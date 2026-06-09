@@ -25,3 +25,5 @@ Append-only log. Oldest at top, newest at bottom.
 2026-06-09 — Desktop-only plugins (e.g. window_manager) MUST be platform-guarded in main() or mobile crashes at launch.
 
 2026-06-09 — Flagged paid/server-side: SMS MFA (paid provider), remote session kill (Edge Function with service_role), suspicious-login/anomaly engine (later).
+
+2026-06-09 — Removed dead code: AuthUser entity, EmailVO/PasswordVO, ResponsiveExtension+breakpoints. AppOtpField gained optional onChanged param; OTP _autoSubmitted flag resets on error and on field edit so retry works.

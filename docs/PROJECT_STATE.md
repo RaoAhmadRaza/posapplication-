@@ -111,18 +111,13 @@ See DATABASE_SCHEMA.md for full schema reference.
 ## Known Issues / Dead Code
 
 **Dead code (defined, zero callers):**
-- `AuthUser` entity — never imported
-- `EmailVO` / `PasswordVO` value objects — never used; pages validate with `.isEmpty`
 - `ServerErrorFailure` — defined but never instantiated
-- `ResponsiveExtension` (isMobile/isTablet/isDesktop) — never called
 - `authStateProvider` (StreamProvider) — defined but no widget consumes it; router uses its own listener
 - `cupertino_icons` package — in pubspec but no Cupertino widget/icon imported
 
 **Minor:**
 - `RecoveryState` lives in `core/error/auth_failure.dart` — semantically not a failure; works but misplaced
-- `widget_test.dart` — default smoke test; can't run without Supabase.init in test setup
-- No widget/unit test infrastructure beyond the default skeleton
-- OTP auto-submit flag resets only on leaving/returning to the page, not on retry
+- `widget_test.dart` — smoke test, ProviderScope-wrapped; no test infrastructure beyond this
 - Profile loaded once on mount (no pull-to-refresh)
 
 ## What's Next

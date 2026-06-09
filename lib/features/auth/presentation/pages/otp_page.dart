@@ -23,6 +23,11 @@ class _OtpPageState extends ConsumerState<OtpPage> {
   bool _autoSubmitted = false;
   String? _errorMessage;
 
+  void _onOtpChanged(String code) {
+    _code = code;
+    _autoSubmitted = false;
+  }
+
   void _onOtpCompleted(String code) {
     _code = code;
     if (!_autoSubmitted) {
@@ -54,6 +59,7 @@ class _OtpPageState extends ConsumerState<OtpPage> {
 
   void _onStateChange(OtpState? prev, OtpState next) {
     if (next.error != null && mounted) {
+      _autoSubmitted = false;
       setState(() => _errorMessage = next.error!.message);
     }
   }
@@ -91,6 +97,7 @@ class _OtpPageState extends ConsumerState<OtpPage> {
           const SizedBox(height: AppSpacing.sm),
           AppOtpField(
             length: 6,
+            onChanged: _onOtpChanged,
             onCompleted: _onOtpCompleted,
           ),
           const SizedBox(height: AppSpacing.xxl),

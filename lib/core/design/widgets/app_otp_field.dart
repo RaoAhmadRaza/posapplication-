@@ -10,10 +10,12 @@ class AppOtpField extends StatelessWidget {
     super.key,
     this.length = 6,
     required this.onCompleted,
+    this.onChanged,
   });
 
   final int length;
   final ValueChanged<String> onCompleted;
+  final ValueChanged<String>? onChanged;
 
   @override
   Widget build(BuildContext context) {
@@ -42,6 +44,7 @@ class AppOtpField extends StatelessWidget {
     return Pinput(
       length: length,
       onCompleted: onCompleted,
+      onChanged: onChanged,
       defaultPinTheme: defaultPinTheme,
       focusedPinTheme: focusedPinTheme,
       submittedPinTheme: defaultPinTheme,
