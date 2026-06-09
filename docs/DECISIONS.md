@@ -27,3 +27,7 @@ Append-only log. Oldest at top, newest at bottom.
 2026-06-09 — Flagged paid/server-side: SMS MFA (paid provider), remote session kill (Edge Function with service_role), suspicious-login/anomaly engine (later).
 
 2026-06-09 — Removed dead code: AuthUser entity, EmailVO/PasswordVO, ResponsiveExtension+breakpoints. AppOtpField gained optional onChanged param; OTP _autoSubmitted flag resets on error and on field edit so retry works.
+
+2026-06-09 — Phase 0.2 auth schema applied as migration 20260609000002_auth_full_schema.sql: extended tenants/roles/users; added branches, user_branch_assignments, permissions, devices, sessions, mfa_configs, audit_logs (audit_logs immutable — update/delete revoked from anon/authenticated); RLS helpers auth_tenant_id()/auth_role_name() + RLS policies on all new tables; seeded Demo Store permission matrix (ADMIN full = 36, CASHIER = 6) + Main Branch (BR01) + branch assignments for existing users.
+
+2026-06-09 — handle_new_user fallback role corrected ADMIN→CASHIER: non-business signups provision into Demo Store as CASHIER (role …012), matching the locked provisioning rule; business_name signups still get their own tenant as ADMIN. (Runbook draft assigned Demo ADMIN in the fallback branch — fixed before applying.)

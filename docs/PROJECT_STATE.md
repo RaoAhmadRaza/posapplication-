@@ -102,6 +102,7 @@ Schema version-controlled in `supabase/migrations/` (previously cloud-only):
 |-----------|----------|
 | `20260609000000_init.sql` | `public.tenants`, `public.roles`, `public.users` (PK FK → auth.users cascade); Demo Store + ADMIN/CASHIER seed; `handle_new_user()` trigger v1 (always Demo Store/CASHIER); RLS on all 3 tables |
 | `20260609000001_signup_provisioning.sql` | Replaces trigger: if `business_name` meta → create tenant + ADMIN/CASHIER roles → assign ADMIN; else fallback Demo Store/CASHIER |
+| `20260609000002_auth_full_schema.sql` | Extends `tenants`/`roles`/`users`; adds `branches`, `user_branch_assignments`, `permissions`, `devices`, `sessions`, `mfa_configs`, immutable `audit_logs`; `auth_tenant_id()`/`auth_role_name()` RLS helpers + RLS on new tables; seeds Demo Store permission matrix (ADMIN 36 / CASHIER 6) + Main Branch (BR01) + assignments; upgrades `handle_new_user()` to full provisioning (business → new tenant as ADMIN + branch + matrix; fallback → Demo Store CASHIER) |
 
 RLS uses `auth.uid()` via helper functions `auth_tenant_id()`/`auth_role_name()` in the
 live project (the migration policy bodies use inline `auth.uid()` as the shipped version).
@@ -122,6 +123,4 @@ See DATABASE_SCHEMA.md for full schema reference.
 
 ## What's Next
 
-See AUTH_COMPLETE_RUNBOOK.md for phased plan. Current phase: auth is complete and
-functional. Next phases per the roadmap: POS/ERP feature modules, multi-tenant
-hardening, desktop polish.
+See AUTH_COMPLETE_RUNBOOK.md for phased plan. Runbook Phase 0 complete (cleanup + OTP retry fix + full auth schema). Current phase: Phase 1 — RBAC engine (permission matrix + PermissionGate).
