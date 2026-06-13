@@ -263,4 +263,122 @@ class InventoryRemoteDataSource {
     final list = await _client.from('barcode_templates').update(data).eq('id', id).select();
     return list.first;
   }
+
+  // ==================== Warehouses ====================
+
+  static const _warehouseCols = 'id, tenant_id, branch_id, name, code, address, capacity_notes, is_active, is_default';
+
+  Future<List<Map<String, dynamic>>> loadWarehouses({String? branchId}) async {
+    var query = _client.from('warehouses').select(_warehouseCols);
+    if (branchId != null) query = query.eq('branch_id', branchId);
+    return query.order('name');
+  }
+
+  Future<Map<String, dynamic>> createWarehouse(Map<String, dynamic> data) async {
+    final payload = {
+      ...data,
+      'tenant_id': await _tenantId(),
+      'created_by': _userId,
+      'updated_by': _userId,
+    };
+    final list = await _client.from('warehouses').insert(payload).select();
+    return list.first;
+  }
+
+  Future<Map<String, dynamic>> updateWarehouse(String id, Map<String, dynamic> data) async {
+    data['updated_by'] = _userId;
+    final list = await _client.from('warehouses').update(data).eq('id', id).select();
+    return list.first;
+  }
+
+  Future<void> softDeleteWarehouse(String id) async {
+    await _client.rpc('soft_delete_warehouse', params: {'p_id': id});
+  }
+
+  Future<void> setDefaultWarehouse(String id) async {
+    await _client.rpc('set_default_warehouse', params: {'p_id': id});
+  }
+
+  Future<Map<String, dynamic>> ensureDefaultWarehouse(String branchId) async {
+    final result = await _client.rpc('ensure_default_warehouse', params: {'p_branch_id': branchId});
+    return result as Map<String, dynamic>;
+  }
+
+  // ==================== Stock Balance ====================
+
+  static const _balanceCols = 'id, branch_id, warehouse_id, product_id, variant_id,'
+      ' qty_on_hand, qty_reserved, qty_in_transit, avg_cost, reorder_point, last_stock_take, last_updated';
+
+  Future<List<Map<String, dynamic>>> loadStockBalances({
+    String? branchId,
+    String? warehouseId,
+    String? productId,
+  }) async {
+    var query = _client.from('stock_balance').select(_balanceCols);
+    if (branchId != null) query = query.eq('branch_id', branchId);
+    if (warehouseId != null) query = query.eq('warehouse_id', warehouseId);
+    if (productId != null) query = query.eq('product_id', productId);
+    return query.order('product_id');
+  }
+
+  // ==================== Stock Ledger ====================
+
+  static const _ledgerCols = 'id, product_id, variant_id, branch_id, warehouse_id,'
+      ' operation_type, qty_change, cost_per_unit, total_cost, balance_after,'
+      ' avg_cost_after, reference_type, reference_id, notes, created_at';
+
+  Future<List<Map<String, dynamic>>> loadProductLedger(
+    String productId, {
+    String? branchId,
+    String? warehouseId,
+  }) async {
+    var query = _client.from('stock_ledger').select(_ledgerCols).eq('product_id', productId);
+    if (branchId != null) query = query.eq('branch_id', branchId);
+    if (warehouseId != null) query = query.eq('warehouse_id', warehouseId);
+    return query.order('created_at', ascending: false);
+  }
+
+  // ==================== Stock Levels (joined with products) ====================
+
+  Future<List<Map<String, dynamic>>> loadStockLevels({
+    String? branchId,
+    String? warehouseId,
+  }) async {
+    var query = _client.from('stock_balance').select(
+      'product_id, warehouse_id, variant_id, qty_on_hand, qty_reserved,'
+      ' qty_in_transit, avg_cost, products!inner(name, sku, reorder_point)',
+    );
+    if (branchId != null) query = query.eq('branch_id', branchId);
+    if (warehouseId != null) query = query.eq('warehouse_id', warehouseId);
+    return query.order('product_id');
+  }
+
+  // ==================== Stock Movement (RPC) ====================
+
+  Future<Map<String, dynamic>> postStockMovement({
+    required String branchId,
+    required String? warehouseId,
+    required String productId,
+    required String? variantId,
+    required String operationType,
+    required double qtyChange,
+    required double costPerUnit,
+    required String referenceType,
+    required String referenceId,
+    String? notes,
+  }) async {
+    final result = await _client.rpc('post_stock_movement', params: {
+      'p_branch_id': branchId,
+      'p_warehouse_id': warehouseId,
+      'p_product_id': productId,
+      'p_variant_id': variantId,
+      'p_operation_type': operationType,
+      'p_qty_change': qtyChange,
+      'p_cost_per_unit': costPerUnit,
+      'p_reference_type': referenceType,
+      'p_reference_id': referenceId,
+      'p_notes': notes,
+    });
+    return result as Map<String, dynamic>;
+  }
 }

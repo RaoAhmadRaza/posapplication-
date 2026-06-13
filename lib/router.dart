@@ -31,6 +31,11 @@ import 'features/inventory/presentation/pages/products_page.dart';
 import 'features/inventory/presentation/pages/product_form_page.dart';
 import 'features/inventory/presentation/pages/barcode_templates_page.dart';
 import 'features/inventory/presentation/pages/barcode_template_form_page.dart';
+import 'features/inventory/presentation/pages/warehouses_page.dart';
+import 'features/inventory/presentation/pages/warehouse_form_page.dart';
+import 'features/inventory/presentation/pages/stock_levels_page.dart';
+import 'features/inventory/presentation/pages/product_stock_detail_page.dart';
+import 'features/inventory/presentation/pages/stock_movement_form_page.dart';
 import 'features/auth/presentation/pages/sale_page.dart';
 import 'features/auth/presentation/pages/settings_page.dart';
 
@@ -234,6 +239,39 @@ final appRouter = GoRouter(
       builder: (context, state) {
         final id = state.pathParameters['templateId'];
         return BarcodeTemplateFormPage(templateId: id);
+      },
+    ),
+    GoRoute(
+      path: '/inventory/warehouses',
+      builder: (context, state) => const WarehousesPage(),
+    ),
+    GoRoute(
+      path: '/inventory/warehouses/create',
+      builder: (context, state) => const WarehouseFormPage(),
+    ),
+    GoRoute(
+      path: '/inventory/warehouses/:warehouseId',
+      builder: (context, state) {
+        final id = state.pathParameters['warehouseId'];
+        return WarehouseFormPage(warehouseId: id);
+      },
+    ),
+    GoRoute(
+      path: '/inventory/stock',
+      builder: (context, state) => const StockLevelsPage(),
+    ),
+    GoRoute(
+      path: '/inventory/stock/movement',
+      builder: (context, state) {
+        final extra = state.extra as Map<String, dynamic>?;
+        return StockMovementFormPage(productId: extra?['productId'] as String?);
+      },
+    ),
+    GoRoute(
+      path: '/inventory/stock/:productId',
+      builder: (context, state) {
+        final id = state.pathParameters['productId']!;
+        return ProductStockDetailPage(productId: id);
       },
     ),
     StatefulShellRoute.indexedStack(

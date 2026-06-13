@@ -17,6 +17,7 @@ import '../../domain/usecases/delete_image.dart';
 import '../../domain/usecases/load_pricing_tiers.dart';
 import '../../domain/usecases/save_pricing_tier.dart';
 import '../../domain/usecases/delete_pricing_tier.dart';
+import 'products_controller.dart';
 
 final productEditProvider =
     NotifierProvider<ProductEditController, AsyncValue<Product?>>(
@@ -100,6 +101,7 @@ class ProductEditController extends Notifier<AsyncValue<Product?>> {
       editingId = product.id;
       state = AsyncValue.data(product);
     }
+    ref.invalidate(productsProvider);
     return null;
   }
 

@@ -9,6 +9,10 @@ import '../../domain/entities/product_variant.dart';
 import '../../domain/entities/product_image.dart';
 import '../../domain/entities/pricing_tier.dart';
 import '../../domain/entities/barcode_template.dart';
+import '../../domain/entities/warehouse.dart';
+import '../../domain/entities/stock_balance.dart';
+import '../../domain/entities/stock_ledger_entry.dart';
+import '../../domain/entities/stock_level.dart';
 import '../../domain/failures/inventory_failure.dart';
 import '../../domain/repositories/inventory_repository.dart';
 import '../datasources/inventory_remote_datasource.dart';
@@ -19,6 +23,10 @@ import '../models/product_variant_model.dart';
 import '../models/product_image_model.dart';
 import '../models/pricing_tier_model.dart';
 import '../models/barcode_template_model.dart';
+import '../models/warehouse_model.dart';
+import '../models/stock_balance_model.dart';
+import '../models/stock_ledger_entry_model.dart';
+import '../models/stock_level_model.dart';
 
 final inventoryRepositoryProvider = Provider<InventoryRepository>((ref) {
   return InventoryRepositoryImpl(ref.read(inventoryRemoteDataSourceProvider));
@@ -32,11 +40,15 @@ class InventoryRepositoryImpl implements InventoryRepository {
   InventoryFailure _mapError(Object e) {
     if (e is PostgrestException) {
       final code = e.code;
+      final msg = e.message.toLowerCase();
       if (code == '23505') {
-        final msg = e.message.toLowerCase();
         if (msg.contains('sku') || msg.contains('barcode')) {
           return DuplicateSkuFailure();
         }
+      }
+      if (code == 'P0001') {
+        if (msg.contains('warehouse has stock')) return WarehouseHasStockFailure();
+        if (msg.contains('stock')) return InsufficientStockFailure();
       }
       if (code == '42501') return PermissionDeniedFailure();
       if (code == 'PGRST116' || code == 'P0002') return NotFoundFailure();
@@ -358,6 +370,160 @@ class InventoryRepositoryImpl implements InventoryRepository {
       return (BarcodeTemplateModel.fromJson(row), null);
     } catch (e) {
       return (null, _mapError(e));
+    }
+  }
+
+  // ==================== Warehouses ====================
+
+  @override
+  Future<(List<Warehouse>, InventoryFailure?)> loadWarehouses({String? branchId}) async {
+    try {
+      final rows = await _ds.loadWarehouses(branchId: branchId);
+      return (rows.map(WarehouseModel.fromJson).toList(), null);
+    } catch (e) {
+      return (<Warehouse>[], _mapError(e));
+    }
+  }
+
+  @override
+  Future<(Warehouse?, InventoryFailure?)> createWarehouse(Map<String, dynamic> data) async {
+    try {
+      final row = await _ds.createWarehouse(data);
+      return (WarehouseModel.fromJson(row), null);
+    } catch (e) {
+      return (null, _mapError(e));
+    }
+  }
+
+  @override
+  Future<(Warehouse?, InventoryFailure?)> updateWarehouse(String id, Map<String, dynamic> data) async {
+    try {
+      final row = await _ds.updateWarehouse(id, data);
+      return (WarehouseModel.fromJson(row), null);
+    } catch (e) {
+      return (null, _mapError(e));
+    }
+  }
+
+  @override
+  Future<(bool, InventoryFailure?)> deleteWarehouse(String id) async {
+    try {
+      await _ds.softDeleteWarehouse(id);
+      return (true, null);
+    } catch (e) {
+      return (false, _mapError(e));
+    }
+  }
+
+  @override
+  Future<(bool, InventoryFailure?)> setDefaultWarehouse(String id) async {
+    try {
+      await _ds.setDefaultWarehouse(id);
+      return (true, null);
+    } catch (e) {
+      return (false, _mapError(e));
+    }
+  }
+
+  @override
+  Future<(Warehouse?, InventoryFailure?)> ensureDefaultWarehouse(String branchId) async {
+    try {
+      final row = await _ds.ensureDefaultWarehouse(branchId);
+      return (WarehouseModel.fromJson(row), null);
+    } catch (e) {
+      return (null, _mapError(e));
+    }
+  }
+
+  // ==================== Stock Balance ====================
+
+  @override
+  Future<(List<StockBalance>, InventoryFailure?)> loadStockBalances({
+    String? branchId,
+    String? warehouseId,
+    String? productId,
+  }) async {
+    try {
+      final rows = await _ds.loadStockBalances(
+        branchId: branchId,
+        warehouseId: warehouseId,
+        productId: productId,
+      );
+      return (rows.map(StockBalanceModel.fromJson).toList(), null);
+    } catch (e) {
+      return (<StockBalance>[], _mapError(e));
+    }
+  }
+
+  // ==================== Stock Ledger ====================
+
+  @override
+  Future<(List<StockLedgerEntry>, InventoryFailure?)> loadProductLedger(
+    String productId, {
+    String? branchId,
+    String? warehouseId,
+  }) async {
+    try {
+      final rows = await _ds.loadProductLedger(
+        productId,
+        branchId: branchId,
+        warehouseId: warehouseId,
+      );
+      return (rows.map(StockLedgerEntryModel.fromJson).toList(), null);
+    } catch (e) {
+      return (<StockLedgerEntry>[], _mapError(e));
+    }
+  }
+
+  // ==================== Stock Movement ====================
+
+  @override
+  Future<(StockBalance?, InventoryFailure?)> postStockMovement({
+    required String branchId,
+    required String? warehouseId,
+    required String productId,
+    required String? variantId,
+    required String operationType,
+    required double qtyChange,
+    required double costPerUnit,
+    required String referenceType,
+    required String referenceId,
+    String? notes,
+  }) async {
+    try {
+      final row = await _ds.postStockMovement(
+        branchId: branchId,
+        warehouseId: warehouseId,
+        productId: productId,
+        variantId: variantId,
+        operationType: operationType,
+        qtyChange: qtyChange,
+        costPerUnit: costPerUnit,
+        referenceType: referenceType,
+        referenceId: referenceId,
+        notes: notes,
+      );
+      return (StockBalanceModel.fromJson(row), null);
+    } catch (e) {
+      return (null, _mapError(e));
+    }
+  }
+
+  // ==================== Stock Levels ====================
+
+  @override
+  Future<(List<StockLevel>, InventoryFailure?)> loadStockLevels({
+    String? branchId,
+    String? warehouseId,
+  }) async {
+    try {
+      final rows = await _ds.loadStockLevels(
+        branchId: branchId,
+        warehouseId: warehouseId,
+      );
+      return (rows.map(StockLevelModel.fromJson).toList(), null);
+    } catch (e) {
+      return (<StockLevel>[], _mapError(e));
     }
   }
 }

@@ -5,6 +5,10 @@ import '../../domain/entities/product_variant.dart';
 import '../../domain/entities/product_image.dart';
 import '../../domain/entities/pricing_tier.dart';
 import '../../domain/entities/barcode_template.dart';
+import '../../domain/entities/warehouse.dart';
+import '../../domain/entities/stock_balance.dart';
+import '../../domain/entities/stock_ledger_entry.dart';
+import '../../domain/entities/stock_level.dart';
 import '../../domain/failures/inventory_failure.dart';
 
 abstract class InventoryRepository {
@@ -47,4 +51,39 @@ abstract class InventoryRepository {
   Future<(List<BarcodeTemplate>, InventoryFailure?)> loadBarcodeTemplates();
   Future<(BarcodeTemplate?, InventoryFailure?)> createBarcodeTemplate(Map<String, dynamic> data);
   Future<(BarcodeTemplate?, InventoryFailure?)> updateBarcodeTemplate(String id, Map<String, dynamic> data);
+
+  Future<(List<Warehouse>, InventoryFailure?)> loadWarehouses({String? branchId});
+  Future<(Warehouse?, InventoryFailure?)> createWarehouse(Map<String, dynamic> data);
+  Future<(Warehouse?, InventoryFailure?)> updateWarehouse(String id, Map<String, dynamic> data);
+  Future<(bool, InventoryFailure?)> deleteWarehouse(String id);
+  Future<(bool, InventoryFailure?)> setDefaultWarehouse(String id);
+  Future<(Warehouse?, InventoryFailure?)> ensureDefaultWarehouse(String branchId);
+
+  Future<(List<StockBalance>, InventoryFailure?)> loadStockBalances({
+    String? branchId,
+    String? warehouseId,
+    String? productId,
+  });
+  Future<(List<StockLedgerEntry>, InventoryFailure?)> loadProductLedger(
+    String productId, {
+    String? branchId,
+    String? warehouseId,
+  });
+  Future<(StockBalance?, InventoryFailure?)> postStockMovement({
+    required String branchId,
+    required String? warehouseId,
+    required String productId,
+    required String? variantId,
+    required String operationType,
+    required double qtyChange,
+    required double costPerUnit,
+    required String referenceType,
+    required String referenceId,
+    String? notes,
+  });
+
+  Future<(List<StockLevel>, InventoryFailure?)> loadStockLevels({
+    String? branchId,
+    String? warehouseId,
+  });
 }

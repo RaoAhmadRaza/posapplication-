@@ -53,7 +53,7 @@ class _ProductFormPageState extends ConsumerState<ProductFormPage> {
 
   String? _error;
   bool _saving = false;
-  bool _loadingExisting = false;
+  bool _didSeed = false;
   bool _hasSavedOnce = false;
 
   bool get _isEditing => widget.productId != null;
@@ -65,25 +65,11 @@ class _ProductFormPageState extends ConsumerState<ProductFormPage> {
     if (_isEditing) {
       Future.microtask(() {
         ref.read(productEditProvider.notifier).loadForEdit(widget.productId!);
-        _loadingExisting = true;
       });
     }
   }
 
-  @override
-  void didChangeDependencies() {
-    super.didChangeDependencies();
-    if (_loadingExisting) {
-      final productState = ref.read(productEditProvider);
-      if (productState.value != null) {
-        _loadExisting(productState.value!);
-      }
-    }
-  }
-
   void _loadExisting(Product p) {
-    if (!_loadingExisting) return;
-    _loadingExisting = false;
     _nameCtrl.text = p.name;
     _barcodeCtrl.text = p.barcode ?? '';
     _descriptionCtrl.text = p.description ?? '';
@@ -229,11 +215,42 @@ class _ProductFormPageState extends ConsumerState<ProductFormPage> {
 
   @override
   Widget build(BuildContext context) {
+    ref.listen<AsyncValue<Product?>>(productEditProvider, (prev, next) {
+      final p = next.value;
+      if (p != null && !_didSeed) {
+        _didSeed = true;
+        _loadExisting(p);
+      }
+    });
+
     final categories = ref.watch(categoriesProvider).value ?? <Category>[];
     final editState = ref.watch(productEditProvider);
     final variants = editState.value != null ? ref.read(productEditProvider.notifier).variantsState.variants : <ProductVariant>[];
     final images = editState.value != null ? ref.read(productEditProvider.notifier).imagesState.images : <ProductImage>[];
     final tiers = editState.value != null ? ref.read(productEditProvider.notifier).pricingState.tiers : <PricingTier>[];
+
+    if (_isEditing) {
+      if (editState.isLoading) {
+        return Scaffold(
+          backgroundColor: AppColors.background,
+          body: const Center(child: CircularProgressIndicator()),
+        );
+      }
+      if (editState.hasError) {
+        return Scaffold(
+          backgroundColor: AppColors.background,
+          body: Center(
+            child: Padding(
+              padding: const EdgeInsets.symmetric(horizontal: AppSpacing.screenPadding),
+              child: AppInlineBanner(
+                message: 'Failed to load product.',
+                type: BannerType.error,
+              ),
+            ),
+          ),
+        );
+      }
+    }
 
     return Scaffold(
       backgroundColor: AppColors.background,
