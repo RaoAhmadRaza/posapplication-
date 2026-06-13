@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
@@ -9,6 +10,7 @@ import '../../../../core/design/widgets/app_inline_banner.dart';
 import '../../../../core/design/widgets/app_text_field.dart';
 import '../../../../core/design/widgets/responsive_form_scaffold.dart';
 import '../../../../core/error/auth_failure.dart';
+import '../../../../core/services/login_throttle_service.dart';
 import '../controllers/sign_in_controller.dart';
 
 class LoginPage extends ConsumerStatefulWidget {
@@ -22,11 +24,14 @@ class _LoginPageState extends ConsumerState<LoginPage> {
   final _emailController = TextEditingController();
   final _passwordController = TextEditingController();
   String? _errorMessage;
+  int _cooldownSeconds = 0;
+  Timer? _cooldownTimer;
 
   @override
   void dispose() {
     _emailController.dispose();
     _passwordController.dispose();
+    _cooldownTimer?.cancel();
     super.dispose();
   }
 
@@ -35,6 +40,13 @@ class _LoginPageState extends ConsumerState<LoginPage> {
     final email = _emailController.text.trim();
     final password = _passwordController.text.trim();
     if (email.isEmpty || password.isEmpty) return;
+
+    final (canAttempt, remaining) = await LoginThrottleService.instance.canAttempt(email);
+    if (!canAttempt) {
+      setState(() => _errorMessage = 'Too many attempts. Try again in ${_formatSeconds(remaining)}.');
+      return;
+    }
+
     await ref.read(signInControllerProvider.notifier).signIn(email, password);
   }
 
@@ -51,14 +63,56 @@ class _LoginPageState extends ConsumerState<LoginPage> {
       return;
     }
 
-    setState(() => _errorMessage = next.error.toString());
+    if (next.error is AccountLockedFailure) {
+      final failure = next.error as AccountLockedFailure;
+      setState(() => _errorMessage = failure.message);
+      _startCooldownCheck();
+      ref.read(signInControllerProvider.notifier).clear();
+      return;
+    }
+
+    final msg = next.error is AuthFailure
+        ? (next.error as AuthFailure).message
+        : next.error.toString();
+
+    if (next.error is InvalidCredentialsFailure) {
+      _startCooldownCheck();
+    }
+
+    setState(() => _errorMessage = msg);
     ref.read(signInControllerProvider.notifier).clear();
+  }
+
+  void _startCooldownCheck() {
+    _cooldownTimer?.cancel();
+    _tick();
+    _cooldownTimer = Timer.periodic(const Duration(seconds: 1), (_) => _tick());
+  }
+
+  Future<void> _tick() async {
+    final email = _emailController.text.trim();
+    if (email.isEmpty) {
+      setState(() => _cooldownSeconds = 0);
+      return;
+    }
+    final (canAttempt, remaining) = await LoginThrottleService.instance.canAttempt(email);
+    if (!mounted) return;
+    setState(() => _cooldownSeconds = canAttempt ? 0 : remaining);
+    if (canAttempt) _cooldownTimer?.cancel();
+  }
+
+  String _formatSeconds(int s) {
+    if (s < 60) return '${s}s';
+    final m = s ~/ 60;
+    final sec = s % 60;
+    return '${m}m ${sec}s';
   }
 
   @override
   Widget build(BuildContext context) {
     ref.listen(signInControllerProvider, _onStateChange);
     final isLoading = ref.watch(signInControllerProvider).isLoading;
+    final disabled = isLoading || _cooldownSeconds > 0;
 
     return ResponsiveFormScaffold(
       title: 'Welcome back',
@@ -76,6 +130,7 @@ class _LoginPageState extends ConsumerState<LoginPage> {
             label: 'Create account',
             variant: AppButtonVariant.tinted,
             onPressed: () => context.go('/signup'),
+            fullWidth: true,
           ),
         ],
       ),
@@ -106,15 +161,19 @@ class _LoginPageState extends ConsumerState<LoginPage> {
           ),
           const SizedBox(height: AppSpacing.xxl),
           AppButton(
-            label: 'Log in',
+            label: _cooldownSeconds > 0
+                ? 'Try again in ${_formatSeconds(_cooldownSeconds)}'
+                : 'Log in',
             loading: isLoading,
-            onPressed: _submit,
+            onPressed: disabled ? null : _submit,
+            fullWidth: true,
           ),
           const SizedBox(height: AppSpacing.md),
           AppButton(
             label: 'Forgot password?',
             variant: AppButtonVariant.plain,
             onPressed: () => context.go('/forgot'),
+            fullWidth: true,
           ),
         ],
       ),

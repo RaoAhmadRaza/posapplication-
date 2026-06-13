@@ -97,4 +97,53 @@ class AuthRemoteDataSource {
   }
 
   Session? get currentSession => _client.auth.currentSession;
+
+  Future<List<Map<String, dynamic>>> loadPermissions(String roleId) async {
+    final list = await _client
+        .from('permissions')
+        .select('module, action, branch_scope, granted')
+        .eq('role_id', roleId);
+    return List<Map<String, dynamic>>.from(list);
+  }
+
+  Future<List<Map<String, dynamic>>> loadUserBranches(String userId) async {
+    final list = await _client
+        .from('user_branch_assignments')
+        .select('is_default, branches(id, name, code, is_main)')
+        .eq('user_id', userId);
+    return List<Map<String, dynamic>>.from(list);
+  }
+
+  Future<List<Map<String, dynamic>>> loadDevices() async {
+    final list = await _client
+        .from('devices')
+        .select('id, device_name, device_model, os_info, trust_level, authorized, last_seen_at, authorized_at, authorized_by')
+        .order('last_seen_at', ascending: false);
+    return List<Map<String, dynamic>>.from(list);
+  }
+
+  Future<void> approveDevice(String deviceId, String authorizedBy) async {
+    await _client.from('devices').update({
+      'authorized': true,
+      'trust_level': 'TRUSTED',
+      'authorized_at': DateTime.now().toUtc().toIso8601String(),
+      'authorized_by': authorizedBy,
+    }).eq('id', deviceId);
+  }
+
+  Future<void> revokeDevice(String deviceId) async {
+    await _client.from('devices').update({
+      'authorized': false,
+      'trust_level': 'REVOKED',
+    }).eq('id', deviceId);
+  }
+
+  Future<List<Map<String, dynamic>>> loadAuditLogs() async {
+    final list = await _client
+        .from('audit_logs')
+        .select('action, entity, created_at, user_id')
+        .order('created_at', ascending: false)
+        .limit(100);
+    return List<Map<String, dynamic>>.from(list);
+  }
 }

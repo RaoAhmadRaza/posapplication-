@@ -1,5 +1,7 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../../../core/error/auth_failure.dart';
+import '../../../../core/services/audit_service.dart';
+import '../../../../core/services/login_throttle_service.dart';
 import '../../domain/usecases/sign_in.dart';
 
 final signInControllerProvider =
@@ -18,6 +20,17 @@ class SignInController extends Notifier<AsyncValue<void>> {
         .call(email: email, password: password);
 
     if (failure != null) {
+      if (failure is InvalidCredentialsFailure) {
+        try {
+          await LoginThrottleService.instance.recordFailure(email);
+        } on AccountLockedException catch (e) {
+          state = AsyncValue.error(
+            AccountLockedFailure(e.lockedUntil),
+            StackTrace.current,
+          );
+          return;
+        }
+      }
       state = AsyncValue.error(failure, StackTrace.current);
       return;
     }
@@ -30,6 +43,8 @@ class SignInController extends Notifier<AsyncValue<void>> {
       return;
     }
 
+    LoginThrottleService.instance.reset(email);
+    AuditService.instance.log(action: 'LOGIN', entity: 'auth');
     state = const AsyncValue.data(null);
   }
 

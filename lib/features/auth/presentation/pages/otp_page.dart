@@ -6,6 +6,7 @@ import '../../../../core/design/widgets/app_button.dart';
 import '../../../../core/design/widgets/app_inline_banner.dart';
 import '../../../../core/design/widgets/app_otp_field.dart';
 import '../../../../core/design/widgets/responsive_form_scaffold.dart';
+import '../../../../core/error/auth_failure.dart';
 import '../controllers/otp_controller.dart';
 
 class OtpPage extends ConsumerStatefulWidget {
@@ -22,10 +23,12 @@ class _OtpPageState extends ConsumerState<OtpPage> {
   String _code = '';
   bool _autoSubmitted = false;
   String? _errorMessage;
+  String? _successMessage;
 
   void _onOtpChanged(String code) {
     _code = code;
     _autoSubmitted = false;
+    setState(() => _errorMessage = null);
   }
 
   void _onOtpCompleted(String code) {
@@ -37,8 +40,16 @@ class _OtpPageState extends ConsumerState<OtpPage> {
   }
 
   Future<void> _verify() async {
-    setState(() => _errorMessage = null);
-    if (_code.isEmpty) return;
+    setState(() {
+      _errorMessage = null;
+      _successMessage = null;
+    });
+
+    if (_code.isEmpty || _code.length < 6) {
+      setState(() => _errorMessage = 'Please enter the 6-digit code.');
+      _autoSubmitted = false;
+      return;
+    }
 
     await ref.read(otpControllerProvider.notifier).verify(
           email: widget.email,
@@ -50,17 +61,37 @@ class _OtpPageState extends ConsumerState<OtpPage> {
   Future<void> _resend() async {
     _autoSubmitted = false;
     _code = '';
-    setState(() => _errorMessage = null);
+    setState(() {
+      _errorMessage = null;
+      _successMessage = null;
+    });
     await ref.read(otpControllerProvider.notifier).resend(
           email: widget.email,
           isRecovery: widget.isRecovery,
         );
   }
 
+  void _back() {
+    RecoveryState.instance.reset();
+    context.go('/login');
+  }
+
   void _onStateChange(OtpState? prev, OtpState next) {
-    if (next.error != null && mounted) {
+    if (!mounted) return;
+
+    if (next.error != null) {
       _autoSubmitted = false;
-      setState(() => _errorMessage = next.error!.message);
+      setState(() {
+        _errorMessage = next.error!.message;
+        _successMessage = null;
+      });
+    }
+
+    if (next.resendSucceeded) {
+      setState(() {
+        _successMessage = 'A new code has been sent to $_maskedEmail.';
+        _errorMessage = null;
+      });
     }
   }
 
@@ -85,11 +116,15 @@ class _OtpPageState extends ConsumerState<OtpPage> {
       footer: AppButton(
         label: 'Back',
         variant: AppButtonVariant.plain,
-        onPressed: () => context.go('/login'),
+        onPressed: widget.isRecovery ? _back : () => context.go('/login'),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
+          if (_successMessage != null) ...[
+            AppInlineBanner(message: _successMessage!, type: BannerType.success),
+            const SizedBox(height: AppSpacing.base),
+          ],
           if (_errorMessage != null) ...[
             AppInlineBanner(message: _errorMessage!),
             const SizedBox(height: AppSpacing.base),

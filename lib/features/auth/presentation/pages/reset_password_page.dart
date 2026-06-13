@@ -1,10 +1,12 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:go_router/go_router.dart';
 import '../../../../core/design/app_spacing.dart';
 import '../../../../core/design/widgets/app_button.dart';
 import '../../../../core/design/widgets/app_inline_banner.dart';
 import '../../../../core/design/widgets/app_text_field.dart';
 import '../../../../core/design/widgets/responsive_form_scaffold.dart';
+import '../../../../core/error/auth_failure.dart';
 import '../controllers/reset_controller.dart';
 
 class ResetPasswordPage extends ConsumerStatefulWidget {
@@ -19,6 +21,7 @@ class _ResetPasswordPageState extends ConsumerState<ResetPasswordPage> {
   final _confirmController = TextEditingController();
   String? _errorMessage;
   String? _confirmError;
+  bool _submitted = false;
 
   @override
   void dispose() {
@@ -36,27 +39,57 @@ class _ResetPasswordPageState extends ConsumerState<ResetPasswordPage> {
     final password = _passwordController.text.trim();
     final confirm = _confirmController.text.trim();
 
-    if (password.isEmpty) return;
+    if (password.isEmpty) {
+      setState(() => _errorMessage = 'Please enter a new password.');
+      return;
+    }
+
+    if (password.length < 8) {
+      setState(() => _errorMessage = 'Password must be at least 8 characters.');
+      return;
+    }
 
     if (password != confirm) {
       setState(() => _confirmError = 'Passwords do not match.');
       return;
     }
 
-    await ref.read(resetControllerProvider.notifier).setNewPassword(password);
+    _submitted = true;
+
+    final failure = await ref
+        .read(resetControllerProvider.notifier)
+        .setNewPassword(password);
+
+    if (!mounted) return;
+    _submitted = false;
+
+    if (failure != null) {
+      setState(() => _errorMessage = failure.message);
+    }
   }
 
   void _onStateChange(AsyncValue<void>? prev, AsyncValue<void> next) {
     if (next.hasError && mounted) {
-      setState(() => _errorMessage = next.error.toString());
+      final msg = next.error is AuthFailure
+          ? (next.error as AuthFailure).message
+          : next.error.toString();
+      setState(() => _errorMessage = msg);
       ref.read(resetControllerProvider.notifier).clear();
     }
+  }
+
+  Future<void> _restartForgot() async {
+    RecoveryState.instance.reset();
+    context.go('/forgot');
   }
 
   @override
   Widget build(BuildContext context) {
     ref.listen(resetControllerProvider, _onStateChange);
     final isLoading = ref.watch(resetControllerProvider).isLoading;
+    final disabled = isLoading || _submitted;
+    final isExpired = _errorMessage != null &&
+        _errorMessage!.contains('reset session expired');
 
     return ResponsiveFormScaffold(
       title: 'Set a new password',
@@ -68,10 +101,18 @@ class _ResetPasswordPageState extends ConsumerState<ResetPasswordPage> {
             AppInlineBanner(message: _errorMessage!),
             const SizedBox(height: AppSpacing.base),
           ],
+          if (isExpired) ...[
+            AppButton(
+              label: 'Start over',
+              variant: AppButtonVariant.plain,
+              onPressed: _restartForgot,
+            ),
+            const SizedBox(height: AppSpacing.base),
+          ],
           AppTextField(
             controller: _passwordController,
             label: 'New password',
-            hint: 'Enter new password',
+            hint: 'At least 8 characters',
             obscure: true,
             textInputAction: TextInputAction.next,
             prefixIcon: Icons.lock_outline,
@@ -85,13 +126,13 @@ class _ResetPasswordPageState extends ConsumerState<ResetPasswordPage> {
             textInputAction: TextInputAction.done,
             prefixIcon: Icons.lock_outline,
             errorText: _confirmError,
-            onSubmitted: (_) => _submit(),
+            onSubmitted: (_) => disabled ? null : _submit(),
           ),
           const SizedBox(height: AppSpacing.xxl),
           AppButton(
             label: 'Update password',
             loading: isLoading,
-            onPressed: _submit,
+            onPressed: disabled ? null : _submit,
           ),
         ],
       ),

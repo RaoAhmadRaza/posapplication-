@@ -1,6 +1,8 @@
 import 'package:supabase_flutter/supabase_flutter.dart';
 import '../../../../core/error/auth_failure.dart';
 import '../entities/auth_profile.dart';
+import '../entities/branch.dart';
+import '../entities/permission.dart';
 
 class SignUpResult {
   final String? emailNeedingConfirmation;
@@ -57,4 +59,8 @@ abstract class AuthRepository {
   Stream<AuthState> watchAuthState();
 
   Future<(AuthProfile?, AuthFailure?)> loadProfile(String userId);
+
+  Future<(List<Permission>, AuthFailure?)> loadPermissions(String roleId);
+
+  Future<(List<Branch>, AuthFailure?)> loadUserBranches(String userId);
 }

@@ -8,7 +8,9 @@ class AuthProfileModel {
     return AuthProfile(
       fullName: json['full_name'] as String? ?? '',
       email: json['email'] as String? ?? '',
+      roleId: json['role_id'] as String?,
       roleName: roles?['name'] as String?,
+      tenantId: json['tenant_id'] as String?,
       tenantName: tenants?['name'] as String?,
     );
   }

@@ -12,7 +12,7 @@ class AppButton extends StatefulWidget {
     this.onPressed,
     this.variant = AppButtonVariant.filled,
     this.loading = false,
-    this.fullWidth = true,
+    this.fullWidth = false,
     this.icon,
   });
 

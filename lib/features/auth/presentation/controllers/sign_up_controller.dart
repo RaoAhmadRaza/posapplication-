@@ -1,4 +1,5 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import '../../../../core/services/audit_service.dart';
 import '../../domain/usecases/sign_up.dart';
 import '../../domain/repositories/auth_repository.dart';
 
@@ -31,6 +32,7 @@ class SignUpController extends Notifier<AsyncValue<SignUpResult>> {
       return null;
     }
 
+    AuditService.instance.log(action: 'SIGNUP', entity: 'auth');
     state = AsyncValue.data(result);
     return result.emailNeedingConfirmation;
   }

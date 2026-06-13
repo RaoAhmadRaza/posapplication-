@@ -10,12 +10,14 @@ class OtpState {
   final bool verifySucceeded;
   final AuthFailure? error;
   final int cooldownSeconds;
+  final bool resendSucceeded;
 
   const OtpState({
     this.isLoading = false,
     this.verifySucceeded = false,
     this.error,
     this.cooldownSeconds = 0,
+    this.resendSucceeded = false,
   });
 
   OtpState copyWith({
@@ -23,13 +25,16 @@ class OtpState {
     bool? verifySucceeded,
     AuthFailure? error,
     int? cooldownSeconds,
+    bool? resendSucceeded,
     bool clearError = false,
+    bool clearResend = false,
   }) {
     return OtpState(
       isLoading: isLoading ?? this.isLoading,
       verifySucceeded: verifySucceeded ?? this.verifySucceeded,
       error: clearError ? null : error,
       cooldownSeconds: cooldownSeconds ?? this.cooldownSeconds,
+      resendSucceeded: clearResend ? false : (resendSucceeded ?? this.resendSucceeded),
     );
   }
 }
@@ -54,20 +59,14 @@ class OtpController extends Notifier<OtpState> {
     required String code,
     required bool isRecovery,
   }) async {
-    state = state.copyWith(isLoading: true, clearError: true);
+    state = state.copyWith(isLoading: true, clearError: true, clearResend: true);
     AuthFailure? failure;
 
     if (isRecovery) {
-      RecoveryState.instance.isRecovering = true;
-      try {
-        failure = await ref.read(verifyRecoveryOtpUseCaseProvider).call(
-              email: email,
-              code: code,
-            );
-      } catch (_) {
-        RecoveryState.instance.isRecovering = false;
-        rethrow;
-      }
+      failure = await ref.read(verifyRecoveryOtpUseCaseProvider).call(
+            email: email,
+            code: code,
+          );
     } else {
       failure = await ref.read(verifyEmailOtpUseCaseProvider).call(
             email: email,
@@ -76,9 +75,11 @@ class OtpController extends Notifier<OtpState> {
     }
 
     if (failure != null) {
-      if (isRecovery) RecoveryState.instance.isRecovering = false;
       state = state.copyWith(isLoading: false, error: failure);
     } else {
+      if (isRecovery) {
+        RecoveryState.instance.stage = RecoveryStage.codeVerified;
+      }
       state = state.copyWith(isLoading: false, verifySucceeded: true);
     }
 
@@ -89,10 +90,9 @@ class OtpController extends Notifier<OtpState> {
     required String email,
     required bool isRecovery,
   }) async {
-    if (state.cooldownSeconds > 0) return;
+    if (state.cooldownSeconds > 0 || state.isLoading) return;
 
-    state = state.copyWith(isLoading: true, cooldownSeconds: 60, clearError: true);
-    _startCooldown();
+    state = state.copyWith(isLoading: true, clearError: true, clearResend: true);
 
     final failure = await ref.read(resendCodeUseCaseProvider).call(
           email: email,
@@ -102,7 +102,12 @@ class OtpController extends Notifier<OtpState> {
     if (failure != null) {
       state = state.copyWith(isLoading: false, error: failure);
     } else {
-      state = state.copyWith(isLoading: false);
+      state = state.copyWith(
+        isLoading: false,
+        cooldownSeconds: 60,
+        resendSucceeded: true,
+      );
+      _startCooldown();
     }
   }
 

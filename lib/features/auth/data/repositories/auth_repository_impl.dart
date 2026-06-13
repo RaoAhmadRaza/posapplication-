@@ -2,6 +2,8 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import '../../../../core/error/auth_failure.dart';
 import '../../domain/entities/auth_profile.dart';
+import '../../domain/entities/branch.dart';
+import '../../domain/entities/permission.dart';
 import '../../domain/repositories/auth_repository.dart';
 import '../datasources/auth_remote_datasource.dart';
 import '../models/auth_profile_model.dart';
@@ -33,13 +35,16 @@ class AuthRepositoryImpl implements AuthRepository {
       }
       if (msg.contains('too many requests') ||
           msg.contains('rate limit') ||
-          msg.contains('429')) {
+          msg.contains('429') ||
+          msg.contains('security purposes') ||
+          msg.contains('request this after')) {
         return TooManyRequestsFailure();
       }
-      if (msg.contains('token has expired') ||
-          msg.contains('otp expired') ||
-          msg.contains('invalid otp')) {
+      if (msg.contains('token has expired') || msg.contains('otp expired')) {
         return OtpExpiredFailure();
+      }
+      if (msg.contains('invalid otp')) {
+        return InvalidOtpFailure();
       }
       if (msg.contains('expired') || msg.contains('session')) {
         return SessionExpiredFailure();
@@ -173,6 +178,44 @@ class AuthRepositoryImpl implements AuthRepository {
       return (AuthProfileModel.fromJson(json), null);
     } catch (e) {
       return (null, _mapError(e));
+    }
+  }
+
+  @override
+  Future<(List<Permission>, AuthFailure?)> loadPermissions(String roleId) async {
+    try {
+      final rows = await _ds.loadPermissions(roleId);
+      final perms = rows.map((r) {
+        return Permission(
+          module: r['module'] as String,
+          action: r['action'] as String,
+          branchScope: r['branch_scope'] as String,
+          granted: r['granted'] as bool,
+        );
+      }).toList();
+      return (perms, null);
+    } catch (e) {
+      return (<Permission>[], _mapError(e));
+    }
+  }
+
+  @override
+  Future<(List<Branch>, AuthFailure?)> loadUserBranches(String userId) async {
+    try {
+      final rows = await _ds.loadUserBranches(userId);
+      final branches = rows.map((r) {
+        final b = r['branches'] as Map<String, dynamic>;
+        return Branch(
+          id: b['id'] as String,
+          name: b['name'] as String,
+          code: b['code'] as String,
+          isMain: b['is_main'] as bool,
+          isDefault: r['is_default'] as bool,
+        );
+      }).toList();
+      return (branches, null);
+    } catch (e) {
+      return (<Branch>[], _mapError(e));
     }
   }
 }
