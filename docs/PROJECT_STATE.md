@@ -1,6 +1,6 @@
 # PROJECT STATE — Lumina POS
 
-Last updated: 2026-06-13
+Last updated: 2026-06-18
 
 ## Stack & Architecture
 
@@ -12,133 +12,178 @@ page → controller (Notifier<AsyncValue<T>>) → use case (Provider) → reposi
 → repository impl → remote datasource → supabase
 ```
 
-Domain has entities + value objects + abstract repo + thin use cases (one call each).
-Data has a single remote datasource holding all Supabase calls + repository impl that
-maps AuthException → sealed AuthFailure. Presentation uses ConsumerStatefulWidgets.
-
 ## Project Structure
 
 ```
 lib/
   main.dart app.dart router.dart
-  core/
-    design/tokens + theme + shared widgets (AppButton, AppTextField, AppCard, AppOtpField,
-      AppInlineBanner, ResponsiveFormScaffold, PermissionGate)
-    services/ (pin, device, mfa, audit, login_throttle)
-  features/auth/         (domain/data/presentation — 21 pages, 12 controllers)
-  features/inventory/
-    domain/entities/      (7 catalog + 4 stock = 11)
-    domain/failures/      (sealed InventoryFailure — 8 variants)
-    domain/usecases/      (23 catalog + 13 stock = 36)
-    data/models/          (7 catalog + 5 stock = 12)
-    data/datasources/     (1: InventoryRemoteDataSource — all Supabase + RPCs)
-    data/repositories/    (1: InventoryRepositoryImpl)
-    presentation/controllers/ (5 catalog + 3 stock = 8)
-    presentation/pages/   (9 catalog + 5 stock + hub = 15)
+  core/design/  (tokens + theme + shared widgets)
+  core/services/ (pin, device, mfa, audit, login_throttle, scanner_support)
+  core/widgets/  (bottom_nav_shell, pin_pad, permission_gate, barcode_scan_page)
+  features/auth/ (21 pages, 12 controllers)
+  features/inventory/ (catalog + stock-engine + stock-ops + barcode + labels)
+  features/notifications/ (entities, model, datasource, repo, controller, page)
+  features/migration_import/ (data layer — entities, repo, datasource, 4 use cases)
+    domain/entities/  17 (7 catalog + 10 stock-ops)
+    domain/failures/  sealed InventoryFailure — 11 variants
+    domain/usecases/  52 (23 catalog + 29 stock-ops)
+    data/models/      17 (7 catalog + 10 stock-ops)
+    data/datasources/ 1 (InventoryRemoteDataSource — all Supabase + RPCs)
+    data/repositories/ 1 (InventoryRepositoryImpl)
+    presentation/controllers/ 11 (5 catalog + 6 stock-ops)
+    presentation/pages/ 20 (9 catalog + 10 stock-ops + hub)
 ```
 
 ## Auth — Complete
 
 All flows end-to-end. 33+ routes, auth redirect, StatefulShellRoute bottom nav.
-RBAC (PermissionGate), branch selection, PIN lock + biometric, TOTP MFA, device
-management, session management, security logs. go_router redirect as single source
-of truth for navigation.
+RBAC, branch selection, PIN lock + biometric, TOTP MFA, device/session/security management.
 
 ## Inventory — Product Catalog (Slice A) — COMPLETE
 
-Categories, brands, products (with variants/images/pricing), barcode templates.
-Trigram-accelerated ILIKE search. SKU auto-gen via DB trigger. Soft-delete via
-SECURITY DEFINER RPCs. Permission-gated by inventory:* matrix.
+Categories, brands, products (variants/images/pricing), barcode templates.
+Trigram ILIKE search. SKU auto-gen. Soft-delete via SECURITY DEFINER RPCs.
 
 ## Stock Engine (Slice B) — COMPLETE
 
-Migration: `20260613061924_stock_engine.sql`. Schema: warehouses, stock_balance
-(trigger-maintained projection), stock_ledger (IMMUTABLE, append-only),
-stock_movement_type_enum (9 values), fn_apply_stock_ledger (negative blocked,
-weighted-avg cost), post_stock_movement + warehouse RPCs, RLS policies.
+Migration `20260613061924_stock_engine.sql`. Trigger-maintained stock_balance projection
+of immutable stock_ledger. All writes via post_stock_movement RPC. Negative blocked.
+Warehouses CRUD + opening-balance form + stock levels list + product detail + ledger.
 
-### Stock files under lib/features/inventory/
+## Stock Ops (Slice C) — COMPLETE
 
-**Entities (4 new):**
-- `stock_movement_type.dart` — enum SALE/PURCHASE_RECEIPT/RETURN_IN/RETURN_OUT/
-  TRANSFER_OUT/TRANSFER_IN/ADJUSTMENT/SCRAP/OPENING_BALANCE + dbValue/fromDb
-- `warehouse.dart` — id, tenantId, branchId, name, code, address, capacityNotes,
-  isActive, isDefault
-- `stock_balance.dart` — id, branchId, warehouseId, productId, variantId, qtyOnHand,
-  qtyReserved, qtyInTransit, avgCost, reorderPoint, lastStockTake, lastUpdated
-- `stock_ledger_entry.dart` — id, productId, variantId, branchId, warehouseId,
-  operationType, qtyChange, costPerUnit, totalCost, balanceAfter, avgCostAfter,
-  referenceType, referenceId, notes, createdAt
-- `stock_level.dart` — composite: productId, productName, productSku, reorderPoint
-  + balance fields; available getter, isLowStock
+Migration `20260613075616_stock_ops.sql`. New tables: stock_adjustments, stock_transfers,
+stock_transfer_items, stock_counts, stock_count_items, imei_records, inventory_settings,
+number_series. New enums (4): adjustment_reason, stock_transfer_status, stock_count_status,
+imei_status. New RPCs (10): create/approve_adjustment, create/dispatch/receive/cancel_transfer,
+open/record/complete_count, register_imei. All ops post through Slice B ledger.
 
-**Failures (+2):** InsufficientStockFailure, WarehouseHasStockFailure
+### Slice C Flutter files
 
-**Models (5 new):** WarehouseModel, StockBalanceModel, StockLedgerEntryModel,
-StockLevelModel, StockMovementType extension
+**Entities (6 new + 4 enums):** StockAdjustment, StockTransfer, StockTransferItem,
+StockCount, StockCountItem, ImeiRecord + AdjustmentReason, StockTransferStatus,
+StockCountStatus, ImeiStatus
 
-**Datasource (+10 methods):** loadWarehouses, create/update/softDelete/setDefault/
-ensureDefault warehouse, loadStockBalances, loadProductLedger, loadStockLevels
-(join products!inner), postStockMovement (RPC)
+**Failures (+3):** DuplicateImeiFailure, ApprovalRequiredFailure, InvalidTransitionFailure
 
-**Repository:** +13 abstract methods + impl; _mapError extended (P0001 'warehouse
-has stock' → WarehouseHasStockFailure, 'stock' → InsufficientStockFailure)
+**Models (6 new):** StockAdjustmentModel, StockTransferModel, StockTransferItemModel,
+StockCountModel, StockCountItemModel, ImeiRecordModel
 
-**Use cases (13 new):** LoadWarehouses, CreateWarehouse, UpdateWarehouse,
-DeleteWarehouse, SetDefaultWarehouse, EnsureDefaultWarehouse, LoadStockBalances,
-LoadProductLedger, PostStockMovement, LoadStockLevels, + 3 product detail reuses
+**Datasource (+20 methods):** adjustments (load/create/approve), transfers (load/loadItems/
+create/dispatch/receive/cancel), counts (load/loadItems/open/recordItem/complete),
+imei (load/register), settings (load/updateThreshold)
 
-**Controllers (3 new):**
-- `warehouses_controller.dart` — AsyncNotifier, build() ensures default → loads
-- `stock_levels_controller.dart` — AsyncNotifier, build() finds default warehouse,
-  loads levels; load({warehouseId})
-- `stock_levels_controller.dart` — reused by forms; no separate movement controller
+**Repository:** +22 abstract + impl; _mapError: 23505+imei→DuplicateImei,
+22000→InvalidTransition
 
-**Pages (5 new):**
-- `warehouses_page.dart` — AppCards with name/code/Default badge/active chip;
-  Set Default + Delete gated by PermissionGate
-- `warehouse_form_page.dart` — name/code/address/capacityNotes + isActive switch
-- `stock_levels_page.dart` — search (300ms debounce), warehouse selector, low-stock
-  toggle; product rows with 4 metrics + low-stock amber badge
-- `product_stock_detail_page.dart` — per-warehouse table + ledger history
-- `stock_movement_form_page.dart` — product/warehouse/target/cost/notes; delta
-  preview; OPENING_BALANCE RPC; InsufficientStockFailure inline banner
+**Use cases (16 new):** LoadAdjustments, CreateAdjustment, ApproveAdjustment,
+LoadTransfers, LoadTransferItems, CreateTransfer, DispatchTransfer, ReceiveTransfer,
+CancelTransfer, LoadCounts, LoadCountItems, OpenCount, RecordCountItem, CompleteCount,
+LoadImei, RegisterImei, LoadInventorySettings, UpdateApprovalThreshold
 
-**Routes (5 new):** `/inventory/warehouses`, `/create`, `/:warehouseId`;
-`/inventory/stock`, `/inventory/stock/:productId`, `/inventory/stock/movement`
+**Controllers (3 new):** AdjustmentsController, TransfersController, CountsController,
+ImeiController
 
-**Hub:** "Warehouses" + "Stock Levels" rows active; "Transfer" row stays Coming Soon.
+**Pages (7 new):** AdjustmentsPage, AdjustmentFormPage, TransfersPage, TransferFormPage,
+TransferReceivePage, CountsPage, CountSessionPage, ImeiLookupPage
+
+**Routes (+13):** `/inventory/adjustments`, `/create`; `/inventory/transfers`, `/create`,
+`/:id/receive`; `/inventory/counts`, `/:id`; `/inventory/imei`
+
+**Hub:** All rows active (Products, Barcode Templates, Categories, Brands, Warehouses,
+Stock Levels, Adjustments, Transfers, Stock Counts, IMEI Lookup)
 
 ## Database Migrations
 
 | Migration | Contents |
 |-----------|----------|
-| `20260609000000_init.sql` | tenants, roles, users + trigger v1 + seeds |
+| `20260609000000_init.sql` | tenants, roles, users, trigger v1, seeds |
 | `20260609000001_signup_provisioning.sql` | business_name → new tenant trigger |
-| `20260609000002_auth_full_schema.sql` | branches, assignments, permissions, devices, sessions, mfa_configs, audit_logs; RLS helpers |
+| `20260609000002_auth_full_schema.sql` | branches, assignments, permissions, devices, sessions, mfa, audit_logs |
 | `20260611000000_failed_login_rpc.sql` | increment/reset_failed_login RPCs |
-| `20260611000001_product_catalog.sql` | categories, brands, products, variants, images, pricing, barcode templates |
-| `20260611163739_product_sku_and_search.sql` | pg_trgm, SKU auto-gen, search_products RPC |
-| `20260613061924_stock_engine.sql` | warehouses, stock_balance, stock_ledger, enums, triggers, RPCs, RLS, seeds |
+| `20260611000001_product_catalog.sql` | catalog schema + RLS |
+| `20260611163739_product_sku_and_search.sql` | pg_trgm, SKU auto-gen |
+| `20260613061924_stock_engine.sql` | warehouses, stock_balance, stock_ledger, enums, triggers, RPCs |
+| `20260613075616_stock_ops.sql` | adjustments, transfers, counts, imei, number_series, settings, RPCs |
 
 ## Bugfixes Applied
 
-- Product edit form: didChangeDependencies → ref.listen(productEditProvider) with
-  _didSeed guard so form populates reactively when async load completes
+- Product edit form: reactive ref.listen(productEditProvider) + _didSeed guard
 - Product create: ref.invalidate(productsProvider) in controller.saveProduct
-  ensures list refreshes after every save
-- RPC parsing: postStockMovement + ensureDefaultWarehouse treat .rpc() result as
-  single-row Map (not List) — removed .first calls that crashed on success
+- RPC parsing: single-row Map (not List) for postStockMovement + ensureDefaultWarehouse
+- Products card restored to Inventory hub (accidentally removed during Slice edits)
+- Products screen filtering: unified search + category/brand/status into single composeable query path
+  (search() now accepts filter params through the full chain — datasource → use case → repo → controller).
+  Added brand filter dropdown to products page. Fixes: category-filter + search non-composition, missing
+  brand filter.
+
+## Barcode Scanning — Wired
+
+- Package: `mobile_scanner: ^7.2.0`
+- `lib/core/services/scanner_support.dart` — `bool get barcodeScanSupported` (true only on iOS/Android, not web)
+- `lib/core/widgets/barcode_scan_page.dart` — shared reusable scanner (293 lines): `scanBarcode(context, title:)` helper + `BarcodeScanPage` widget (camera preview, scan-window overlay, torch toggle, 1.5s debounce, manual-entry sentinel, permission-denied screen)
+- Platform permissions: `NSCameraUsageDescription` in iOS Info.plist, `CAMERA` + `uses-feature` in Android manifest
+- Wired into 4 inventory screens (scan buttons gated by `barcodeScanSupported`; desktop/web degrade silently):
+  - Products search — sets field + triggers debounced search
+  - Product form barcode field — sets `_barcodeCtrl.text`
+  - IMEI lookup — sets field + calls `_search()`
+  - Count session — matches scanned SKU/barcode to count line, scrolls + focuses quantity input; "Not in this count" banner if no match
+
+## Barcode Templates — Label Printing (Workflow §6.6) — COMPLETE
+
+- Packages: `pdf`, `printing`, `barcode`
+- `lib/features/inventory/data/services/label_pdf_service.dart` — renders labels on A4 grid per BarcodeTemplate mm dimensions (CODE128/EAN13/QR, SKU fallback on null barcode, EAN13 validates 13-digit else degrades to CODE128)
+- Products page: multi-select mode gated by `PermissionGate(module:'inventory', action:'export')` — ADMIN only; bottom bar with count + "Choose Template" → `/inventory/labels`
+- `lib/features/inventory/presentation/pages/label_print_page.dart` — template picker (defaults to `isDefault`), per-product +/- quantity controls, "Preview / Print" via `Printing.layoutPdf`
+- Barcode Templates are no longer CRUD-only — they produce actual PDF labels end-to-end
+
+## Notifications (§3.13) — Low-Stock Alerts + In-App Inbox — COMPLETE
+
+- Migration `20260615082538_notifications_low_stock.sql`: `notifications` + `notification_preferences` tables
+- DB trigger `trg_low_stock_notify` on `stock_balance` fires on qty_on_hand crossing below effective reorder_point (stock_balance override else product.reorder_point); deduped per product+branch while unread; inserts per tenant ADMIN respecting preferences
+- `mark_notification_read(p_id)` SECURITY DEFINER RPC
+- `lib/features/notifications/` clean-arch feature folder: `AppNotification` entity (18 columns + 3 enums), `NotificationModel`, `NotificationRemoteDataSource` (load/unreadCount/markRead/markAllRead), `NotificationRepository`, `NotificationsController` (AsyncNotifier) + `unreadCountProvider` (FutureProvider)
+- `NotificationsPage` — list with priority chip, unread dot, time-ago, tap → deep-links to `/inventory/stock/:actionId`, "Mark All Read"
+- Inventory hub AppBar: bell icon + unread badge (destructive counter, 99+ cap) → `/inventory/notifications`
+
+## Bulk Product Import — COMPLETE
+
+- Migration `20260616100723_bulk_import_products.sql`: `bulk_import_products(p_rows jsonb)` SECURITY DEFINER RPC — per-row try/catch, `{ok, failed, errors[]}`, resolves category/brand by name, SKU auto-gen, gated by `inventory:create`
+- Packages: `file_picker: ^3.0.4`, `csv: ^8.0.0`
+- `lib/features/inventory/presentation/pages/import_products_page.dart` — 3-step flow: pick .csv, column-mapping with smart auto-map + preview table, import with result summary
+- Datasource + use case + controller method `bulkImport(jsonPayload)` wired through clean-arch layers
+- Products page: upload icon button (PermissionGate `inventory:create`) → `/inventory/import`
+
+## Voice Search — Wired
+
+- Package: `speech_to_text: ^7.4.0`
+- `lib/core/services/voice_support.dart` — `bool get voiceSearchSupported` (iOS/Android only)
+- `lib/core/services/voice_input_service.dart` — wraps `SpeechToText`: lazy init, `listen()` returns `Future<String?>`, 5s timeout, streams partial → `onPartial` callback, dictation mode
+- Products search: mic icon (gated by `voiceSearchSupported`); while listening shows red mic + "Listening… '[partial]'" subtitle; partial streams into search field; final result triggers `ProductsController.search()`
+- Native permissions: `NSMicrophoneUsageDescription` + `NSSpeechRecognitionUsageDescription` in Info.plist, `RECORD_AUDIO` in Android manifest
 
 ## Known Issues
 
 - `ServerErrorFailure` — defined, never instantiated
 - `cupertino_icons` — in pubspec, unused
-- `RecoveryState` in `core/error/auth_failure.dart` — semantic misplacement
-- Profile loaded once on mount (no pull-to-refresh)
+- `RecoveryState` in core/error — semantic misplacement
+- Profile loaded once (no pull-to-refresh)
+- IMEI section not yet integrated into product edit form (SERIALIZED products)
+
+## Migration Import — COMPLETE
+
+Feature folder `lib/features/migration_import/` with full clean-arch stack.
+Reuses InventoryFailure. 4 RPCs: migrate_import_categories/brands/products/stock.
+M1: Datasource → Repository → 4 use cases.
+M2: MigrationImportController (Notifier) with pickAndParse + run; CSV header→field pass-through.
+M3: MigrationImportPage — 4 FK-ordered step cards, preview tables, expandable errors, on-screen logs panel.
+Set-based RPCs (20260617120537) for categories/brands/products — single INSERT SELECT replaces per-row loop.
+Stock RPC gets `set local statement_timeout = 0`. Products deduplicate barcode within batch + skip existing.
+Chunk sizes: products 2000, stock 1000, others 500. Hub row in InventoryHubPage. Route /inventory/import-migration.
+Bugfixes: bytes/null (withData:true + utf8.decode + path fallback), button hang (try/finally), jsonb params as List,
+chunk failure tolerant (continue loop, accumulate totals), on-screen log panel replacing console prints.
 
 ## What's Next
 
-Slice C: stock transfers, stock adjustments, stock counts, IMEI tracking, scrap,
-valuation. Remaining stock_balance fields (qty_in_transit populated when transfer
-logic ships). stock_ledger partitioning deferred.
+Data migration import UI + full end-to-end flow. Sales module (POS bills,
+checkout, invoice history) or Purchasing module.

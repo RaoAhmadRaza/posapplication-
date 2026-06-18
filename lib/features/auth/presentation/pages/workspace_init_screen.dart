@@ -8,6 +8,7 @@ import '../../../../core/design/widgets/app_button.dart';
 import '../../../../core/design/widgets/app_inline_banner.dart';
 import '../../../../core/services/device_service.dart';
 import '../../../../core/services/mfa_service.dart';
+import '../../../../core/services/pin_service.dart';
 import '../../../../core/state/app_flow_state.dart';
 import '../../../../core/supabase.dart';
 import '../controllers/branch_controller.dart';
@@ -54,6 +55,8 @@ class _WorkspaceInitScreenState extends ConsumerState<WorkspaceInitScreen> {
   }
 
   void _triggerLoads() {
+    // TEMP debug
+    debugPrint('[WORKSPACE-INIT] _triggerLoads called, session uid=${supabase.auth.currentUser?.id}, completed=${WorkspaceInitState.instance.completed}');
     final userId = supabase.auth.currentUser?.id;
     if (userId == null) return;
     ref.read(profileControllerProvider.notifier).load(userId);
@@ -81,6 +84,13 @@ class _WorkspaceInitScreenState extends ConsumerState<WorkspaceInitScreen> {
     WidgetsBinding.instance.addPostFrameCallback((_) => _triggerLoads());
   }
 
+  Future<void> _reconcilePin() async {
+    final serverHash = await PinService.instance.getServerPinHash();
+    if (serverHash != null) {
+      await PinService.instance.reconcilePinFromServer(serverHash);
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     ref.listen(profileControllerProvider, (prev, next) {
@@ -102,6 +112,9 @@ class _WorkspaceInitScreenState extends ConsumerState<WorkspaceInitScreen> {
             userId: userId,
             tenantId: profile.tenantId!,
           );
+        }
+        if (prevProfile == null) {
+          _reconcilePin();
         }
       }
 

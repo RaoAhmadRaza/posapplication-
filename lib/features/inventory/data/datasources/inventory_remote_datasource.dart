@@ -120,16 +120,29 @@ class InventoryRemoteDataSource {
     return query.order('created_at', ascending: false);
   }
 
-  Future<List<Map<String, dynamic>>> searchProducts(String q) async {
+  Future<List<Map<String, dynamic>>> searchProducts(
+    String q, {
+    String? categoryId,
+    String? brandId,
+    String? status,
+  }) async {
     final trimmed = q.trim();
-    if (trimmed.isEmpty) return loadProducts();
+    if (trimmed.isEmpty) {
+      return loadProducts(
+        categoryId: categoryId,
+        brandId: brandId,
+        status: status,
+      );
+    }
 
-    final list = await _client
+    var query = _client
         .from('products')
         .select(_productCols)
-        .or('name.ilike.*$trimmed*,sku.ilike.*$trimmed*,barcode.ilike.$trimmed')
-        .order('created_at', ascending: false);
-    return list;
+        .or('name.ilike.*$trimmed*,sku.ilike.*$trimmed*,barcode.ilike.$trimmed');
+    if (categoryId != null) query = query.eq('category_id', categoryId);
+    if (brandId != null) query = query.eq('brand_id', brandId);
+    if (status != null) query = query.eq('status', status);
+    return query.order('created_at', ascending: false);
   }
 
   Future<Map<String, dynamic>?> getProduct(String id) async {
@@ -380,5 +393,223 @@ class InventoryRemoteDataSource {
       'p_notes': notes,
     });
     return result as Map<String, dynamic>;
+  }
+
+  // ==================== Stock Adjustments ====================
+
+  static const _adjustmentCols = 'id, tenant_id, branch_id, warehouse_id, product_id, variant_id,'
+      ' adj_qty, cost_per_unit, reason_code, reason_notes, reference_number, requires_approval,'
+      ' approved_by, approved_at, posted, created_at, created_by';
+
+  Future<List<Map<String, dynamic>>> loadAdjustments({
+    String? branchId,
+    bool pendingOnly = false,
+  }) async {
+    var query = _client.from('stock_adjustments').select(_adjustmentCols);
+    if (branchId != null) query = query.eq('branch_id', branchId);
+    if (pendingOnly) query = query.eq('requires_approval', true).filter('approved_by', 'is', null);
+    return query.order('created_at', ascending: false);
+  }
+
+  Future<Map<String, dynamic>> createAdjustment({
+    required String branchId,
+    required String? warehouseId,
+    required String productId,
+    required String? variantId,
+    required double adjQty,
+    required double costPerUnit,
+    required String reasonCode,
+    String? notes,
+  }) async {
+    final result = await _client.rpc('create_stock_adjustment', params: {
+      'p_branch_id': branchId,
+      'p_warehouse_id': warehouseId,
+      'p_product_id': productId,
+      'p_variant_id': variantId,
+      'p_adj_qty': adjQty,
+      'p_cost_per_unit': costPerUnit,
+      'p_reason': reasonCode,
+      'p_notes': notes,
+    });
+    return result as Map<String, dynamic>;
+  }
+
+  Future<void> approveAdjustment(String id) async {
+    await _client.rpc('approve_stock_adjustment', params: {'p_id': id});
+  }
+
+  // ==================== Stock Transfers ====================
+
+  static const _transferCols = 'id, tenant_id, transfer_number, from_branch_id, to_branch_id,'
+      ' from_warehouse_id, to_warehouse_id, status, dispatched_at, dispatched_by,'
+      ' received_at, received_by, notes, created_at, updated_at, created_by, updated_by';
+
+  Future<List<Map<String, dynamic>>> loadTransfers({
+    String? branchId,
+    String? direction,
+  }) async {
+    var query = _client.from('stock_transfers').select(_transferCols);
+    if (branchId != null && direction == 'outgoing') {
+      query = query.eq('from_branch_id', branchId);
+    } else if (branchId != null && direction == 'incoming') {
+      query = query.eq('to_branch_id', branchId);
+    } else if (branchId != null) {
+      query = query.or('from_branch_id.eq.$branchId,to_branch_id.eq.$branchId');
+    }
+    return query.order('created_at', ascending: false);
+  }
+
+  static const _transferItemCols = 'id, transfer_id, product_id, variant_id, imei_id,'
+      ' qty, qty_received, cost_price, notes, created_at';
+
+  Future<List<Map<String, dynamic>>> loadTransferItems(String transferId) async {
+    return _client.from('stock_transfer_items').select(_transferItemCols)
+        .eq('transfer_id', transferId).order('created_at');
+  }
+
+  Future<Map<String, dynamic>> createTransfer({
+    required String fromBranchId,
+    required String toBranchId,
+    required String? fromWarehouseId,
+    required String? toWarehouseId,
+    required List<Map<String, dynamic>> items,
+    String? notes,
+  }) async {
+    final result = await _client.rpc('create_stock_transfer', params: {
+      'p_from_branch': fromBranchId,
+      'p_to_branch': toBranchId,
+      'p_from_wh': fromWarehouseId,
+      'p_to_wh': toWarehouseId,
+      'p_items': items,
+      'p_notes': notes,
+    });
+    return result as Map<String, dynamic>;
+  }
+
+  Future<void> dispatchTransfer(String id) async {
+    await _client.rpc('dispatch_stock_transfer', params: {'p_id': id});
+  }
+
+  Future<void> receiveTransfer(String id, List<Map<String, dynamic>> received) async {
+    await _client.rpc('receive_stock_transfer', params: {
+      'p_id': id,
+      'p_received': received,
+    });
+  }
+
+  Future<void> cancelTransfer(String id) async {
+    await _client.rpc('cancel_stock_transfer', params: {'p_id': id});
+  }
+
+  // ==================== Stock Counts ====================
+
+  static const _countCols = 'id, tenant_id, branch_id, warehouse_id, count_number, status,'
+      ' category_id, started_at, completed_at, total_items, items_counted, variance_count,'
+      ' notes, created_at, updated_at, created_by, updated_by';
+
+  Future<List<Map<String, dynamic>>> loadCounts() async {
+    return _client.from('stock_counts').select(_countCols)
+        .order('created_at', ascending: false);
+  }
+
+  static const _countItemCols = 'id, stock_count_id, product_id, variant_id, system_qty,'
+      ' counted_qty, variance, variance_cost, notes, counted_at, counted_by, created_at';
+
+  Future<List<Map<String, dynamic>>> loadCountItems(String countId) async {
+    return _client.from('stock_count_items').select(_countItemCols)
+        .eq('stock_count_id', countId).order('created_at');
+  }
+
+  Future<Map<String, dynamic>> openCount({
+    required String branchId,
+    String? warehouseId,
+    String? categoryId,
+  }) async {
+    final result = await _client.rpc('open_stock_count', params: {
+      'p_branch': branchId,
+      'p_warehouse': warehouseId,
+      'p_category': categoryId,
+    });
+    return result as Map<String, dynamic>;
+  }
+
+  Future<void> recordCountItem(String itemId, double counted) async {
+    await _client.rpc('record_count_item', params: {
+      'p_item_id': itemId,
+      'p_counted': counted,
+    });
+  }
+
+  Future<void> completeCount(String id) async {
+    await _client.rpc('complete_stock_count', params: {'p_id': id});
+  }
+
+  // ==================== IMEI Records ====================
+
+  static const _imeiCols = 'id, tenant_id, imei, product_id, variant_id, status, branch_id,'
+      ' warehouse_id, source_type, source_id, cost_price, selling_price, warranty_expires_at,'
+      ' notes, created_at, updated_at, created_by, updated_by';
+
+  Future<List<Map<String, dynamic>>> loadImei({
+    String? productId,
+    String? status,
+  }) async {
+    var query = _client.from('imei_records').select(_imeiCols);
+    if (productId != null) query = query.eq('product_id', productId);
+    if (status != null) query = query.eq('status', status);
+    return query.order('created_at', ascending: false);
+  }
+
+  Future<Map<String, dynamic>> registerImei({
+    required String productId,
+    required String? variantId,
+    required String branchId,
+    required String? warehouseId,
+    required String imei,
+    required String sourceType,
+    required double costPrice,
+    bool postStock = true,
+  }) async {
+    final result = await _client.rpc('register_imei', params: {
+      'p_product': productId,
+      'p_variant': variantId,
+      'p_branch': branchId,
+      'p_warehouse': warehouseId,
+      'p_imei': imei,
+      'p_source_type': sourceType,
+      'p_cost': costPrice,
+      'p_post_stock': postStock,
+    });
+    return result as Map<String, dynamic>;
+  }
+
+  // ==================== Inventory Settings ====================
+
+  Future<Map<String, dynamic>> loadInventorySettings() async {
+    final tid = await _tenantId();
+    final list = await _client.from('inventory_settings')
+        .select('tenant_id, adjustment_approval_threshold, allow_negative_stock, updated_at')
+        .eq('tenant_id', tid);
+    return list.isNotEmpty ? list.first : <String, dynamic>{
+      'tenant_id': tid,
+      'adjustment_approval_threshold': 0,
+      'allow_negative_stock': false,
+      'updated_at': DateTime.now().toIso8601String(),
+    };
+  }
+
+  Future<void> updateApprovalThreshold(double value) async {
+    final tid = await _tenantId();
+    await _client.from('inventory_settings').update({
+      'adjustment_approval_threshold': value,
+    }).eq('tenant_id', tid);
+  }
+
+  Future<Map<String, dynamic>> bulkImportProducts(
+      List<Map<String, dynamic>> rows) async {
+    final result = await _client.rpc('bulk_import_products', params: {
+      'p_rows': rows,
+    });
+    return Map<String, dynamic>.from(result as Map);
   }
 }

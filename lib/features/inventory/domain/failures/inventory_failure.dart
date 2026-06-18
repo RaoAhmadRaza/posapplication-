@@ -32,6 +32,21 @@ class WarehouseHasStockFailure extends InventoryFailure {
   String get message => 'Cannot delete a warehouse that still has stock.';
 }
 
+class DuplicateImeiFailure extends InventoryFailure {
+  @override
+  String get message => 'This IMEI is already registered.';
+}
+
+class ApprovalRequiredFailure extends InventoryFailure {
+  @override
+  String get message => 'This adjustment requires approval before posting.';
+}
+
+class InvalidTransitionFailure extends InventoryFailure {
+  @override
+  String get message => 'This status transition is not allowed.';
+}
+
 class UnknownFailure extends InventoryFailure {
   final String details;
   UnknownFailure(this.details);

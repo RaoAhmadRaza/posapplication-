@@ -9,6 +9,12 @@ import '../../domain/entities/warehouse.dart';
 import '../../domain/entities/stock_balance.dart';
 import '../../domain/entities/stock_ledger_entry.dart';
 import '../../domain/entities/stock_level.dart';
+import '../../domain/entities/stock_adjustment.dart';
+import '../../domain/entities/stock_transfer.dart';
+import '../../domain/entities/stock_transfer_item.dart';
+import '../../domain/entities/stock_count.dart';
+import '../../domain/entities/stock_count_item.dart';
+import '../../domain/entities/imei_record.dart';
 import '../../domain/failures/inventory_failure.dart';
 
 abstract class InventoryRepository {
@@ -27,7 +33,12 @@ abstract class InventoryRepository {
     String? brandId,
     String? status,
   });
-  Future<(List<Product>, InventoryFailure?)> searchProducts(String q);
+  Future<(List<Product>, InventoryFailure?)> searchProducts(
+    String q, {
+    String? categoryId,
+    String? brandId,
+    String? status,
+  });
   Future<(Product?, InventoryFailure?)> getProduct(String id);
   Future<(Product?, InventoryFailure?)> createProduct(Map<String, dynamic> data);
   Future<(Product?, InventoryFailure?)> updateProduct(String id, Map<String, dynamic> data);
@@ -86,4 +97,67 @@ abstract class InventoryRepository {
     String? branchId,
     String? warehouseId,
   });
+
+  Future<(List<StockAdjustment>, InventoryFailure?)> loadAdjustments({
+    String? branchId,
+    bool pendingOnly = false,
+  });
+  Future<(StockAdjustment?, InventoryFailure?)> createAdjustment({
+    required String branchId,
+    required String? warehouseId,
+    required String productId,
+    required String? variantId,
+    required double adjQty,
+    required double costPerUnit,
+    required String reasonCode,
+    String? notes,
+  });
+  Future<(bool, InventoryFailure?)> approveAdjustment(String id);
+
+  Future<(List<StockTransfer>, InventoryFailure?)> loadTransfers({
+    String? branchId,
+    String? direction,
+  });
+  Future<(List<StockTransferItem>, InventoryFailure?)> loadTransferItems(String transferId);
+  Future<(StockTransfer?, InventoryFailure?)> createTransfer({
+    required String fromBranchId,
+    required String toBranchId,
+    required String? fromWarehouseId,
+    required String? toWarehouseId,
+    required List<Map<String, dynamic>> items,
+    String? notes,
+  });
+  Future<(bool, InventoryFailure?)> dispatchTransfer(String id);
+  Future<(bool, InventoryFailure?)> receiveTransfer(String id, List<Map<String, dynamic>> received);
+  Future<(bool, InventoryFailure?)> cancelTransfer(String id);
+
+  Future<(List<StockCount>, InventoryFailure?)> loadCounts();
+  Future<(List<StockCountItem>, InventoryFailure?)> loadCountItems(String countId);
+  Future<(StockCount?, InventoryFailure?)> openCount({
+    required String branchId,
+    String? warehouseId,
+    String? categoryId,
+  });
+  Future<(bool, InventoryFailure?)> recordCountItem(String itemId, double counted);
+  Future<(bool, InventoryFailure?)> completeCount(String id);
+
+  Future<(List<ImeiRecord>, InventoryFailure?)> loadImei({
+    String? productId,
+    String? status,
+  });
+  Future<(ImeiRecord?, InventoryFailure?)> registerImei({
+    required String productId,
+    required String? variantId,
+    required String branchId,
+    required String? warehouseId,
+    required String imei,
+    required String sourceType,
+    required double costPrice,
+    bool postStock = true,
+  });
+
+  Future<(Map<String, dynamic>, InventoryFailure?)> loadInventorySettings();
+  Future<(bool, InventoryFailure?)> updateApprovalThreshold(double value);
+  Future<(Map<String, dynamic>, InventoryFailure?)> bulkImportProducts(
+      List<Map<String, dynamic>> rows);
 }

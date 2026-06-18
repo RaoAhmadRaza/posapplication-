@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'core/design/app_theme.dart';
 import 'core/services/pin_service.dart';
 import 'core/state/app_flow_state.dart';
+import 'core/supabase.dart';
 import 'router.dart';
 
 class App extends StatefulWidget {
@@ -32,6 +33,8 @@ class _AppState extends State<App> with WidgetsBindingObserver {
   }
 
   Future<void> _checkPinLock() async {
+    if (supabase.auth.currentUser == null) return;
+    if (!WorkspaceInitState.instance.completed) return;
     final hasPin = await PinService.instance.hasPin();
     if (hasPin && mounted) {
       PinLockState.instance.lock();

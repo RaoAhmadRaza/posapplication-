@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import 'core/error/auth_failure.dart';
@@ -36,13 +37,38 @@ import 'features/inventory/presentation/pages/warehouse_form_page.dart';
 import 'features/inventory/presentation/pages/stock_levels_page.dart';
 import 'features/inventory/presentation/pages/product_stock_detail_page.dart';
 import 'features/inventory/presentation/pages/stock_movement_form_page.dart';
+import 'features/inventory/presentation/pages/adjustments_page.dart';
+import 'features/inventory/presentation/pages/adjustment_form_page.dart';
+import 'features/inventory/presentation/pages/transfers_page.dart';
+import 'features/inventory/presentation/pages/transfer_form_page.dart';
+import 'features/inventory/presentation/pages/transfer_receive_page.dart';
+import 'features/inventory/presentation/pages/counts_page.dart';
+import 'features/inventory/presentation/pages/count_session_page.dart';
+import 'features/inventory/presentation/pages/imei_lookup_page.dart';
+import 'features/inventory/presentation/pages/label_print_page.dart';
+import 'features/inventory/presentation/pages/import_products_page.dart';
+import 'features/migration_import/presentation/pages/migration_import_page.dart';
+import 'features/notifications/presentation/pages/notifications_page.dart';
 import 'features/auth/presentation/pages/sale_page.dart';
 import 'features/auth/presentation/pages/settings_page.dart';
 
 class _GoRouterRefreshStream extends ChangeNotifier {
+  String? _lastUid;
+
   _GoRouterRefreshStream() {
-    supabase.auth.onAuthStateChange.listen((_) {
-      notifyListeners();
+    _lastUid = supabase.auth.currentUser?.id;
+    supabase.auth.onAuthStateChange.listen((event) {
+      final newUid = event.session?.user.id;
+      final eventName = event.event.name;
+      if (newUid != _lastUid || eventName == 'SIGNED_OUT') {
+        debugPrint('[AUTH-LIFECYCLE] user changed: $_lastUid -> $newUid ($eventName), resetting state');
+        _lastUid = newUid;
+        BranchRouterState.instance.reset();
+        resetUserScopedState();
+        Future.microtask(() => notifyListeners());
+      } else {
+        notifyListeners();
+      }
     });
   }
 }
@@ -273,6 +299,63 @@ final appRouter = GoRouter(
         final id = state.pathParameters['productId']!;
         return ProductStockDetailPage(productId: id);
       },
+    ),
+    GoRoute(
+      path: '/inventory/adjustments',
+      builder: (context, state) => const AdjustmentsPage(),
+    ),
+    GoRoute(
+      path: '/inventory/adjustments/create',
+      builder: (context, state) => const AdjustmentFormPage(),
+    ),
+    GoRoute(
+      path: '/inventory/transfers',
+      builder: (context, state) => const TransfersPage(),
+    ),
+    GoRoute(
+      path: '/inventory/transfers/create',
+      builder: (context, state) => const TransferFormPage(),
+    ),
+    GoRoute(
+      path: '/inventory/transfers/:transferId/receive',
+      builder: (context, state) {
+        final id = state.pathParameters['transferId']!;
+        return TransferReceivePage(transferId: id);
+      },
+    ),
+    GoRoute(
+      path: '/inventory/counts',
+      builder: (context, state) => const CountsPage(),
+    ),
+    GoRoute(
+      path: '/inventory/counts/:countId',
+      builder: (context, state) {
+        final id = state.pathParameters['countId']!;
+        return CountSessionPage(countId: id);
+      },
+    ),
+    GoRoute(
+      path: '/inventory/imei',
+      builder: (context, state) => const ImeiLookupPage(),
+    ),
+    GoRoute(
+      path: '/inventory/labels',
+      builder: (context, state) {
+        final ids = state.extra as List<String>;
+        return LabelPrintPage(productIds: ids);
+      },
+    ),
+    GoRoute(
+      path: '/inventory/import',
+      builder: (context, state) => const ImportProductsPage(),
+    ),
+    GoRoute(
+      path: '/inventory/import-migration',
+      builder: (context, state) => const MigrationImportPage(),
+    ),
+    GoRoute(
+      path: '/inventory/notifications',
+      builder: (context, state) => const NotificationsPage(),
     ),
     StatefulShellRoute.indexedStack(
       builder: (context, state, navigationShell) =>

@@ -8,8 +8,18 @@ class SearchProducts {
   final InventoryRepository _repo;
   SearchProducts(this._repo);
 
-  Future<(List<Product>, InventoryFailure?)> call(String q) async {
-    return _repo.searchProducts(q);
+  Future<(List<Product>, InventoryFailure?)> call(
+    String q, {
+    String? categoryId,
+    String? brandId,
+    String? status,
+  }) async {
+    return _repo.searchProducts(
+      q,
+      categoryId: categoryId,
+      brandId: brandId,
+      status: status,
+    );
   }
 }
 

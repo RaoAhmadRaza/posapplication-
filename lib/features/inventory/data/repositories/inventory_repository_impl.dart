@@ -13,6 +13,12 @@ import '../../domain/entities/warehouse.dart';
 import '../../domain/entities/stock_balance.dart';
 import '../../domain/entities/stock_ledger_entry.dart';
 import '../../domain/entities/stock_level.dart';
+import '../../domain/entities/stock_adjustment.dart';
+import '../../domain/entities/stock_transfer.dart';
+import '../../domain/entities/stock_transfer_item.dart';
+import '../../domain/entities/stock_count.dart';
+import '../../domain/entities/stock_count_item.dart';
+import '../../domain/entities/imei_record.dart';
 import '../../domain/failures/inventory_failure.dart';
 import '../../domain/repositories/inventory_repository.dart';
 import '../datasources/inventory_remote_datasource.dart';
@@ -27,6 +33,12 @@ import '../models/warehouse_model.dart';
 import '../models/stock_balance_model.dart';
 import '../models/stock_ledger_entry_model.dart';
 import '../models/stock_level_model.dart';
+import '../models/stock_adjustment_model.dart';
+import '../models/stock_transfer_model.dart';
+import '../models/stock_transfer_item_model.dart';
+import '../models/stock_count_model.dart';
+import '../models/stock_count_item_model.dart';
+import '../models/imei_record_model.dart';
 
 final inventoryRepositoryProvider = Provider<InventoryRepository>((ref) {
   return InventoryRepositoryImpl(ref.read(inventoryRemoteDataSourceProvider));
@@ -42,6 +54,7 @@ class InventoryRepositoryImpl implements InventoryRepository {
       final code = e.code;
       final msg = e.message.toLowerCase();
       if (code == '23505') {
+        if (msg.contains('imei')) return DuplicateImeiFailure();
         if (msg.contains('sku') || msg.contains('barcode')) {
           return DuplicateSkuFailure();
         }
@@ -50,6 +63,7 @@ class InventoryRepositoryImpl implements InventoryRepository {
         if (msg.contains('warehouse has stock')) return WarehouseHasStockFailure();
         if (msg.contains('stock')) return InsufficientStockFailure();
       }
+      if (code == '22000') return InvalidTransitionFailure();
       if (code == '42501') return PermissionDeniedFailure();
       if (code == 'PGRST116' || code == 'P0002') return NotFoundFailure();
     }
@@ -165,9 +179,19 @@ class InventoryRepositoryImpl implements InventoryRepository {
   }
 
   @override
-  Future<(List<Product>, InventoryFailure?)> searchProducts(String q) async {
+  Future<(List<Product>, InventoryFailure?)> searchProducts(
+    String q, {
+    String? categoryId,
+    String? brandId,
+    String? status,
+  }) async {
     try {
-      final rows = await _ds.searchProducts(q);
+      final rows = await _ds.searchProducts(
+        q,
+        categoryId: categoryId,
+        brandId: brandId,
+        status: status,
+      );
       return (rows.map(ProductModel.fromJson).toList(), null);
     } catch (e) {
       return (<Product>[], _mapError(e));
@@ -524,6 +548,274 @@ class InventoryRepositoryImpl implements InventoryRepository {
       return (rows.map(StockLevelModel.fromJson).toList(), null);
     } catch (e) {
       return (<StockLevel>[], _mapError(e));
+    }
+  }
+
+  // ==================== Stock Adjustments ====================
+
+  @override
+  Future<(List<StockAdjustment>, InventoryFailure?)> loadAdjustments({
+    String? branchId,
+    bool pendingOnly = false,
+  }) async {
+    try {
+      final rows = await _ds.loadAdjustments(branchId: branchId, pendingOnly: pendingOnly);
+      return (rows.map(StockAdjustmentModel.fromJson).toList(), null);
+    } catch (e) {
+      return (<StockAdjustment>[], _mapError(e));
+    }
+  }
+
+  @override
+  Future<(StockAdjustment?, InventoryFailure?)> createAdjustment({
+    required String branchId,
+    required String? warehouseId,
+    required String productId,
+    required String? variantId,
+    required double adjQty,
+    required double costPerUnit,
+    required String reasonCode,
+    String? notes,
+  }) async {
+    try {
+      final row = await _ds.createAdjustment(
+        branchId: branchId,
+        warehouseId: warehouseId,
+        productId: productId,
+        variantId: variantId,
+        adjQty: adjQty,
+        costPerUnit: costPerUnit,
+        reasonCode: reasonCode,
+        notes: notes,
+      );
+      return (StockAdjustmentModel.fromJson(row), null);
+    } catch (e) {
+      return (null, _mapError(e));
+    }
+  }
+
+  @override
+  Future<(bool, InventoryFailure?)> approveAdjustment(String id) async {
+    try {
+      await _ds.approveAdjustment(id);
+      return (true, null);
+    } catch (e) {
+      return (false, _mapError(e));
+    }
+  }
+
+  // ==================== Stock Transfers ====================
+
+  @override
+  Future<(List<StockTransfer>, InventoryFailure?)> loadTransfers({
+    String? branchId,
+    String? direction,
+  }) async {
+    try {
+      final rows = await _ds.loadTransfers(branchId: branchId, direction: direction);
+      return (rows.map(StockTransferModel.fromJson).toList(), null);
+    } catch (e) {
+      return (<StockTransfer>[], _mapError(e));
+    }
+  }
+
+  @override
+  Future<(List<StockTransferItem>, InventoryFailure?)> loadTransferItems(String transferId) async {
+    try {
+      final rows = await _ds.loadTransferItems(transferId);
+      return (rows.map(StockTransferItemModel.fromJson).toList(), null);
+    } catch (e) {
+      return (<StockTransferItem>[], _mapError(e));
+    }
+  }
+
+  @override
+  Future<(StockTransfer?, InventoryFailure?)> createTransfer({
+    required String fromBranchId,
+    required String toBranchId,
+    required String? fromWarehouseId,
+    required String? toWarehouseId,
+    required List<Map<String, dynamic>> items,
+    String? notes,
+  }) async {
+    try {
+      final row = await _ds.createTransfer(
+        fromBranchId: fromBranchId,
+        toBranchId: toBranchId,
+        fromWarehouseId: fromWarehouseId,
+        toWarehouseId: toWarehouseId,
+        items: items,
+        notes: notes,
+      );
+      return (StockTransferModel.fromJson(row), null);
+    } catch (e) {
+      return (null, _mapError(e));
+    }
+  }
+
+  @override
+  Future<(bool, InventoryFailure?)> dispatchTransfer(String id) async {
+    try {
+      await _ds.dispatchTransfer(id);
+      return (true, null);
+    } catch (e) {
+      return (false, _mapError(e));
+    }
+  }
+
+  @override
+  Future<(bool, InventoryFailure?)> receiveTransfer(String id, List<Map<String, dynamic>> received) async {
+    try {
+      await _ds.receiveTransfer(id, received);
+      return (true, null);
+    } catch (e) {
+      return (false, _mapError(e));
+    }
+  }
+
+  @override
+  Future<(bool, InventoryFailure?)> cancelTransfer(String id) async {
+    try {
+      await _ds.cancelTransfer(id);
+      return (true, null);
+    } catch (e) {
+      return (false, _mapError(e));
+    }
+  }
+
+  // ==================== Stock Counts ====================
+
+  @override
+  Future<(List<StockCount>, InventoryFailure?)> loadCounts() async {
+    try {
+      final rows = await _ds.loadCounts();
+      return (rows.map(StockCountModel.fromJson).toList(), null);
+    } catch (e) {
+      return (<StockCount>[], _mapError(e));
+    }
+  }
+
+  @override
+  Future<(List<StockCountItem>, InventoryFailure?)> loadCountItems(String countId) async {
+    try {
+      final rows = await _ds.loadCountItems(countId);
+      return (rows.map(StockCountItemModel.fromJson).toList(), null);
+    } catch (e) {
+      return (<StockCountItem>[], _mapError(e));
+    }
+  }
+
+  @override
+  Future<(StockCount?, InventoryFailure?)> openCount({
+    required String branchId,
+    String? warehouseId,
+    String? categoryId,
+  }) async {
+    try {
+      final row = await _ds.openCount(
+        branchId: branchId,
+        warehouseId: warehouseId,
+        categoryId: categoryId,
+      );
+      return (StockCountModel.fromJson(row), null);
+    } catch (e) {
+      return (null, _mapError(e));
+    }
+  }
+
+  @override
+  Future<(bool, InventoryFailure?)> recordCountItem(String itemId, double counted) async {
+    try {
+      await _ds.recordCountItem(itemId, counted);
+      return (true, null);
+    } catch (e) {
+      return (false, _mapError(e));
+    }
+  }
+
+  @override
+  Future<(bool, InventoryFailure?)> completeCount(String id) async {
+    try {
+      await _ds.completeCount(id);
+      return (true, null);
+    } catch (e) {
+      return (false, _mapError(e));
+    }
+  }
+
+  // ==================== IMEI Records ====================
+
+  @override
+  Future<(List<ImeiRecord>, InventoryFailure?)> loadImei({
+    String? productId,
+    String? status,
+  }) async {
+    try {
+      final rows = await _ds.loadImei(productId: productId, status: status);
+      return (rows.map(ImeiRecordModel.fromJson).toList(), null);
+    } catch (e) {
+      return (<ImeiRecord>[], _mapError(e));
+    }
+  }
+
+  @override
+  Future<(ImeiRecord?, InventoryFailure?)> registerImei({
+    required String productId,
+    required String? variantId,
+    required String branchId,
+    required String? warehouseId,
+    required String imei,
+    required String sourceType,
+    required double costPrice,
+    bool postStock = true,
+  }) async {
+    try {
+      final row = await _ds.registerImei(
+        productId: productId,
+        variantId: variantId,
+        branchId: branchId,
+        warehouseId: warehouseId,
+        imei: imei,
+        sourceType: sourceType,
+        costPrice: costPrice,
+        postStock: postStock,
+      );
+      return (ImeiRecordModel.fromJson(row), null);
+    } catch (e) {
+      return (null, _mapError(e));
+    }
+  }
+
+  // ==================== Inventory Settings ====================
+
+  @override
+  Future<(Map<String, dynamic>, InventoryFailure?)> loadInventorySettings() async {
+    try {
+      final row = await _ds.loadInventorySettings();
+      return (row, null);
+    } catch (e) {
+      return (<String, dynamic>{}, _mapError(e));
+    }
+  }
+
+  @override
+  Future<(bool, InventoryFailure?)> updateApprovalThreshold(double value) async {
+    try {
+      await _ds.updateApprovalThreshold(value);
+      return (true, null);
+    } catch (e) {
+      return (false, _mapError(e));
+    }
+  }
+
+  @override
+  Future<(Map<String, dynamic>, InventoryFailure?)> bulkImportProducts(
+      List<Map<String, dynamic>> rows) async {
+    try {
+      final result = await _ds.bulkImportProducts(rows);
+      return (result, null);
+    } catch (e) {
+      return (<String, dynamic>{}, _mapError(e));
     }
   }
 }

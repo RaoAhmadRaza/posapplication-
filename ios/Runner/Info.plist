@@ -45,7 +45,13 @@
 	<true/>
 	<key>UIApplicationSupportsIndirectInputEvents</key>
 	<true/>
+	<key>NSCameraUsageDescription</key>
+	<string>Scan product barcodes and serial numbers.</string>
 	<key>NSFaceIDUsageDescription</key>
 	<string>Use Face ID to unlock Lumina POS.</string>
+	<key>NSMicrophoneUsageDescription</key>
+	<string>Use the microphone for voice search of products.</string>
+	<key>NSSpeechRecognitionUsageDescription</key>
+	<string>Recognize speech to search products by voice.</string>
 </dict>
 </plist>

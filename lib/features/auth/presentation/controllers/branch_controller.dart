@@ -38,6 +38,15 @@ class BranchRouterState extends ChangeNotifier {
 
   bool get needsSelection => _loaded && _count > 1 && !_autoSelected;
 
+  void reset() {
+    if (_loaded || _autoSelected || _count != 0) {
+      _loaded = false;
+      _autoSelected = false;
+      _count = 0;
+      notifyListeners();
+    }
+  }
+
   void onBranchesLoaded(List<Branch> branches) {
     _loaded = true;
     _count = branches.length;

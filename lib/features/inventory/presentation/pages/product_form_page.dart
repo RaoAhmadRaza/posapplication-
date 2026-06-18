@@ -8,7 +8,9 @@ import '../../../../core/design/widgets/app_button.dart';
 import '../../../../core/design/widgets/app_card.dart';
 import '../../../../core/design/widgets/app_inline_banner.dart';
 import '../../../../core/design/widgets/app_text_field.dart';
+import '../../../../core/widgets/barcode_scan_page.dart';
 import '../../../../core/widgets/permission_gate.dart';
+import '../../../../core/services/scanner_support.dart';
 import '../../domain/entities/category.dart';
 import '../../domain/entities/brand.dart';
 import '../../domain/entities/product.dart';
@@ -192,6 +194,13 @@ class _ProductFormPageState extends ConsumerState<ProductFormPage> {
     if (mounted) Navigator.of(context).pop();
   }
 
+  Future<void> _scanBarcode() async {
+    final code = await scanBarcode(context, title: 'Scan Barcode');
+    if (code == null || code == BarcodeScanPage.manualEntrySentinel) return;
+    _barcodeCtrl.text = code;
+    setState(() {});
+  }
+
   Future<void> _confirmDelete() async {
     final ok = await showDialog<bool>(
       context: context,
@@ -317,7 +326,21 @@ class _ProductFormPageState extends ConsumerState<ProductFormPage> {
       children: [
         AppTextField(controller: _nameCtrl, label: 'Name', prefixIcon: Icons.inventory_2, hint: 'Product name'),
         const SizedBox(height: AppSpacing.fieldGap),
-        AppTextField(controller: _barcodeCtrl, label: 'Barcode', prefixIcon: Icons.barcode_reader, hint: 'Optional'),
+        Row(
+          children: [
+            Expanded(
+              child: AppTextField(controller: _barcodeCtrl, label: 'Barcode', prefixIcon: Icons.barcode_reader, hint: 'Optional'),
+            ),
+            if (barcodeScanSupported) ...[
+              const SizedBox(width: AppSpacing.sm),
+              IconButton(
+                icon: const Icon(Icons.qr_code_scanner, color: AppColors.accent),
+                onPressed: _scanBarcode,
+                tooltip: 'Scan barcode',
+              ),
+            ],
+          ],
+        ),
         const SizedBox(height: AppSpacing.fieldGap),
         AppTextField(controller: _descriptionCtrl, label: 'Description', prefixIcon: Icons.description, hint: 'Optional'),
         const SizedBox(height: AppSpacing.fieldGap),

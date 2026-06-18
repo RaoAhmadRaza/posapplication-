@@ -1,4 +1,9 @@
 import 'package:flutter/foundation.dart';
+import 'package:flutter_secure_storage/flutter_secure_storage.dart';
+import '../error/auth_failure.dart';
+
+const _storage = FlutterSecureStorage();
+const _branchIdKey = 'current_branch_id';
 
 class EnvCheckState extends ChangeNotifier {
   static final instance = EnvCheckState();
@@ -20,9 +25,18 @@ class WorkspaceInitState extends ChangeNotifier {
   bool _completed = false;
   bool get completed => _completed;
 
+  void reset() {
+    if (_completed) {
+      _completed = false;
+      debugPrint('[WORKSPACE-STATE] reset: completed=false');
+      notifyListeners();
+    }
+  }
+
   set completed(bool v) {
     if (_completed != v) {
       _completed = v;
+      debugPrint('[WORKSPACE-STATE] completed=$v');
       notifyListeners();
     }
   }
@@ -62,10 +76,28 @@ class MfaState extends ChangeNotifier {
     }
   }
 
+  void reset() {
+    if (_needsMfa) {
+      _needsMfa = false;
+      notifyListeners();
+    }
+  }
+
   void clear() {
     if (_needsMfa) {
       _needsMfa = false;
       notifyListeners();
     }
   }
+}
+
+Future<void> resetUserScopedState() async {
+  debugPrint('[AUTH-LIFECYCLE] resetUserScopedState called');
+  WorkspaceInitState.instance.reset();
+  MfaState.instance.reset();
+  RecoveryState.instance.reset();
+  try {
+    await _storage.delete(key: _branchIdKey);
+    debugPrint('[AUTH-LIFECYCLE] cleared branch storage');
+  } catch (_) {}
 }
