@@ -146,4 +146,20 @@ class AuthRemoteDataSource {
         .limit(100);
     return List<Map<String, dynamic>>.from(list);
   }
+
+  Future<void> insertAuditLog({
+    required String userId,
+    required String action,
+    required String entity,
+    String? entityId,
+    Map<String, dynamic>? newValues,
+  }) async {
+    await _client.from('audit_logs').insert({
+      'user_id': userId,
+      'action': action,
+      'entity': entity,
+      'entity_id': entityId,
+      'new_values': newValues,
+    });
+  }
 }
