@@ -1,7 +1,11 @@
 import 'dart:convert';
 import 'dart:math';
 import 'package:crypto/crypto.dart';
+import 'package:flutter/foundation.dart';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
+import '../../features/auth/data/datasources/auth_remote_datasource.dart';
+import '../../features/auth/data/repositories/pin_repository_impl.dart';
+import '../../features/auth/domain/repositories/pin_repository.dart';
 import '../supabase.dart';
 
 const _storage = FlutterSecureStorage();
@@ -10,8 +14,12 @@ const _pinSaltBase = 'pin_salt';
 const _biometricsBase = 'biometrics_enabled';
 
 class PinService {
-  static const instance = PinService._();
-  const PinService._();
+  PinService({PinRepository? repo})
+      : _repo = repo ?? PinRepositoryImpl(AuthRemoteDataSource(supabase));
+
+  static final instance = PinService();
+
+  final PinRepository _repo;
 
   String _k(String base) {
     final uid = supabase.auth.currentUser?.id;
@@ -60,11 +68,10 @@ class PinService {
 
     final userId = supabase.auth.currentUser?.id;
     if (userId != null) {
-      try {
-        await supabase
-            .from('users')
-            .update({'pin_hash': hash}).eq('id', userId);
-      } catch (_) {}
+      final failure = await _repo.updatePinHash(userId, hash);
+      if (failure != null) {
+        debugPrint('[PinService] setPin sync failed: ${failure.message}');
+      }
     }
   }
 
@@ -85,11 +92,10 @@ class PinService {
     await _storage.delete(key: _k(_biometricsBase));
 
     if (uid != null) {
-      try {
-        await supabase
-            .from('users')
-            .update({'pin_hash': null}).eq('id', uid);
-      } catch (_) {}
+      final failure = await _repo.updatePinHash(uid, null);
+      if (failure != null) {
+        debugPrint('[PinService] clearPin sync failed: ${failure.message}');
+      }
     }
   }
 
@@ -109,16 +115,12 @@ class PinService {
   Future<String?> getServerPinHash() async {
     final uid = supabase.auth.currentUser?.id;
     if (uid == null) return null;
-    try {
-      final data = await supabase
-          .from('users')
-          .select('pin_hash')
-          .eq('id', uid)
-          .single();
-      return data['pin_hash'] as String?;
-    } catch (_) {
+    final (hash, failure) = await _repo.getServerPinHash(uid);
+    if (failure != null) {
+      debugPrint('[PinService] getServerPinHash failed: ${failure.message}');
       return null;
     }
+    return hash;
   }
 
   Future<void> reconcilePinFromServer(String serverHash) async {

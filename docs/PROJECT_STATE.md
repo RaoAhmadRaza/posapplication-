@@ -42,6 +42,9 @@ lib/
 
 All flows end-to-end. 33+ routes, auth redirect, StatefulShellRoute bottom nav.
 RBAC, branch selection, PIN lock + biometric, TOTP MFA, device/session/security management.
+MFA is clean-arch (audit D.1): MfaRemoteDataSource + MfaRepository + usecases; verify returns typed
+AuthFailure? — transient network fault shows a connection/retry banner, only a real rejection shows
+"Incorrect code" (no more permanent MFA lockout on flaky connections). MfaService deleted.
 
 ## Inventory — Product Catalog (Slice A) — COMPLETE
 
@@ -178,17 +181,12 @@ Stock Levels, Adjustments, Transfers, Stock Counts, IMEI Lookup)
 
 ## Known Issues
 
-- `ServerErrorFailure` — defined, never instantiated
 - `cupertino_icons` — in pubspec, unused
 - `RecoveryState` in core/error — semantic misplacement
 - Profile loaded once (no pull-to-refresh)
 - IMEI section not yet integrated into product edit form (SERIALIZED products)
-- MFA verify swallows transient errors — network fault renders as "wrong code" (mfa_service.dart:51,81)
-- Core services bypass datasources — pin/device/audit/login_throttle call supabase directly (no error mapping, not testable)
-- PinLockState not reset on user change — user A's PIN lock can trap user B (app_flow_state.dart resetUserScopedState)
 - roles + tenants RLS `using (true)` — cross-tenant read of tenant names / role hierarchy
 - loadProducts() unbounded — silently truncated by Supabase's ~1000-row cap at 8,294 products
-- No shared currency formatter — 19 inline 'PKR ' strings, (0) vs (2) precision inconsistency
 
 ## Migration Import — COMPLETE
 

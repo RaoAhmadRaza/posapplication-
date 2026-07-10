@@ -191,4 +191,17 @@ class AuthRemoteDataSource {
       'last_seen_at': DateTime.now().toUtc().toIso8601String(),
     }, onConflict: 'fingerprint_hash');
   }
+
+  Future<void> updatePinHash(String userId, String? hash) async {
+    await _client.from('users').update({'pin_hash': hash}).eq('id', userId);
+  }
+
+  Future<String?> selectPinHash(String userId) async {
+    final data = await _client
+        .from('users')
+        .select('pin_hash')
+        .eq('id', userId)
+        .single();
+    return data['pin_hash'] as String?;
+  }
 }
