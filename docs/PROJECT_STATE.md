@@ -23,7 +23,11 @@ lib/
   features/auth/ (21 pages, 12 controllers)
   features/inventory/ (catalog + stock-engine + stock-ops + barcode + labels)
   features/notifications/ (entities, model, datasource, repo, controller, page)
-  features/migration_import/ (data layer — entities, repo, datasource, 4 use cases)
+  features/sales/ (data + domain + controllers + 7 pages + receipt service)
+    domain/entities/  7  domain/failures/  sealed SalesFailure  domain/usecases/  7
+    data/models/  6  data/datasources/  1  data/repositories/  1  data/services/  1 (receipt PDF)
+    presentation/controllers/  4  presentation/pages/  7 (open/close session, POS terminal, payment, success, receipt)
+  features/dashboard/ (data + domain + controller — entity, model, datasource, repo, use case, controller)
     domain/entities/  17 (7 catalog + 10 stock-ops)
     domain/failures/  sealed InventoryFailure — 11 variants
     domain/usecases/  52 (23 catalog + 29 stock-ops)
@@ -105,6 +109,7 @@ Stock Levels, Adjustments, Transfers, Stock Counts, IMEI Lookup)
 | `20260611163739_product_sku_and_search.sql` | pg_trgm, SKU auto-gen |
 | `20260613061924_stock_engine.sql` | warehouses, stock_balance, stock_ledger, enums, triggers, RPCs |
 | `20260613075616_stock_ops.sql` | adjustments, transfers, counts, imei, number_series, settings, RPCs |
+| `20260618114258_sales_foundation.sql` | customers, cashier_sessions, invoices, invoice_items, payments + RLS, INVOICE number_series seed, create_sale/open_cashier_session/close_cashier_session RPCs, invoice-immutability trigger |
 
 ## Bugfixes Applied
 
@@ -116,6 +121,15 @@ Stock Levels, Adjustments, Transfers, Stock Counts, IMEI Lookup)
   (search() now accepts filter params through the full chain — datasource → use case → repo → controller).
   Added brand filter dropdown to products page. Fixes: category-filter + search non-composition, missing
   brand filter.
+- Stock read path: stockLevelsController was filtering loadStockLevels by default warehouse UUID, but all
+  stock_balance rows use warehouse_id IS NULL (canonical default-location representation). Controller now
+  passes warehouseId: null; datasource isFilter('warehouse_id', null) matches NULL rows. POS onTap now
+  gates on (stock?.available ?? 0) > 0 — null/zero stock = not addable + greyed. SearchResultTile: spacing
+  before price + dividers between tiles.
+- Products card stock: was showing product.reorderPoint labeled "Stock:" (all=10, migration default).
+  Now shows real stock_balance.qty_on_hand via loadProductsStock (branch-wide eq branch_id +
+  isFilter warehouse_id null), merged into Product.qtyOnHand. Card renders Out/Low/—/N. Controller
+  ref.watch currentBranchProvider for rebuild on branch resolve; throws on stock failure (visible).
 
 ## Barcode Scanning — Wired
 
@@ -169,21 +183,63 @@ Stock Levels, Adjustments, Transfers, Stock Counts, IMEI Lookup)
 - `RecoveryState` in core/error — semantic misplacement
 - Profile loaded once (no pull-to-refresh)
 - IMEI section not yet integrated into product edit form (SERIALIZED products)
+- MFA verify swallows transient errors — network fault renders as "wrong code" (mfa_service.dart:51,81)
+- Core services bypass datasources — pin/device/audit/login_throttle call supabase directly (no error mapping, not testable)
+- PinLockState not reset on user change — user A's PIN lock can trap user B (app_flow_state.dart resetUserScopedState)
+- roles + tenants RLS `using (true)` — cross-tenant read of tenant names / role hierarchy
+- loadProducts() unbounded — silently truncated by Supabase's ~1000-row cap at 8,294 products
+- No shared currency formatter — 19 inline 'PKR ' strings, (0) vs (2) precision inconsistency
 
 ## Migration Import — COMPLETE
 
 Feature folder `lib/features/migration_import/` with full clean-arch stack.
 Reuses InventoryFailure. 4 RPCs: migrate_import_categories/brands/products/stock.
-M1: Datasource → Repository → 4 use cases.
-M2: MigrationImportController (Notifier) with pickAndParse + run; CSV header→field pass-through.
-M3: MigrationImportPage — 4 FK-ordered step cards, preview tables, expandable errors, on-screen logs panel.
-Set-based RPCs (20260617120537) for categories/brands/products — single INSERT SELECT replaces per-row loop.
-Stock RPC gets `set local statement_timeout = 0`. Products deduplicate barcode within batch + skip existing.
-Chunk sizes: products 2000, stock 1000, others 500. Hub row in InventoryHubPage. Route /inventory/import-migration.
-Bugfixes: bytes/null (withData:true + utf8.decode + path fallback), button hang (try/finally), jsonb params as List,
-chunk failure tolerant (continue loop, accumulate totals), on-screen log panel replacing console prints.
+Set-based RPCs for categories/brands/products; products deduplicate barcode within batch.
+M3: MigrationImportPage — 4 FK-ordered step cards, preview tables, expandable errors.
+Route /inventory/import-migration. Hub row in InventoryHubPage.
+
+## Sales V1 — Core COMPLETE
+
+DB foundation (S1): customers, cashier_sessions, invoices, invoice_items, payments + RLS; RPCs create_sale,
+open/close_cashier_session, create_sales_return, void_invoice; invoice-immutability trigger; INVOICE
+number_series seed. Data+domain (S2): 7 entities, SalesFailure, repo, 6 models, datasource, 10 use cases,
+4 controllers. POS terminal (S3): product search+scan, cart qty-steppers, customer picker (S4),
+multi-payment/credit (S4), tax at checkout (R5), hold/resume (R6A), void (R6B), return (S6). Session
+lifecycle fix (SF1): SessionController DB-backed, Resume/Close card, variance summary, staleness chip.
+Polish (SF2): negative-float validation, "PKR" labels, receipt WhatsApp share fix. Autosave (SF3):
+WidgetsBindingObserver auto-holds non-empty cart on app pause ("Auto-saved HH:MM"), resume banner
+"Auto-saved cart available — tap Resume". POS fixes (SF4): createCustomer tenant_id fix; narrow layout
+products-full-body + cart bottom-sheet (FAB); stock qty chip on product cards (via stockLevelsProvider);
+live session sales via invoices sum (banner). Session
+open/close (S3). Sales history+detail (S5) with Reprint/Share. Receipt PDF (S3). Permission gating on
+all routes + bottom-nav (R2). Operation-aware post_stock_movement gate applied (SALE/RETURN_IN accept
+sales perms). create_sale enforces min_selling_price + credit_limit, overridable by sales:approve.
+Bugfix round: cart sheet watches provider live (SF4 fix 1), banner loads on entry+session change (fix 2),
+same-product dedup (fix 3), product search capped at 50 (fix 4).
+Audit fix (2026-06-24): close_cashier_session now gated on sales:create + owner-only (session.cashier_id
+= auth.uid()), overridable by sales:approve — was the one ungated sales RPC.
+
+### Sales V1 Deferred
+
+delivery_orders, loyalty_transactions, tax_rules table, payment_methods table, customer_groups,
+pricing-tier engine, offline sync logic.
+
+## Dashboard V1 — COMPLETE
+
+D1 data layer: DashboardSummary entity (9 fields + nested RecentSale/TrendPoint/paymentBreakdown),
+DashboardSummaryModel fromJson, DashboardRemoteDataSource .rpc('dashboard_summary'), repo +
+DashboardFailure, LoadDashboardSummary use case, AsyncNotifier controller.
+D2 UI: replaces placeholder — PermissionGate(reports:read), pull-to-refresh, KPI grid (6 cards:
+Today's Sales/Transactions/Profit/Receivables/Stock Value/Low Stock), recent sales list (status chip →
+invoice detail), quick-launch (POS/Inventory/History gated by matrix). D3 charts: fl_chart bar chart
+(7-day trend, PKR tooltips) + pie chart (payment breakdown + legend).
+Controller propagates failure as AsyncError (no zero-fill); page shows AppInlineBanner + retry on error.
+
+### Dashboard V1 Deferred (Pipeline M10, Reporting phase)
+
+payables + cash/bank balances, P&L/balance-sheet, drilldown reports, scheduled/email reports,
+configurable KPI grid.
 
 ## What's Next
 
-Data migration import UI + full end-to-end flow. Sales module (POS bills,
-checkout, invoice history) or Purchasing module.
+Purchasing module.
