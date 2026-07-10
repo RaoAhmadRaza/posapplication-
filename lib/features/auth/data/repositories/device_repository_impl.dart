@@ -1,4 +1,7 @@
+import 'package:flutter/foundation.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import '../../../../core/error/auth_failure.dart';
+import '../../../../core/error/supabase_error_mapper.dart';
 import '../datasources/auth_remote_datasource.dart';
 import '../../domain/entities/device.dart';
 import '../../domain/repositories/device_repository.dart';
@@ -26,5 +29,30 @@ class DeviceRepositoryImpl implements DeviceRepository {
   @override
   Future<void> revokeDevice(String deviceId) async {
     await _ds.revokeDevice(deviceId);
+  }
+
+  @override
+  Future<AuthFailure?> registerDevice({
+    required String tenantId,
+    required String userId,
+    required String deviceName,
+    required String deviceModel,
+    required String osInfo,
+    required String fingerprintHash,
+  }) async {
+    try {
+      await _ds.registerDevice(
+        tenantId: tenantId,
+        userId: userId,
+        deviceName: deviceName,
+        deviceModel: deviceModel,
+        osInfo: osInfo,
+        fingerprintHash: fingerprintHash,
+      );
+      return null;
+    } catch (e) {
+      debugPrint('[DeviceRepository] register failed: $e');
+      return mapSupabaseFailure(e);
+    }
   }
 }

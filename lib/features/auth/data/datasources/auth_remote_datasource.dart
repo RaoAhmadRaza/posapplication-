@@ -172,4 +172,23 @@ class AuthRemoteDataSource {
   Future<void> resetFailedLogin(String email) async {
     await _client.rpc('reset_failed_login', params: {'p_email': email});
   }
+
+  Future<void> registerDevice({
+    required String tenantId,
+    required String userId,
+    required String deviceName,
+    required String deviceModel,
+    required String osInfo,
+    required String fingerprintHash,
+  }) async {
+    await _client.from('devices').upsert({
+      'tenant_id': tenantId,
+      'user_id': userId,
+      'device_name': deviceName,
+      'device_model': deviceModel,
+      'os_info': osInfo,
+      'fingerprint_hash': fingerprintHash,
+      'last_seen_at': DateTime.now().toUtc().toIso8601String(),
+    }, onConflict: 'fingerprint_hash');
+  }
 }

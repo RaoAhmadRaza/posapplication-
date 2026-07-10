@@ -2,15 +2,23 @@ import 'dart:convert';
 import 'dart:io' show Platform;
 import 'package:crypto/crypto.dart';
 import 'package:device_info_plus/device_info_plus.dart';
+import 'package:flutter/foundation.dart';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
+import '../../features/auth/data/datasources/auth_remote_datasource.dart';
+import '../../features/auth/data/repositories/device_repository_impl.dart';
+import '../../features/auth/domain/repositories/device_repository.dart';
 import '../supabase.dart';
 
 const _storage = FlutterSecureStorage();
 const _deviceUuidKey = 'device_uuid';
 
 class DeviceService {
-  static const instance = DeviceService._();
-  const DeviceService._();
+  DeviceService({DeviceRepository? repo})
+      : _repo = repo ?? DeviceRepositoryImpl(AuthRemoteDataSource(supabase));
+
+  static final instance = DeviceService();
+
+  final DeviceRepository _repo;
 
   Future<void> registerDevice({
     required String userId,
@@ -21,17 +29,17 @@ class DeviceService {
     final fingerprint = '${deviceInfo.model}|${deviceInfo.osInfo}|$uuid';
     final fingerprintHash = sha256.convert(utf8.encode(fingerprint)).toString();
 
-    try {
-      await supabase.from('devices').upsert({
-        'tenant_id': tenantId,
-        'user_id': userId,
-        'device_name': deviceInfo.name,
-        'device_model': deviceInfo.model,
-        'os_info': deviceInfo.osInfo,
-        'fingerprint_hash': fingerprintHash,
-        'last_seen_at': DateTime.now().toUtc().toIso8601String(),
-      }, onConflict: 'fingerprint_hash');
-    } catch (_) {}
+    final failure = await _repo.registerDevice(
+      tenantId: tenantId,
+      userId: userId,
+      deviceName: deviceInfo.name,
+      deviceModel: deviceInfo.model,
+      osInfo: deviceInfo.osInfo,
+      fingerprintHash: fingerprintHash,
+    );
+    if (failure != null) {
+      debugPrint('[DeviceService] register failed: ${failure.message}');
+    }
   }
 
   Future<String> _getOrCreateUuid() async {
