@@ -1,5 +1,9 @@
 import 'dart:convert';
+import 'package:flutter/foundation.dart';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
+import '../../features/auth/data/datasources/auth_remote_datasource.dart';
+import '../../features/auth/data/repositories/login_throttle_repository_impl.dart';
+import '../../features/auth/domain/repositories/login_throttle_repository.dart';
 import '../error/auth_failure.dart';
 import '../supabase.dart';
 
@@ -8,8 +12,13 @@ const _attemptsPrefix = 'login_attempts_';
 const _lockedUntilPrefix = 'login_locked_';
 
 class LoginThrottleService {
-  static const instance = LoginThrottleService._();
-  const LoginThrottleService._();
+  LoginThrottleService({LoginThrottleRepository? repo})
+      : _repo =
+            repo ?? LoginThrottleRepositoryImpl(AuthRemoteDataSource(supabase));
+
+  static final instance = LoginThrottleService();
+
+  final LoginThrottleRepository _repo;
 
   static const maxAttempts = 5;
   static const baseCooldown = 30;
@@ -61,8 +70,13 @@ class LoginThrottleService {
       );
     }
 
-    final res = await supabase.rpc('increment_failed_login', params: {'p_email': email});
-    final data = res as Map<String, dynamic>?;
+    final (data, failure) = await _repo.incrementFailedLogin(email);
+    if (failure != null) {
+      // Server counter is best-effort; the local secure-storage throttle above
+      // already recorded this attempt. Log, don't block the login error path.
+      debugPrint('[LoginThrottle] increment failed: ${failure.message}');
+      return;
+    }
     if (data != null && data['locked'] == true) {
       throw AccountLockedException(
         data['locked_until'] as String? ?? DateTime.now().toUtc().toIso8601String(),
@@ -73,8 +87,9 @@ class LoginThrottleService {
   Future<void> reset(String email) async {
     await _storage.delete(key: _key(email, _attemptsPrefix));
     await _storage.delete(key: _key(email, _lockedUntilPrefix));
-    try {
-      await supabase.rpc('reset_failed_login', params: {'p_email': email});
-    } catch (_) {}
+    final failure = await _repo.resetFailedLogin(email);
+    if (failure != null) {
+      debugPrint('[LoginThrottle] reset failed: ${failure.message}');
+    }
   }
 }

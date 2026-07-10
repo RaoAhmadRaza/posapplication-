@@ -162,4 +162,14 @@ class AuthRemoteDataSource {
       'new_values': newValues,
     });
   }
+
+  Future<Map<String, dynamic>?> incrementFailedLogin(String email) async {
+    final res =
+        await _client.rpc('increment_failed_login', params: {'p_email': email});
+    return res as Map<String, dynamic>?;
+  }
+
+  Future<void> resetFailedLogin(String email) async {
+    await _client.rpc('reset_failed_login', params: {'p_email': email});
+  }
 }
