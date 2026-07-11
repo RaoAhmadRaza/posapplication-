@@ -1,20 +1,23 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../../../core/design/app_spacing.dart';
 import '../../../../core/design/widgets/app_button.dart';
 import '../../../../core/design/widgets/app_inline_banner.dart';
 import '../../../../core/design/widgets/app_otp_field.dart';
 import '../../../../core/design/widgets/responsive_form_scaffold.dart';
-import '../../../../core/services/mfa_service.dart';
 import '../../../../core/state/app_flow_state.dart';
+import '../../domain/usecases/challenge_mfa.dart';
+import '../../domain/usecases/get_enrolled_factor_id.dart';
+import '../../domain/usecases/verify_mfa.dart';
 
-class MfaChallengeScreen extends StatefulWidget {
+class MfaChallengeScreen extends ConsumerStatefulWidget {
   const MfaChallengeScreen({super.key});
 
   @override
-  State<MfaChallengeScreen> createState() => _MfaChallengeScreenState();
+  ConsumerState<MfaChallengeScreen> createState() => _MfaChallengeScreenState();
 }
 
-class _MfaChallengeScreenState extends State<MfaChallengeScreen> {
+class _MfaChallengeScreenState extends ConsumerState<MfaChallengeScreen> {
   String? _factorId;
   String? _challengeId;
   String? _errorMessage;
@@ -28,26 +31,36 @@ class _MfaChallengeScreenState extends State<MfaChallengeScreen> {
   }
 
   Future<void> _startChallenge() async {
-    try {
-      final factorId = await MfaService.instance.getEnrolledFactorId();
-      if (factorId == null) {
-        MfaState.instance.clear();
-        return;
-      }
-      final challengeId = await MfaService.instance.challenge(factorId);
-      if (mounted) {
-        setState(() {
-          _factorId = factorId;
-          _challengeId = challengeId;
-          _loading = false;
-        });
-      }
-    } catch (_) {
+    final (factorId, factorFailure) =
+        await ref.read(getEnrolledFactorIdUseCaseProvider).call();
+    if (!mounted) return;
+    if (factorFailure != null) {
       setState(() {
-        _errorMessage = 'Could not start authentication.';
+        _errorMessage = factorFailure.message;
         _loading = false;
       });
+      return;
     }
+    if (factorId == null) {
+      MfaState.instance.clear();
+      return;
+    }
+    final (challengeId, challengeFailure) =
+        await ref.read(challengeMfaUseCaseProvider).call(factorId);
+    if (!mounted) return;
+    if (challengeFailure != null || challengeId == null) {
+      setState(() {
+        _errorMessage =
+            challengeFailure?.message ?? 'Could not start authentication.';
+        _loading = false;
+      });
+      return;
+    }
+    setState(() {
+      _factorId = factorId;
+      _challengeId = challengeId;
+      _loading = false;
+    });
   }
 
   Future<void> _verify(String code) async {
@@ -58,20 +71,22 @@ class _MfaChallengeScreenState extends State<MfaChallengeScreen> {
       _errorMessage = null;
     });
 
-    final ok = await MfaService.instance.verify(
-      factorId: _factorId!,
-      challengeId: _challengeId!,
-      code: code,
-    );
+    final failure = await ref.read(verifyMfaUseCaseProvider).call(
+          factorId: _factorId!,
+          challengeId: _challengeId!,
+          code: code,
+        );
 
     if (!mounted) return;
 
-    if (ok) {
+    if (failure == null) {
       MfaState.instance.clear();
     } else {
+      // InvalidOtpFailure → "Incorrect code…"; MfaTransientFailure → connection
+      // banner. Either way surface the typed message and let the user retry.
       setState(() {
         _verifying = false;
-        _errorMessage = 'Incorrect code. Please try again.';
+        _errorMessage = failure.message;
       });
     }
   }

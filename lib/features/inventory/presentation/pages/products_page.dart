@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import '../../../../core/design/app_colors.dart';
+import '../../../../core/design/format.dart';
 import '../../../../core/design/app_radius.dart';
 import '../../../../core/design/app_spacing.dart';
 import '../../../../core/design/app_typography.dart';
@@ -31,7 +32,9 @@ class ProductsPage extends ConsumerStatefulWidget {
 
 class _ProductsPageState extends ConsumerState<ProductsPage> {
   final _searchController = TextEditingController();
+  final _scrollController = ScrollController();
   Timer? _debounce;
+  bool _loadingMore = false;
   String? _filterCategoryId;
   String? _filterBrandId;
   String? _filterStatus;
@@ -46,15 +49,38 @@ class _ProductsPageState extends ConsumerState<ProductsPage> {
   void initState() {
     super.initState();
     _searchController.addListener(_onSearchTextChanged);
+    _scrollController.addListener(_onScroll);
   }
 
   @override
   void dispose() {
     _searchController.removeListener(_onSearchTextChanged);
     _searchController.dispose();
+    _scrollController.dispose();
     _debounce?.cancel();
     _voiceService.cancel();
     super.dispose();
+  }
+
+  void _onScroll() {
+    if (_loadingMore) return;
+    final notifier = ref.read(productsProvider.notifier);
+    if (!notifier.hasMore) return;
+    final pos = _scrollController.position;
+    if (pos.pixels < pos.maxScrollExtent - 400) return;
+    _loadMore();
+  }
+
+  Future<void> _loadMore() async {
+    setState(() => _loadingMore = true);
+    final failure = await ref.read(productsProvider.notifier).loadMore();
+    if (!mounted) return;
+    setState(() => _loadingMore = false);
+    if (failure != null) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Could not load more products.')),
+      );
+    }
   }
 
   void _onSearchTextChanged() {
@@ -374,23 +400,32 @@ class _ProductsPageState extends ConsumerState<ProductsPage> {
           );
         }
         return ListView.builder(
+          controller: _scrollController,
           padding: const EdgeInsets.symmetric(
             horizontal: AppSpacing.screenPadding,
             vertical: AppSpacing.md,
           ),
-          itemCount: products.length,
-          itemBuilder: (_, i) => Padding(
-            padding: EdgeInsets.only(
-              bottom: i < products.length - 1 ? AppSpacing.md : 0,
-            ),
-            child: _ProductCard(
-              product: products[i],
-              selected: _selectedIds.contains(products[i].id),
-              onToggle: _selectionMode
-                  ? () => _toggleProduct(products[i].id)
-                  : null,
-            ),
-          ),
+          itemCount: products.length + (_loadingMore ? 1 : 0),
+          itemBuilder: (_, i) {
+            if (i >= products.length) {
+              return const Padding(
+                padding: EdgeInsets.symmetric(vertical: AppSpacing.md),
+                child: Center(child: CircularProgressIndicator()),
+              );
+            }
+            return Padding(
+              padding: EdgeInsets.only(
+                bottom: i < products.length - 1 ? AppSpacing.md : 0,
+              ),
+              child: _ProductCard(
+                product: products[i],
+                selected: _selectedIds.contains(products[i].id),
+                onToggle: _selectionMode
+                    ? () => _toggleProduct(products[i].id)
+                    : null,
+              ),
+            );
+          },
         );
       },
     );
@@ -722,14 +757,11 @@ class _ProductCard extends ConsumerWidget {
               Row(
                 children: [
                   Text(
-                    'PKR ${product.sellingPrice.toStringAsFixed(2)}',
+                    formatPkr(product.sellingPrice),
                     style: AppTypography.headline.copyWith(color: AppColors.accent),
                   ),
                   const Spacer(),
-                  Text(
-                    'Stock: ${product.reorderPoint}',
-                    style: AppTypography.footnote.copyWith(color: AppColors.textMuted),
-                  ),
+                  _StockLabel(product: product),
                 ],
               ),
             ],
@@ -747,6 +779,38 @@ class _ProductCard extends ConsumerWidget {
     }
     if (categoryName != null) parts.add(categoryName);
     return parts.join(' · ');
+  }
+}
+
+class _StockLabel extends StatelessWidget {
+  const _StockLabel({required this.product});
+  final Product product;
+
+  @override
+  Widget build(BuildContext context) {
+    final qty = product.qtyOnHand;
+    if (qty == null) {
+      return Text(
+        'Stock: —',
+        style: AppTypography.footnote.copyWith(color: AppColors.textHint),
+      );
+    }
+    if (qty <= 0) {
+      return Text(
+        'Stock: Out',
+        style: AppTypography.footnote.copyWith(color: AppColors.destructive, fontWeight: FontWeight.w600),
+      );
+    }
+    if (qty <= product.reorderPoint) {
+      return Text(
+        'Stock: Low (${qty.toStringAsFixed(0)})',
+        style: AppTypography.footnote.copyWith(color: AppColors.warning, fontWeight: FontWeight.w600),
+      );
+    }
+    return Text(
+      'Stock: ${qty.toStringAsFixed(0)}',
+      style: AppTypography.footnote.copyWith(color: AppColors.textMuted),
+    );
   }
 }
 

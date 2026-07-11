@@ -17,6 +17,7 @@ import '../../domain/entities/product.dart';
 import '../../domain/entities/stock_count.dart';
 import '../../domain/entities/stock_count_item.dart';
 import '../../domain/entities/stock_count_status.dart';
+import '../../domain/failures/inventory_failure.dart';
 import '../../domain/usecases/load_count_items.dart';
 import '../controllers/counts_controller.dart';
 import '../controllers/products_controller.dart';
@@ -163,7 +164,17 @@ class _CountSessionPageState extends ConsumerState<CountSessionPage> {
   Future<void> _record(String itemId, double counted) async {
     try {
       await ref.read(countsProvider.notifier).recordItem(itemId, counted);
-    } catch (_) {}
+      if (mounted) setState(() => _error = null);
+    } on InventoryFailure catch (f) {
+      if (!mounted) return;
+      setState(() => _error = f.message);
+      // Keep the user on the field with the typed qty selected, to retry.
+      final ctrl = _controllers[itemId];
+      if (ctrl != null) {
+        ctrl.selection =
+            TextSelection(baseOffset: 0, extentOffset: ctrl.text.length);
+      }
+    }
   }
 
   Future<void> _complete() async {

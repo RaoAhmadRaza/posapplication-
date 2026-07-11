@@ -7,13 +7,13 @@ import '../../../../core/design/app_typography.dart';
 import '../../../../core/design/widgets/app_button.dart';
 import '../../../../core/design/widgets/app_inline_banner.dart';
 import '../../../../core/services/device_service.dart';
-import '../../../../core/services/mfa_service.dart';
 import '../../../../core/services/pin_service.dart';
 import '../../../../core/state/app_flow_state.dart';
 import '../../../../core/supabase.dart';
 import '../controllers/branch_controller.dart';
 import '../controllers/permission_controller.dart';
 import '../controllers/profile_controller.dart';
+import '../../domain/usecases/needs_aal2.dart';
 
 class WorkspaceInitScreen extends ConsumerStatefulWidget {
   const WorkspaceInitScreen({super.key});
@@ -66,7 +66,7 @@ class _WorkspaceInitScreenState extends ConsumerState<WorkspaceInitScreen> {
     if (_mfaChecked) return;
     _mfaChecked = true;
 
-    final needsAal2 = MfaService.instance.needsAal2();
+    final needsAal2 = ref.read(needsAal2UseCaseProvider).call();
     if (needsAal2) {
       MfaState.instance.require();
     } else {

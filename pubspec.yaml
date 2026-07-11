@@ -51,6 +51,9 @@ dependencies:
   file_picker: ^3.0.4
   csv: ^8.0.0
   speech_to_text: ^7.4.0
+  share_plus: ^13.1.0
+  url_launcher: ^6.3.2
+  fl_chart: ^1.2.0
 
 dev_dependencies:
   flutter_test:

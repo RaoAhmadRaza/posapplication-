@@ -1,5 +1,5 @@
-import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:qr_flutter/qr_flutter.dart';
 import '../../../../core/design/app_colors.dart';
 import '../../../../core/design/app_radius.dart';
@@ -8,16 +8,18 @@ import '../../../../core/design/app_typography.dart';
 import '../../../../core/design/widgets/app_button.dart';
 import '../../../../core/design/widgets/app_inline_banner.dart';
 import '../../../../core/design/widgets/app_text_field.dart';
-import '../../../../core/services/mfa_service.dart';
+import '../../domain/usecases/challenge_mfa.dart';
+import '../../domain/usecases/enroll_mfa.dart';
+import '../../domain/usecases/verify_mfa.dart';
 
-class MfaEnrollScreen extends StatefulWidget {
+class MfaEnrollScreen extends ConsumerStatefulWidget {
   const MfaEnrollScreen({super.key});
 
   @override
-  State<MfaEnrollScreen> createState() => _MfaEnrollScreenState();
+  ConsumerState<MfaEnrollScreen> createState() => _MfaEnrollScreenState();
 }
 
-class _MfaEnrollScreenState extends State<MfaEnrollScreen> {
+class _MfaEnrollScreenState extends ConsumerState<MfaEnrollScreen> {
   final _codeController = TextEditingController();
   String? _factorId;
   String? _qrCodeUri;
@@ -40,27 +42,35 @@ class _MfaEnrollScreenState extends State<MfaEnrollScreen> {
   }
 
   Future<void> _enroll() async {
-    try {
-      final result = await MfaService.instance.enroll();
-      final challengeId = await MfaService.instance.challenge(result.factorId);
-      if (mounted) {
-        setState(() {
-          _factorId = result.factorId;
-          _qrCodeUri = result.qrCodeUri;
-          _secret = result.secret;
-          _challengeId = challengeId;
-          _loading = false;
-        });
-      }
-    } catch (e) {
-      if (kDebugMode) debugPrint('[MfaEnroll] enroll failed: $e');
-      if (mounted) {
-        setState(() {
-          _errorMessage = 'Failed to set up authenticator.\n${e.toString()}';
-          _loading = false;
-        });
-      }
+    final (result, enrollFailure) =
+        await ref.read(enrollMfaUseCaseProvider).call();
+    if (!mounted) return;
+    if (enrollFailure != null || result == null) {
+      setState(() {
+        _errorMessage =
+            enrollFailure?.message ?? 'Failed to set up authenticator.';
+        _loading = false;
+      });
+      return;
     }
+    final (challengeId, challengeFailure) =
+        await ref.read(challengeMfaUseCaseProvider).call(result.factorId);
+    if (!mounted) return;
+    if (challengeFailure != null || challengeId == null) {
+      setState(() {
+        _errorMessage =
+            challengeFailure?.message ?? 'Failed to set up authenticator.';
+        _loading = false;
+      });
+      return;
+    }
+    setState(() {
+      _factorId = result.factorId;
+      _qrCodeUri = result.qrCodeUri;
+      _secret = result.secret;
+      _challengeId = challengeId;
+      _loading = false;
+    });
   }
 
   Future<void> _verify() async {
@@ -77,20 +87,22 @@ class _MfaEnrollScreenState extends State<MfaEnrollScreen> {
       _errorMessage = null;
     });
 
-    final ok = await MfaService.instance.verify(
-      factorId: _factorId!,
-      challengeId: _challengeId!,
-      code: code,
-    );
+    final failure = await ref.read(verifyMfaUseCaseProvider).call(
+          factorId: _factorId!,
+          challengeId: _challengeId!,
+          code: code,
+        );
 
     if (!mounted) return;
 
-    if (ok) {
+    if (failure == null) {
       Navigator.of(context).pop();
     } else {
+      // Typed failure: InvalidOtpFailure → wrong code; MfaTransientFailure →
+      // connection problem. Surface the real message, never a blanket "wrong".
       setState(() {
         _verifying = false;
-        _errorMessage = 'Incorrect code. Please try again.';
+        _errorMessage = failure.message;
       });
     }
   }

@@ -4,6 +4,7 @@ import 'package:barcode/barcode.dart' as bc;
 import 'package:pdf/pdf.dart';
 import 'package:pdf/widgets.dart' as pw;
 
+import '../../../../core/design/format.dart';
 import '../../domain/entities/barcode_template.dart';
 import '../../domain/entities/product.dart';
 
@@ -137,7 +138,7 @@ class LabelPdfService {
             ),
           if (showPrice)
             pw.Text(
-              'PKR ${product.sellingPrice.toStringAsFixed(0)}',
+              formatPkr(product.sellingPrice),
               style: pw.TextStyle(fontSize: 7),
               textAlign: pw.TextAlign.center,
             ),

@@ -32,6 +32,8 @@ abstract class InventoryRepository {
     String? categoryId,
     String? brandId,
     String? status,
+    int page,
+    int pageSize,
   });
   Future<(List<Product>, InventoryFailure?)> searchProducts(
     String q, {
@@ -91,6 +93,10 @@ abstract class InventoryRepository {
     required String referenceType,
     required String referenceId,
     String? notes,
+  });
+
+  Future<(Map<String, double>, InventoryFailure?)> loadProductsStock({
+    required String branchId,
   });
 
   Future<(List<StockLevel>, InventoryFailure?)> loadStockLevels({

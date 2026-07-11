@@ -80,6 +80,7 @@ class ProductModel {
       status: _productStatusFromString(json['status'] as String?),
       imageUrl: json['image_url'] as String?,
       tags: tags,
+      qtyOnHand: (json['qty_on_hand'] as num?)?.toDouble(),
     );
   }
 

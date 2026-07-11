@@ -49,7 +49,15 @@ import 'features/inventory/presentation/pages/label_print_page.dart';
 import 'features/inventory/presentation/pages/import_products_page.dart';
 import 'features/migration_import/presentation/pages/migration_import_page.dart';
 import 'features/notifications/presentation/pages/notifications_page.dart';
-import 'features/auth/presentation/pages/sale_page.dart';
+import 'features/sales/presentation/pages/pos_terminal_page.dart';
+import 'features/sales/presentation/pages/open_session_page.dart';
+import 'features/sales/presentation/pages/close_session_page.dart';
+import 'features/sales/presentation/pages/payment_sheet.dart';
+import 'features/sales/presentation/pages/sale_success_page.dart';
+import 'features/sales/presentation/pages/receipt_page.dart';
+import 'features/sales/presentation/pages/sales_history_page.dart';
+import 'features/sales/presentation/pages/invoice_detail_page.dart';
+import 'features/sales/presentation/pages/sales_return_page.dart';
 import 'features/auth/presentation/pages/settings_page.dart';
 
 class _GoRouterRefreshStream extends ChangeNotifier {
@@ -380,8 +388,56 @@ final appRouter = GoRouter(
         StatefulShellBranch(
           routes: [
             GoRoute(
-              path: '/sale',
-              builder: (context, state) => const SalePage(),
+              path: '/sales',
+              redirect: (context, state) => '/sales/pos',
+            ),
+            GoRoute(
+              path: '/sales/pos',
+              builder: (context, state) => const PosTerminalPage(),
+            ),
+            GoRoute(
+              path: '/sales/open',
+              builder: (context, state) => const OpenSessionPage(),
+            ),
+            GoRoute(
+              path: '/sales/session/close',
+              builder: (context, state) => const CloseSessionPage(),
+            ),
+            GoRoute(
+              path: '/sales/payment',
+              builder: (context, state) {
+                final extra = state.extra as Map<String, dynamic>;
+                return PaymentSheet(
+                  branchId: extra['branchId'] as String,
+                  sessionId: extra['sessionId'] as String?,
+                );
+              },
+            ),
+            GoRoute(
+              path: '/sales/success',
+              builder: (context, state) => const SaleSuccessPage(),
+            ),
+            GoRoute(
+              path: '/sales/receipt',
+              builder: (context, state) {
+                final invoiceId = state.extra as String;
+                return ReceiptPage(invoiceId: invoiceId);
+              },
+            ),
+            GoRoute(
+              path: '/sales/history',
+              builder: (context, state) => const SalesHistoryPage(),
+            ),
+            GoRoute(
+              path: '/sales/invoice/:invoiceId',
+              builder: (context, state) {
+                final id = state.pathParameters['invoiceId']!;
+                return InvoiceDetailPage(invoiceId: id);
+              },
+            ),
+            GoRoute(
+              path: '/sales/return',
+              builder: (context, state) => const SalesReturnPage(),
             ),
           ],
         ),

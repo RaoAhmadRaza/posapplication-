@@ -47,6 +47,11 @@ class InvalidOtpFailure extends AuthFailure {
   String get message => 'Incorrect code, please try again.';
 }
 
+class MfaTransientFailure extends AuthFailure {
+  @override
+  String get message => 'Connection problem — check your network and try again.';
+}
+
 class OtpExpiredFailure extends AuthFailure {
   @override
   String get message => 'That code expired or was already used — request a new one.';

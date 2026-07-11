@@ -9,7 +9,7 @@ import '../../../../core/design/app_typography.dart';
 import '../../../../core/design/widgets/app_button.dart';
 import '../../../../core/design/widgets/app_card.dart';
 import '../../../../core/design/widgets/app_inline_banner.dart';
-import '../../../../core/services/mfa_service.dart';
+import '../../domain/usecases/get_enrolled_factor_id.dart';
 import '../../../../core/services/pin_service.dart';
 import '../../../../core/widgets/permission_gate.dart';
 import '../controllers/auth_controller.dart';
@@ -204,7 +204,9 @@ class _SecuritySectionState extends ConsumerState<_SecuritySection> {
     final hasPin = await PinService.instance.hasPin();
     final canBiometrics = hasPin ? await LocalAuthentication().canCheckBiometrics : false;
     final biometricsOn = hasPin ? await PinService.instance.isBiometricsEnabled() : false;
-    final hasMfa = (await MfaService.instance.getEnrolledFactorId()) != null;
+    final (factorId, mfaFailure) =
+        await ref.read(getEnrolledFactorIdUseCaseProvider).call();
+    final hasMfa = mfaFailure == null && factorId != null;
     if (mounted) {
       setState(() {
         _hasPin = hasPin;

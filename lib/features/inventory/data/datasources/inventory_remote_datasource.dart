@@ -112,12 +112,17 @@ class InventoryRemoteDataSource {
     String? categoryId,
     String? brandId,
     String? status,
+    int page = 0,
+    int pageSize = 200,
   }) async {
     var query = _client.from('products').select(_productCols);
     if (categoryId != null) query = query.eq('category_id', categoryId);
     if (brandId != null) query = query.eq('brand_id', brandId);
     if (status != null) query = query.eq('status', status);
-    return query.order('created_at', ascending: false);
+    final from = page * pageSize;
+    return query
+        .order('created_at', ascending: false)
+        .range(from, from + pageSize - 1);
   }
 
   Future<List<Map<String, dynamic>>> searchProducts(
@@ -128,11 +133,7 @@ class InventoryRemoteDataSource {
   }) async {
     final trimmed = q.trim();
     if (trimmed.isEmpty) {
-      return loadProducts(
-        categoryId: categoryId,
-        brandId: brandId,
-        status: status,
-      );
+      return _client.from('products').select(_productCols).order('name').limit(50);
     }
 
     var query = _client
@@ -142,7 +143,7 @@ class InventoryRemoteDataSource {
     if (categoryId != null) query = query.eq('category_id', categoryId);
     if (brandId != null) query = query.eq('brand_id', brandId);
     if (status != null) query = query.eq('status', status);
-    return query.order('created_at', ascending: false);
+    return query.order('name').limit(50);
   }
 
   Future<Map<String, dynamic>?> getProduct(String id) async {
@@ -329,7 +330,11 @@ class InventoryRemoteDataSource {
   }) async {
     var query = _client.from('stock_balance').select(_balanceCols);
     if (branchId != null) query = query.eq('branch_id', branchId);
-    if (warehouseId != null) query = query.eq('warehouse_id', warehouseId);
+    if (warehouseId != null) {
+      query = query.eq('warehouse_id', warehouseId);
+    } else {
+      query = query.isFilter('warehouse_id', null);
+    }
     if (productId != null) query = query.eq('product_id', productId);
     return query.order('product_id');
   }
@@ -347,8 +352,28 @@ class InventoryRemoteDataSource {
   }) async {
     var query = _client.from('stock_ledger').select(_ledgerCols).eq('product_id', productId);
     if (branchId != null) query = query.eq('branch_id', branchId);
-    if (warehouseId != null) query = query.eq('warehouse_id', warehouseId);
+    if (warehouseId != null) {
+      query = query.eq('warehouse_id', warehouseId);
+    } else {
+      query = query.isFilter('warehouse_id', null);
+    }
     return query.order('created_at', ascending: false);
+  }
+
+  // ==================== Products Stock (branch-wide) ====================
+
+  Future<Map<String, double>> loadProductsStock({
+    required String branchId,
+  }) async {
+    final rows = await _client
+        .from('stock_balance')
+        .select('product_id, qty_on_hand')
+        .eq('branch_id', branchId)
+        .isFilter('warehouse_id', null);
+    return {
+      for (final r in rows)
+        r['product_id'] as String: (r['qty_on_hand'] as num).toDouble(),
+    };
   }
 
   // ==================== Stock Levels (joined with products) ====================
@@ -362,7 +387,11 @@ class InventoryRemoteDataSource {
       ' qty_in_transit, avg_cost, products!inner(name, sku, reorder_point)',
     );
     if (branchId != null) query = query.eq('branch_id', branchId);
-    if (warehouseId != null) query = query.eq('warehouse_id', warehouseId);
+    if (warehouseId != null) {
+      query = query.eq('warehouse_id', warehouseId);
+    } else {
+      query = query.isFilter('warehouse_id', null);
+    }
     return query.order('product_id');
   }
 

@@ -26,6 +26,7 @@ class Product {
   final ProductStatus status;
   final String? imageUrl;
   final List<String>? tags;
+  final double? qtyOnHand;
 
   const Product({
     required this.id,
@@ -51,5 +52,33 @@ class Product {
     required this.status,
     this.imageUrl,
     this.tags,
+    this.qtyOnHand,
   });
+
+  Product copyWith({double? qtyOnHand}) => Product(
+    id: id,
+    tenantId: tenantId,
+    sku: sku,
+    name: name,
+    description: description,
+    barcode: barcode,
+    type: type,
+    categoryId: categoryId,
+    brandId: brandId,
+    unitOfMeasure: unitOfMeasure,
+    costPrice: costPrice,
+    sellingPrice: sellingPrice,
+    minSellingPrice: minSellingPrice,
+    wholesalePrice: wholesalePrice,
+    taxRate: taxRate,
+    taxInclusive: taxInclusive,
+    reorderPoint: reorderPoint,
+    reorderQty: reorderQty,
+    weight: weight,
+    isActive: isActive,
+    status: status,
+    imageUrl: imageUrl,
+    tags: tags,
+    qtyOnHand: qtyOnHand ?? this.qtyOnHand,
+  );
 }

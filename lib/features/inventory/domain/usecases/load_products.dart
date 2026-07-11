@@ -12,11 +12,15 @@ class LoadProducts {
     String? categoryId,
     String? brandId,
     String? status,
+    int page = 0,
+    int pageSize = 200,
   }) async {
     return _repo.loadProducts(
       categoryId: categoryId,
       brandId: brandId,
       status: status,
+      page: page,
+      pageSize: pageSize,
     );
   }
 }

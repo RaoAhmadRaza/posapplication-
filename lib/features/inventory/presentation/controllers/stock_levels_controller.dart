@@ -1,7 +1,6 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../../auth/presentation/controllers/branch_controller.dart';
 import '../../domain/entities/stock_level.dart';
-import '../../domain/usecases/ensure_default_warehouse.dart';
 import '../../domain/usecases/load_stock_levels.dart';
 
 final stockLevelsProvider =
@@ -15,13 +14,9 @@ class StockLevelsController extends AsyncNotifier<List<StockLevel>> {
     final branch = ref.read(currentBranchProvider);
     if (branch == null) return <StockLevel>[];
 
-    final (wh, _) =
-        await ref.read(ensureDefaultWarehouseUseCaseProvider).call(branch.id);
-    final defaultWarehouseId = wh?.id;
-
     final (levels, failure) = await ref
         .read(loadStockLevelsUseCaseProvider)
-        .call(branchId: branch.id, warehouseId: defaultWarehouseId);
+        .call(branchId: branch.id, warehouseId: null);
     if (failure != null) throw failure;
     return levels;
   }

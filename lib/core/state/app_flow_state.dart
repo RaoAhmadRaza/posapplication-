@@ -94,6 +94,7 @@ class MfaState extends ChangeNotifier {
 Future<void> resetUserScopedState() async {
   debugPrint('[AUTH-LIFECYCLE] resetUserScopedState called');
   WorkspaceInitState.instance.reset();
+  PinLockState.instance.unlock();
   MfaState.instance.reset();
   RecoveryState.instance.reset();
   try {

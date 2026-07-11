@@ -165,12 +165,16 @@ class InventoryRepositoryImpl implements InventoryRepository {
     String? categoryId,
     String? brandId,
     String? status,
+    int page = 0,
+    int pageSize = 200,
   }) async {
     try {
       final rows = await _ds.loadProducts(
         categoryId: categoryId,
         brandId: brandId,
         status: status,
+        page: page,
+        pageSize: pageSize,
       );
       return (rows.map(ProductModel.fromJson).toList(), null);
     } catch (e) {
@@ -195,6 +199,18 @@ class InventoryRepositoryImpl implements InventoryRepository {
       return (rows.map(ProductModel.fromJson).toList(), null);
     } catch (e) {
       return (<Product>[], _mapError(e));
+    }
+  }
+
+  @override
+  Future<(Map<String, double>, InventoryFailure?)> loadProductsStock({
+    required String branchId,
+  }) async {
+    try {
+      final map = await _ds.loadProductsStock(branchId: branchId);
+      return (map, null);
+    } catch (e) {
+      return (<String, double>{}, _mapError(e));
     }
   }
 

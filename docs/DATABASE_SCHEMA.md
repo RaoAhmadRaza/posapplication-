@@ -6,6 +6,10 @@
 > **Total Domains:** 18  
 > **Generated:** 2026-05-16  
 
+> **Note:** This document describes the **target** 89-table schema. **37 tables are built as of
+> 2026-06-25.** The authoritative as-built set is `supabase/migrations/` plus `docs/PROJECT_STATE.md` —
+> this doc is design intent, not a mirror of the live database.
+
 ---
 
 ## Table of Contents
@@ -991,6 +995,16 @@ CREATE INDEX idx_pricing_tiers_group ON product_pricing_tiers(customer_group_id)
 CREATE INDEX idx_barcode_templates_tenant ON barcode_templates(tenant_id) WHERE deleted_at IS NULL;
 ```
 
+#### Table: `product_sku_sequences`
+
+Per-tenant SKU counter. Written ONLY via the SECURITY DEFINER SKU-generation RPC; intentionally has no
+client RLS and no direct client access.
+
+| Column | Type | Constraints | Default | Description |
+|--------|------|------------|---------|-------------|
+| `tenant_id` | UUID | NOT NULL | | Owning tenant |
+| `last_number` | INTEGER | NOT NULL | `0` | Last SKU number issued for this tenant |
+
 ---
 
 ### 3.5 Sales & POS
@@ -1879,6 +1893,17 @@ CREATE INDEX idx_stock_count_items_count ON stock_count_items(stock_count_id);
 CREATE INDEX idx_stock_count_items_product ON stock_count_items(product_id);
 CREATE UNIQUE INDEX uq_stock_count_items ON stock_count_items(stock_count_id, product_id);
 ```
+
+#### Table: `inventory_settings`
+
+Per-tenant inventory thresholds; used by the stock-adjustment approval flow.
+
+| Column | Type | Constraints | Default | Description |
+|--------|------|------------|---------|-------------|
+| `tenant_id` | UUID | NOT NULL | | Owning tenant |
+| `adjustment_approval_threshold` | NUMERIC | NOT NULL | `0` | Adjustment value at/above which approval is required |
+| `allow_negative_stock` | BOOLEAN | NOT NULL | `false` | Whether negative on-hand is permitted |
+| `updated_at` | TIMESTAMPTZ | NOT NULL | `now()` | |
 
 ---
 

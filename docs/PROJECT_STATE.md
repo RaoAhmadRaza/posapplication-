@@ -120,19 +120,26 @@ Stock Levels, Adjustments, Transfers, Stock Counts, IMEI Lookup)
 - Product create: ref.invalidate(productsProvider) in controller.saveProduct
 - RPC parsing: single-row Map (not List) for postStockMovement + ensureDefaultWarehouse
 - Products card restored to Inventory hub (accidentally removed during Slice edits)
-- Products screen filtering: unified search + category/brand/status into single composeable query path
-  (search() now accepts filter params through the full chain — datasource → use case → repo → controller).
-  Added brand filter dropdown to products page. Fixes: category-filter + search non-composition, missing
-  brand filter.
+- Products screen filtering: unified search + category/brand/status into one composeable query path
+  (search() takes filter params through datasource→usecase→repo→controller); added brand dropdown.
 - Stock read path: stockLevelsController was filtering loadStockLevels by default warehouse UUID, but all
-  stock_balance rows use warehouse_id IS NULL (canonical default-location representation). Controller now
-  passes warehouseId: null; datasource isFilter('warehouse_id', null) matches NULL rows. POS onTap now
-  gates on (stock?.available ?? 0) > 0 — null/zero stock = not addable + greyed. SearchResultTile: spacing
-  before price + dividers between tiles.
+  stock_balance rows use warehouse_id IS NULL (canonical). Now passes warehouseId: null; datasource
+  isFilter('warehouse_id', null). POS onTap gates on (stock?.available ?? 0) > 0 (null/zero = not addable).
 - Products card stock: was showing product.reorderPoint labeled "Stock:" (all=10, migration default).
   Now shows real stock_balance.qty_on_hand via loadProductsStock (branch-wide eq branch_id +
   isFilter warehouse_id null), merged into Product.qtyOnHand. Card renders Out/Low/—/N. Controller
   ref.watch currentBranchProvider for rebuild on branch resolve; throws on stock failure (visible).
+- Set Opening Stock form (stock_movement_form_page): was seeding _selectedWarehouseId from the real
+  default-warehouse UUID (ensureDefaultWarehouse), then reading + writing at that non-canonical
+  warehouse_id. Read → eq(uuid) matched 0 canonical rows → showed on-hand 0 for stocked products
+  (form is ABSOLUTE: delta = target − currentOnHand, so a false 0 corrupts the posted qty_change);
+  write → row would land at a non-null warehouse_id, invisible to every other screen. Removed the
+  warehouse concept from the form: reads/writes canonical (warehouseId: null), deleted the
+  _WarehousePicker (no screen can show non-null-warehouse stock). _loadCurrentBalance now surfaces a
+  read failure (error banner) instead of masking it as 0.
+- Latent null-predicate bug: loadStockBalances + loadProductLedger emitted NO warehouse_id predicate
+  when warehouseId==null (rows across all warehouses). Now isFilter('warehouse_id', null) when null
+  (matches loadProductsStock/loadStockLevels) — would have mixed locations on the first non-null row.
 
 ## Barcode Scanning — Wired
 
@@ -186,7 +193,6 @@ Stock Levels, Adjustments, Transfers, Stock Counts, IMEI Lookup)
 - Profile loaded once (no pull-to-refresh)
 - IMEI section not yet integrated into product edit form (SERIALIZED products)
 - roles + tenants RLS `using (true)` — cross-tenant read of tenant names / role hierarchy
-- loadProducts() unbounded — silently truncated by Supabase's ~1000-row cap at 8,294 products
 
 ## Migration Import — COMPLETE
 
@@ -215,7 +221,9 @@ sales perms). create_sale enforces min_selling_price + credit_limit, overridable
 Bugfix round: cart sheet watches provider live (SF4 fix 1), banner loads on entry+session change (fix 2),
 same-product dedup (fix 3), product search capped at 50 (fix 4).
 Audit fix (2026-06-24): close_cashier_session now gated on sales:create + owner-only (session.cashier_id
-= auth.uid()), overridable by sales:approve — was the one ungated sales RPC.
+= auth.uid()), overridable by sales:approve — was the one ungated sales RPC. POS live-sales banner (D.3)
+reads sessionSalesProvider (LoadSessionSales use case, autoDispose family) instead of a direct datasource
+call; shows an error state ('Sales: —') on failure, not a silent zero.
 
 ### Sales V1 Deferred
 
