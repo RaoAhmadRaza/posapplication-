@@ -246,6 +246,16 @@ Controller propagates failure as AsyncError (no zero-fill); page shows AppInline
 payables + cash/bank balances, P&L/balance-sheet, drilldown reports, scheduled/email reports,
 configurable KPI grid.
 
+## Purchasing — In Progress
+
+Suppliers foundation + Purchase Orders (create/submit/approve, landed-cost allocation by line_total)
++ GRN receive (receive_goods: canonical warehouse_id NULL stock via post_stock_movement PURCHASE_RECEIPT,
+landed unit cost, IMEI capture for serialized, PO status DRAFT→APPROVED→PARTIALLY_RECEIVED/RECEIVED).
+receive_goods enum-cast bug fixed (migration 20260711101802 — see DECISIONS).
+NOTE: number_series.include_branch_code defaults true → PO/GRN/PV numbers render WITH branch code:
+PO-BR01-000001, GRN-BR01-000001, PV-BR01-000001 (not PO-000001). Dropping the branch code is a
+one-line change to the seeded number_series rows if desired.
+
 ## What's Next
 
-Purchasing module.
+Purchasing module — remaining: purchase_invoices, supplier_payments, UI/Flutter layers.
