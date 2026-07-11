@@ -1,6 +1,6 @@
 # PROJECT STATE — Lumina POS
 
-Last updated: 2026-06-18
+Last updated: 2026-07-11
 
 ## Stack & Architecture
 
@@ -66,10 +66,8 @@ imei_status. New RPCs (10): create/approve_adjustment, create/dispatch/receive/c
 open/record/complete_count, register_imei. All ops post through Slice B ledger.
 
 ### Slice C Flutter files
-Full clean-arch stack (detail in DECISIONS): 6 entities + 4 enums, 3 failures, 6 models, +20 datasource
-methods, +22 repo methods, 16 usecases, 4 controllers (Adjustments/Transfers/Counts/Imei), 8 pages, +13
-routes. Inventory hub rows all active (Products, Barcode Templates, Categories, Brands, Warehouses,
-Stock Levels, Adjustments, Transfers, Stock Counts, IMEI Lookup).
+Full clean-arch (detail in DECISIONS): 6 entities + 4 enums, 3 failures, 6 models, 16 usecases, 4 controllers
+(Adjustments/Transfers/Counts/Imei), 8 pages, +13 routes. All inventory-hub rows active.
 
 ## Database Migrations
 
@@ -83,70 +81,61 @@ Stock Levels, Adjustments, Transfers, Stock Counts, IMEI Lookup).
 | `20260611163739_product_sku_and_search.sql` | pg_trgm, SKU auto-gen |
 | `20260613061924_stock_engine.sql` | warehouses, stock_balance, stock_ledger, enums, triggers, RPCs |
 | `20260613075616_stock_ops.sql` | adjustments, transfers, counts, imei, number_series, settings, RPCs |
+| `20260611173542_fix_softdelete_rls.sql` | collapse duplicate catalog UPDATE policies |
+| `20260612160453_inventory_softdelete_rpcs.sql` | soft_delete_brand/category/product SECURITY DEFINER RPCs |
+| `20260615082538_notifications_low_stock.sql` | notifications + notification_preferences + low-stock trigger |
+| `20260616100723_bulk_import_products.sql` | bulk_import_products RPC |
+| `20260617103129 / 120537 / 121221 / 122153 / 122619` | migration-import RPCs + set-based + counts/idempotent/numfix fixes |
 | `20260618114258_sales_foundation.sql` | customers, cashier_sessions, invoices, invoice_items, payments + RLS, INVOICE number_series seed, create_sale/open_cashier_session/close_cashier_session RPCs, invoice-immutability trigger |
+| `20260618174821_sales_returns.sql` | create_sales_return RPC |
+| `20260619115907_post_stock_movement_operation_aware.sql` | SALE/RETURN_IN accept sales perms |
+| `20260619124544_create_sale_price_credit_guards.sql` | min_selling_price + credit_limit guards (overridable sales:approve) |
+| `20260619124958_held_sales.sql` | held_sales table (hold/resume) |
+| `20260619125510_void_invoice.sql` | void_invoice RPC |
+| `20260619180707_dashboard_summary.sql` | dashboard_summary RPC |
+| `20260624185804_close_cashier_session_permission_gate.sql` | sales:create gate + owner-only |
+| `20260710132545_tenant_scope_roles_tenants_rls.sql` | tenant-scoped RLS on roles + tenants (fixes cross-tenant read) |
+| `20260710134809_customers_mutation_permissions.sql` | customers perm module; insert/update/delete gated customers:* |
+| `20260710143731_revoke_next_number_from_authenticated.sql` | revoke next_number from authenticated (SECURITY DEFINER callers unaffected) |
+| `20260711094601_purchase_foundation_suppliers_perms.sql` | suppliers table + purchase perm module + PO/GRN/PV number series |
+| `20260711094922_purchase_orders_and_rpcs.sql` | purchase_orders(+items) + create/update/submit/approve/cancel RPCs |
+| `20260711100014_purchase_grn_receive.sql` | grns(+items) + receive_goods RPC |
+| `20260711101802_fix_receive_goods_enum_cast.sql` | receive_goods PO-status enum-cast fix |
+| `20260711102138_purchase_invoices_and_payments.sql` | purchase_invoices + supplier_payments + create_invoice/record_payment RPCs |
+| `20260711102631_purchase_supplier_ledger_aging.sql` | supplier_ledger + payables_aging RPCs |
+| `20260711111535_fix_receive_goods_imei_status.sql` | serialized receipt imei status IN_STOCK→AVAILABLE fix |
+| `20260711124610_purchase_return_number_series_enum.sql` | add PURCHASE_RETURN to number_series_type_enum |
+| `20260711124716_purchase_returns.sql` | purchase_returns(+items) + create_purchase_return RPC |
+| `20260711141631_customer_ledger_receivables_aging.sql` | customer_ledger + receivables_aging RPCs (customers:read) |
+| `20260711145841_fix_receivables_aging_and_ledger_basis.sql` | aging due-date from credit_terms; ledger outstanding = invoice balance |
 
 ## Bugfixes Applied
 Full detail in DECISIONS.md. Headlines: product edit/create reactive-seed + invalidate; RPC single-row
 Map parsing; unified products query path; canonical warehouse_id NULL stock read/write (2026-07-11 audit H).
 
-## Barcode Scanning — Wired
+## Peripheral features — COMPLETE (detail in DECISIONS.md)
 
-- Package: `mobile_scanner: ^7.2.0`
-- `lib/core/services/scanner_support.dart` — `bool get barcodeScanSupported` (true only on iOS/Android, not web)
-- `lib/core/widgets/barcode_scan_page.dart` — shared reusable scanner (293 lines): `scanBarcode(context, title:)` helper + `BarcodeScanPage` widget (camera preview, scan-window overlay, torch toggle, 1.5s debounce, manual-entry sentinel, permission-denied screen)
-- Platform permissions: `NSCameraUsageDescription` in iOS Info.plist, `CAMERA` + `uses-feature` in Android manifest
-- Wired into 4 inventory screens (scan buttons gated by `barcodeScanSupported`; desktop/web degrade silently):
-  - Products search — sets field + triggers debounced search
-  - Product form barcode field — sets `_barcodeCtrl.text`
-  - IMEI lookup — sets field + calls `_search()`
-  - Count session — matches scanned SKU/barcode to count line, scrolls + focuses quantity input; "Not in this count" banner if no match
-
-## Barcode Templates — Label Printing (Workflow §6.6) — COMPLETE
-
-- Packages: `pdf`, `printing`, `barcode`
-- `lib/features/inventory/data/services/label_pdf_service.dart` — renders labels on A4 grid per BarcodeTemplate mm dimensions (CODE128/EAN13/QR, SKU fallback on null barcode, EAN13 validates 13-digit else degrades to CODE128)
-- Products page: multi-select mode gated by `PermissionGate(module:'inventory', action:'export')` — ADMIN only; bottom bar with count + "Choose Template" → `/inventory/labels`
-- `lib/features/inventory/presentation/pages/label_print_page.dart` — template picker (defaults to `isDefault`), per-product +/- quantity controls, "Preview / Print" via `Printing.layoutPdf`
-- Barcode Templates are no longer CRUD-only — they produce actual PDF labels end-to-end
-
-## Notifications (§3.13) — Low-Stock Alerts + In-App Inbox — COMPLETE
-
-- Migration `20260615082538_notifications_low_stock.sql`: `notifications` + `notification_preferences` tables
-- DB trigger `trg_low_stock_notify` on `stock_balance` fires on qty_on_hand crossing below effective reorder_point (stock_balance override else product.reorder_point); deduped per product+branch while unread; inserts per tenant ADMIN respecting preferences
-- `mark_notification_read(p_id)` SECURITY DEFINER RPC
-- `lib/features/notifications/` clean-arch feature folder: `AppNotification` entity (18 columns + 3 enums), `NotificationModel`, `NotificationRemoteDataSource` (load/unreadCount/markRead/markAllRead), `NotificationRepository`, `NotificationsController` (AsyncNotifier) + `unreadCountProvider` (FutureProvider)
-- `NotificationsPage` — list with priority chip, unread dot, time-ago, tap → deep-links to `/inventory/stock/:actionId`, "Mark All Read"
-- Inventory hub AppBar: bell icon + unread badge (destructive counter, 99+ cap) → `/inventory/notifications`
-
-## Bulk Product Import — COMPLETE
-
-- Migration `20260616100723_bulk_import_products.sql`: `bulk_import_products(p_rows jsonb)` SECURITY DEFINER RPC — per-row try/catch, `{ok, failed, errors[]}`, resolves category/brand by name, SKU auto-gen, gated by `inventory:create`
-- Packages: `file_picker: ^3.0.4`, `csv: ^8.0.0`
-- `lib/features/inventory/presentation/pages/import_products_page.dart` — 3-step flow: pick .csv, column-mapping with smart auto-map + preview table, import with result summary
-- Datasource + use case + controller method `bulkImport(jsonPayload)` wired through clean-arch layers
-- Products page: upload icon button (PermissionGate `inventory:create`) → `/inventory/import`
-
-## Voice Search — Wired
-
-- Package: `speech_to_text: ^7.4.0`
-- `lib/core/services/voice_support.dart` — `bool get voiceSearchSupported` (iOS/Android only)
-- `lib/core/services/voice_input_service.dart` — wraps `SpeechToText`: lazy init, `listen()` returns `Future<String?>`, 5s timeout, streams partial → `onPartial` callback, dictation mode
-- Products search: mic icon (gated by `voiceSearchSupported`); while listening shows red mic + "Listening… '[partial]'" subtitle; partial streams into search field; final result triggers `ProductsController.search()`
-- Native permissions: `NSMicrophoneUsageDescription` + `NSSpeechRecognitionUsageDescription` in Info.plist, `RECORD_AUDIO` in Android manifest
+- **Barcode scanning** (`mobile_scanner`): shared `scanBarcode()` / `BarcodeScanPage` in core/widgets;
+  `barcodeScanSupported` guard (iOS/Android only, web degrades to manual); wired into products search,
+  product-form barcode, IMEI lookup, count session.
+- **Label printing** (§6.6; `pdf`/`printing`/`barcode`): `LabelPdfService` renders template-sized labels on
+  an A4 grid; products multi-select (gated inventory:export) → `LabelPrintPage`.
+- **Notifications** (§3.13): `notifications` + `notification_preferences`; `trg_low_stock_notify` trigger;
+  `NotificationsPage` + inventory-hub bell badge; deep-links to stock detail.
+- **Bulk product import** (`file_picker`/`csv`): `bulk_import_products` RPC + `ImportProductsPage` 3-step CSV
+  flow with column mapping (gated inventory:create).
+- **Voice search** (`speech_to_text`): `voiceSearchSupported` guard; mic in products search streams partial
+  → `ProductsController.search()`.
 
 ## Known Issues
 
 - Profile loaded once (no pull-to-refresh)
 - IMEI section not yet integrated into product edit form (SERIALIZED products)
-- roles + tenants RLS `using (true)` — cross-tenant read of tenant names / role hierarchy
 
 ## Migration Import — COMPLETE
-
-Feature folder `lib/features/migration_import/` with full clean-arch stack.
-Reuses InventoryFailure. 4 RPCs: migrate_import_categories/brands/products/stock.
-Set-based RPCs for categories/brands/products; products deduplicate barcode within batch.
-M3: MigrationImportPage — 4 FK-ordered step cards, preview tables, expandable errors.
-Route /inventory/import-migration. Hub row in InventoryHubPage.
+`lib/features/migration_import/` clean-arch (reuses InventoryFailure). 4 set-based RPCs
+(migrate_import_categories/brands/products/stock); MigrationImportPage — 4 FK-ordered step cards.
+Route /inventory/import-migration.
 
 ## Sales V1 — Core COMPLETE
 
@@ -245,5 +234,6 @@ bounded, SERIALIZED lines need exactly qty IMEIs via type/scan, reason required,
 
 ## What's Next
 
-Device click-through of Purchasing + Purchase Returns (flutter run -d chrome). Then M07 accounting
-(bank_accounts + GL) or the Reporting phase.
+Next module (decision pending): **M07 Accounting** (bank_accounts + GL — unblocks supplier-payment bank
+refs + dashboard payables/cash) or **M10 Reporting** (P&L / balance-sheet, drilldowns, scheduled reports).
+Outstanding non-module task: on-device click-through of the Purchasing + CRM UI (flutter run).
