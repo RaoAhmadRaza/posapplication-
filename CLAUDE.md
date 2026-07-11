@@ -4,6 +4,11 @@ Mode: caveman terse (see caveman skill). Full tech accuracy, zero fluff.
 Normal prose ONLY for: code, comments, commits, PRs, security warnings, destructive-op
 confirms, multi-step command order.
 
+Always use the `ponytail` skill on any coding task (write/add/refactor/fix/review/design):
+lazy-senior-dev ladder — YAGNI, reuse existing code, stdlib, native platform feature,
+installed dependency, one line, only then custom code. Never skip validation/error-handling/
+security/accessibility to hit this.
+
 Scope of any task is set by the PROMPT, not this file. This file = durable conventions +
 behavioral guardrails + lessons learned. No feature is permanently off-limits — the project is
 built out fully over time, one vertical slice at a time.
