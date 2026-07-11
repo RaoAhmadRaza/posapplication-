@@ -34,6 +34,13 @@ class PurchaseRemoteDataSource {
   static const _paymentCols = 'id, tenant_id, supplier_id, invoice_id, method,'
       ' amount, reference, voucher_number, notes, paid_at';
 
+  static const _returnCols = 'id, tenant_id, branch_id, supplier_id, po_id,'
+      ' grn_id, invoice_id, return_number, status, reason, return_date,'
+      ' subtotal, tax_total, total_amount, notes, created_at';
+
+  static const _returnItemCols = 'id, return_id, po_item_id, product_id,'
+      ' variant_id, qty_returned, unit_cost, tax_pct, line_total, imei_ids_json';
+
   Future<List<Map<String, dynamic>>> loadPurchaseOrders({
     String? status,
   }) async {
@@ -208,6 +215,72 @@ class PurchaseRemoteDataSource {
       'p_reference': reference,
       'p_bank_account_id': null,
       'p_notes': notes,
+    });
+    return result as Map<String, dynamic>;
+  }
+
+  Future<List<Map<String, dynamic>>> loadPurchaseReturns({
+    String? status,
+    String? supplierId,
+    String? poId,
+  }) async {
+    var q = _client
+        .from('purchase_returns')
+        .select(_returnCols)
+        .isFilter('deleted_at', null);
+    if (status != null) q = q.eq('status', status);
+    if (supplierId != null) q = q.eq('supplier_id', supplierId);
+    if (poId != null) q = q.eq('po_id', poId);
+    return q.order('created_at', ascending: false);
+  }
+
+  Future<Map<String, dynamic>> loadPurchaseReturn(String id) async {
+    return _client
+        .from('purchase_returns')
+        .select(_returnCols)
+        .eq('id', id)
+        .single();
+  }
+
+  Future<List<Map<String, dynamic>>> loadPurchaseReturnItems(
+      String returnId) async {
+    return _client
+        .from('purchase_return_items')
+        .select(_returnItemCols)
+        .eq('return_id', returnId)
+        .order('created_at');
+  }
+
+  /// Rows of {po_item_id, qty_returned} across CONFIRMED, non-deleted returns
+  /// of this PO — summed per po_item on the client to bound the return form.
+  Future<List<Map<String, dynamic>>> loadReturnedQtysForPo(String poId) async {
+    return _client
+        .from('purchase_return_items')
+        .select('po_item_id, qty_returned,'
+            ' purchase_returns!inner(po_id, status, deleted_at)')
+        .eq('purchase_returns.po_id', poId)
+        .eq('purchase_returns.status', 'CONFIRMED')
+        .isFilter('purchase_returns.deleted_at', null);
+  }
+
+  Future<Map<String, dynamic>> createPurchaseReturn({
+    required String branchId,
+    required String poId,
+    String? grnId,
+    String? invoiceId,
+    required String reason,
+    String? notes,
+    required List<Map<String, dynamic>> items,
+  }) async {
+    final result = await _client.rpc('create_purchase_return', params: {
+      'p_branch_id': branchId,
+      'p_po_id': poId,
+      'p_grn_id': grnId,
+      'p_invoice_id': invoiceId,
+      'p_reason': reason,
+      'p_notes': notes,
+      'p_items': items,
+      'p_reduce_invoice': false,
     });
     return result as Map<String, dynamic>;
   }

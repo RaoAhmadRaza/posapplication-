@@ -38,6 +38,9 @@ class SalesRepositoryImpl implements SalesRepository {
       if (lower.contains('err_insufficient_stock')) {
         return InsufficientStockFailure();
       }
+      if (lower.contains('err_credit_limit_exceeded')) {
+        return CreditLimitExceededFailure();
+      }
       if (lower.contains('err_credit_requires_customer')) {
         return CreditRequiresCustomerFailure();
       }
@@ -189,7 +192,7 @@ class SalesRepositoryImpl implements SalesRepository {
   @override
   Future<(Customer?, SalesFailure?)> createCustomer(Map<String, dynamic> data) async {
     try {
-      final row = await _ds.createCustomer(data);
+      final row = await _ds.createCustomer(CustomerModel.toInsert(data));
       return (CustomerModel.fromJson(row), null);
     } catch (e) {
       return (null, _mapError(e));

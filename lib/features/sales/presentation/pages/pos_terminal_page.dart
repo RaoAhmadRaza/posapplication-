@@ -24,6 +24,7 @@ import '../controllers/session_controller.dart';
 import '../controllers/session_sales_provider.dart';
 import 'customer_picker_sheet.dart';
 import 'held_sales_sheet.dart';
+import '../../../customers/presentation/controllers/customers_controller.dart';
 
 class PosTerminalPage extends ConsumerStatefulWidget {
   const PosTerminalPage({super.key});
@@ -384,15 +385,29 @@ class _SessionBanner extends ConsumerWidget {
   }
 }
 
-class _CustomerChip extends StatelessWidget {
+class _CustomerChip extends ConsumerWidget {
   const _CustomerChip({required this.customer, required this.onTap});
   final dynamic customer;
   final VoidCallback onTap;
 
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context, WidgetRef ref) {
     final name = customer?.name ?? 'Walk-in';
     final isWalkIn = customer == null;
+    final creditLimit =
+        isWalkIn ? 0.0 : (customer.creditLimit as double? ?? 0.0);
+
+    // Remaining credit = limit − outstanding (guard basis). Best-effort: only
+    // shown when a limit is set and the ledger resolves; never blocks the sale.
+    String? creditLeft;
+    if (!isWalkIn && creditLimit > 0) {
+      final outstanding =
+          ref.watch(customerOutstandingProvider(customer.id as String)).value;
+      if (outstanding != null) {
+        creditLeft = 'Credit left ${formatPkr(creditLimit - outstanding)}';
+      }
+    }
+
     return InkWell(
       onTap: onTap,
       child: Container(
@@ -407,14 +422,33 @@ class _CustomerChip extends StatelessWidget {
               color: isWalkIn ? AppColors.textMuted : AppColors.accent,
             ),
             const SizedBox(width: AppSpacing.sm),
-            Text(
-              isWalkIn ? 'Walk-in' : name.toString(),
-              style: AppTypography.footnote.copyWith(
-                color: isWalkIn ? AppColors.textMuted : AppColors.accent,
-                fontWeight: FontWeight.w600,
+            Expanded(
+              child: Row(
+                children: [
+                  Flexible(
+                    child: Text(
+                      isWalkIn ? 'Walk-in' : name.toString(),
+                      overflow: TextOverflow.ellipsis,
+                      style: AppTypography.footnote.copyWith(
+                        color: isWalkIn ? AppColors.textMuted : AppColors.accent,
+                        fontWeight: FontWeight.w600,
+                      ),
+                    ),
+                  ),
+                  if (creditLeft != null) ...[
+                    const SizedBox(width: AppSpacing.sm),
+                    Flexible(
+                      child: Text(
+                        creditLeft,
+                        overflow: TextOverflow.ellipsis,
+                        style: AppTypography.caption
+                            .copyWith(color: AppColors.textMuted),
+                      ),
+                    ),
+                  ],
+                ],
               ),
             ),
-            const Spacer(),
             Icon(Icons.keyboard_arrow_down, size: 18, color: AppColors.textMuted),
           ],
         ),

@@ -47,3 +47,13 @@ class PaymentResultModel {
     );
   }
 }
+
+class ReturnCreateResultModel {
+  static ReturnCreateResult fromJson(Map<String, dynamic> json) {
+    return ReturnCreateResult(
+      returnId: json['return_id'] as String,
+      returnNumber: json['return_number'] as String,
+      totalAmount: double.tryParse(json['total_amount'].toString()) ?? 0,
+    );
+  }
+}

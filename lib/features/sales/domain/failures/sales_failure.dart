@@ -16,6 +16,12 @@ class CreditRequiresCustomerFailure extends SalesFailure {
   String get message => 'Credit sales require a customer.';
 }
 
+class CreditLimitExceededFailure extends SalesFailure {
+  @override
+  String get message =>
+      'Credit limit exceeded. Collect a payment or raise the limit.';
+}
+
 class NoOpenSessionFailure extends SalesFailure {
   @override
   String get message => 'No open cashier session. Please open a session first.';

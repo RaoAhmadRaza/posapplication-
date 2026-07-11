@@ -31,6 +31,10 @@ import 'features/inventory/presentation/pages/brand_form_page.dart';
 import 'features/suppliers/presentation/pages/suppliers_page.dart';
 import 'features/suppliers/presentation/pages/supplier_form_page.dart';
 import 'features/suppliers/presentation/pages/supplier_detail_page.dart';
+import 'features/customers/presentation/pages/customers_page.dart';
+import 'features/customers/presentation/pages/customer_form_page.dart';
+import 'features/customers/presentation/pages/customer_detail_page.dart';
+import 'features/customers/presentation/pages/receivables_aging_page.dart';
 import 'features/purchasing/presentation/pages/purchase_hub_page.dart';
 import 'features/purchasing/presentation/pages/purchase_orders_page.dart';
 import 'features/purchasing/presentation/pages/purchase_order_form_page.dart';
@@ -41,6 +45,9 @@ import 'features/purchasing/presentation/pages/purchase_invoices_page.dart';
 import 'features/purchasing/presentation/pages/purchase_invoice_detail_page.dart';
 import 'features/purchasing/presentation/pages/supplier_payment_page.dart';
 import 'features/purchasing/presentation/pages/reorder_suggestions_page.dart';
+import 'features/purchasing/presentation/pages/purchase_returns_page.dart';
+import 'features/purchasing/presentation/pages/purchase_return_detail_page.dart';
+import 'features/purchasing/presentation/pages/purchase_return_form_page.dart';
 import 'features/inventory/presentation/pages/products_page.dart';
 import 'features/inventory/presentation/pages/product_form_page.dart';
 import 'features/inventory/presentation/pages/barcode_templates_page.dart';
@@ -401,6 +408,28 @@ final appRouter = GoRouter(
       },
     ),
     GoRoute(
+      path: '/customers',
+      builder: (context, state) => const CustomersPage(),
+    ),
+    GoRoute(
+      path: '/customers/create',
+      builder: (context, state) => const CustomerFormPage(),
+    ),
+    GoRoute(
+      path: '/receivables',
+      builder: (context, state) => const ReceivablesAgingPage(),
+    ),
+    GoRoute(
+      path: '/customers/:customerId',
+      builder: (context, state) =>
+          CustomerDetailPage(customerId: state.pathParameters['customerId']!),
+    ),
+    GoRoute(
+      path: '/customers/:customerId/edit',
+      builder: (context, state) =>
+          CustomerFormPage(customerId: state.pathParameters['customerId']!),
+    ),
+    GoRoute(
       path: '/purchasing/orders',
       builder: (context, state) => const PurchaseOrdersPage(),
     ),
@@ -456,6 +485,26 @@ final appRouter = GoRouter(
     GoRoute(
       path: '/purchasing/reorder',
       builder: (context, state) => const ReorderSuggestionsPage(),
+    ),
+    GoRoute(
+      path: '/purchasing/returns',
+      builder: (context, state) => const PurchaseReturnsPage(),
+    ),
+    GoRoute(
+      path: '/purchasing/returns/create',
+      builder: (context, state) {
+        final extra = state.extra as Map<String, dynamic>?;
+        return PurchaseReturnFormPage(
+          poId: extra?['poId'] as String,
+          grnId: extra?['grnId'] as String?,
+          invoiceId: extra?['invoiceId'] as String?,
+        );
+      },
+    ),
+    GoRoute(
+      path: '/purchasing/returns/:id',
+      builder: (context, state) =>
+          PurchaseReturnDetailPage(returnId: state.pathParameters['id']!),
     ),
     StatefulShellRoute.indexedStack(
       builder: (context, state, navigationShell) =>

@@ -9,6 +9,10 @@
 > **Note:** This document describes the **target** 89-table schema. **37 tables are built as of
 > 2026-06-25.** The authoritative as-built set is `supabase/migrations/` plus `docs/PROJECT_STATE.md` —
 > this doc is design intent, not a mirror of the live database.
+>
+> **Extensions beyond the target (added 2026-07-11):** `purchase_returns` + `purchase_return_items`
+> (§3.6) are two post-target extension tables (89 → 91). They are the first consumers of
+> `stock_movement_type_enum` value `RETURN_OUT` and the `number_series_type_enum` value `PURCHASE_RETURN`.
 
 ---
 
@@ -158,6 +162,7 @@ CREATE TYPE cashier_session_status_enum AS ENUM ('OPEN', 'CLOSED', 'SUSPENDED');
 -- === Purchase Enums ===
 CREATE TYPE purchase_order_status_enum AS ENUM ('DRAFT', 'SUBMITTED', 'APPROVED', 'PARTIALLY_RECEIVED', 'RECEIVED', 'INVOICED', 'CLOSED', 'CANCELLED');
 CREATE TYPE purchase_invoice_status_enum AS ENUM ('DRAFT', 'PENDING', 'APPROVED', 'PAID', 'VOID');
+CREATE TYPE purchase_return_status_enum AS ENUM ('DRAFT', 'CONFIRMED', 'CANCELLED');   -- extension — added 2026-07-11
 
 -- === Inventory Enums ===
 CREATE TYPE stock_movement_type_enum AS ENUM ('SALE', 'PURCHASE_RECEIPT', 'RETURN_IN', 'RETURN_OUT', 'TRANSFER_OUT', 'TRANSFER_IN', 'ADJUSTMENT', 'SCRAP', 'OPENING_BALANCE');
@@ -201,7 +206,7 @@ CREATE TYPE approval_workflow_type_enum AS ENUM ('PURCHASE_ORDER', 'STOCK_ADJUST
 
 -- === Settings Enums ===
 CREATE TYPE tax_calculation_mode_enum AS ENUM ('INCLUSIVE', 'EXCLUSIVE');
-CREATE TYPE number_series_type_enum AS ENUM ('INVOICE', 'PURCHASE_ORDER', 'GRN', 'JOURNAL_ENTRY', 'STOCK_TRANSFER', 'REPAIR_JOB', 'PAYMENT_VOUCHER', 'RECEIPT_VOUCHER');
+CREATE TYPE number_series_type_enum AS ENUM ('INVOICE', 'PURCHASE_ORDER', 'GRN', 'JOURNAL_ENTRY', 'STOCK_TRANSFER', 'REPAIR_JOB', 'PAYMENT_VOUCHER', 'RECEIPT_VOUCHER', 'PURCHASE_RETURN');   -- PURCHASE_RETURN: extension — added 2026-07-11 (PR- series)
 
 -- === File Enums ===
 CREATE TYPE file_category_enum AS ENUM ('DOCUMENT', 'IMAGE', 'RECEIPT', 'REPORT', 'BACKUP', 'IMPORT');
@@ -1552,6 +1557,72 @@ CREATE INDEX idx_supplier_payments_invoice ON supplier_payments(invoice_id) WHER
 CREATE INDEX idx_supplier_payments_tenant ON supplier_payments(tenant_id, paid_at);
 
 ALTER TABLE supplier_payments ADD CONSTRAINT chk_supplier_payments_amount CHECK (amount > 0);
+```
+
+---
+
+#### Table: `purchase_returns`   (extension — not in original target; added 2026-07-11)
+
+| Column | Type | Constraints | Default | Description |
+|--------|------|------------|---------|-------------|
+| `id` | UUID | PK | `gen_random_uuid()` | |
+| `tenant_id` | UUID | NOT NULL, FK → tenants | | |
+| `branch_id` | UUID | NOT NULL, FK → branches | | |
+| `supplier_id` | UUID | NOT NULL, FK → suppliers | | |
+| `po_id` | UUID | NOT NULL, FK → purchase_orders | | |
+| `grn_id` | UUID | FK → grns | | Nullable |
+| `invoice_id` | UUID | FK → purchase_invoices | | Nullable |
+| `return_number` | VARCHAR(50) | NOT NULL | | Sequential `PR-` |
+| `status` | `purchase_return_status_enum` | NOT NULL | `'CONFIRMED'` | |
+| `reason` | TEXT | | | |
+| `return_date` | DATE | NOT NULL | `CURRENT_DATE` | |
+| `subtotal` | DECIMAL(15,4) | NOT NULL | `0` | |
+| `tax_total` | DECIMAL(15,4) | NOT NULL | `0` | |
+| `total_amount` | DECIMAL(15,4) | NOT NULL | `0` | Credit value / payable reduction |
+| `notes` | TEXT | | | |
+| `correlation_id` | UUID | | | |
+| `created_at` | TIMESTAMPTZ | NOT NULL | `now()` | |
+| `updated_at` | TIMESTAMPTZ | NOT NULL | `now()` | |
+| `deleted_at` | TIMESTAMPTZ | | | |
+| `version` | INTEGER | NOT NULL | `1` | |
+| `created_by` | UUID | FK → users | | |
+| `updated_by` | UUID | FK → users | | |
+
+```sql
+CREATE UNIQUE INDEX uq_purchase_returns_number ON purchase_returns(tenant_id, return_number) WHERE deleted_at IS NULL;
+CREATE INDEX idx_purchase_returns_po ON purchase_returns(po_id) WHERE deleted_at IS NULL;
+CREATE INDEX idx_purchase_returns_supplier ON purchase_returns(supplier_id, return_date) WHERE deleted_at IS NULL;
+CREATE INDEX idx_purchase_returns_status ON purchase_returns(tenant_id, status) WHERE deleted_at IS NULL;
+```
+
+Business rule: stock reverses via `post_stock_movement` `RETURN_OUT` at canonical `warehouse_id IS NULL`;
+`qty_returned` is validated against received − prior CONFIRMED returns; does not mutate
+`purchase_order_items` / `purchase_orders` / `purchase_invoices` by default (invoice-balance reduction is opt-in).
+
+---
+
+#### Table: `purchase_return_items`   (extension — added 2026-07-11)
+
+| Column | Type | Constraints | Default | Description |
+|--------|------|------------|---------|-------------|
+| `id` | UUID | PK | `gen_random_uuid()` | |
+| `return_id` | UUID | NOT NULL, FK → purchase_returns | | ON DELETE CASCADE |
+| `po_item_id` | UUID | NOT NULL, FK → purchase_order_items | | |
+| `product_id` | UUID | NOT NULL, FK → products | | |
+| `variant_id` | UUID | FK → product_variants | | Nullable |
+| `qty_returned` | DECIMAL(15,4) | NOT NULL | | |
+| `unit_cost` | DECIMAL(15,4) | NOT NULL | | |
+| `tax_pct` | DECIMAL(5,2) | NOT NULL | `0` | |
+| `line_total` | DECIMAL(15,4) | NOT NULL | | |
+| `imei_ids_json` | JSONB | | | Serials returned |
+| `created_at` | TIMESTAMPTZ | NOT NULL | `now()` | |
+
+```sql
+CREATE INDEX idx_purchase_return_items_return ON purchase_return_items(return_id);
+CREATE INDEX idx_purchase_return_items_po_item ON purchase_return_items(po_item_id);
+CREATE INDEX idx_purchase_return_items_product ON purchase_return_items(product_id);
+
+ALTER TABLE purchase_return_items ADD CONSTRAINT chk_purchase_return_items_qty CHECK (qty_returned > 0);
 ```
 
 ---
@@ -3855,6 +3926,18 @@ erDiagram
 | supplier_payments | supplier_id | → | suppliers(id) | RESTRICT | |
 | supplier_payments | invoice_id | → | purchase_invoices(id) | SET NULL | |
 | supplier_payments | bank_account_id | → | bank_accounts(id) | SET NULL | |
+| purchase_returns | tenant_id | → | tenants(id) | RESTRICT | extension — added 2026-07-11 |
+| purchase_returns | branch_id | → | branches(id) | RESTRICT | |
+| purchase_returns | supplier_id | → | suppliers(id) | RESTRICT | |
+| purchase_returns | po_id | → | purchase_orders(id) | RESTRICT | |
+| purchase_returns | grn_id | → | grns(id) | SET NULL | |
+| purchase_returns | invoice_id | → | purchase_invoices(id) | SET NULL | |
+| purchase_returns | created_by | → | users(id) | RESTRICT | |
+| purchase_returns | updated_by | → | users(id) | RESTRICT | |
+| purchase_return_items | return_id | → | purchase_returns(id) | CASCADE | |
+| purchase_return_items | po_item_id | → | purchase_order_items(id) | RESTRICT | |
+| purchase_return_items | product_id | → | products(id) | RESTRICT | |
+| purchase_return_items | variant_id | → | product_variants(id) | SET NULL | |
 | **Inventory & Warehouse** | | | | | |
 | stock_balance | tenant_id | → | tenants(id) | RESTRICT | |
 | stock_balance | branch_id | → | branches(id) | RESTRICT | |

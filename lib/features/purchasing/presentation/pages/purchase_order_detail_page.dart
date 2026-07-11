@@ -221,6 +221,22 @@ class _Body extends ConsumerWidget {
         ),
       ));
     }
+    if (items.any((i) => i.qtyReceived > 0)) {
+      add(PermissionGate(
+        module: 'purchase',
+        action: 'update',
+        child: AppButton(
+          label: 'Return',
+          icon: Icons.assignment_return,
+          variant: AppButtonVariant.tinted,
+          fullWidth: true,
+          onPressed: () => context.push(
+            '/purchasing/returns/create',
+            extra: {'poId': po.id},
+          ),
+        ),
+      ));
+    }
     const terminal = {
       PurchaseOrderStatus.received,
       PurchaseOrderStatus.invoiced,

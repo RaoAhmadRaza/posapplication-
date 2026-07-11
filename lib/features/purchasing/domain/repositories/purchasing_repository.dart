@@ -3,6 +3,8 @@ import '../entities/purchase_order_item.dart';
 import '../entities/grn.dart';
 import '../entities/purchase_invoice.dart';
 import '../entities/supplier_payment.dart';
+import '../entities/purchase_return.dart';
+import '../entities/purchase_return_item.dart';
 import '../entities/purchase_results.dart';
 import '../failures/purchase_failure.dart';
 
@@ -50,5 +52,26 @@ abstract class PurchasingRepository {
     required double amount,
     String? reference,
     String? notes,
+  });
+  Future<(List<PurchaseReturn>, PurchaseFailure?)> loadPurchaseReturns({
+    PurchaseReturnStatus? status,
+    String? supplierId,
+    String? poId,
+  });
+  Future<(PurchaseReturn?, List<PurchaseReturnItem>, PurchaseFailure?)>
+      loadPurchaseReturn(String id);
+
+  /// Already-returned qty per po_item across CONFIRMED returns of a PO,
+  /// keyed by po_item_id. Bounds the editable return qty in the form.
+  Future<(Map<String, double>, PurchaseFailure?)> loadReturnedQtysForPo(
+      String poId);
+  Future<(ReturnCreateResult?, PurchaseFailure?)> createPurchaseReturn({
+    required String branchId,
+    required String poId,
+    String? grnId,
+    String? invoiceId,
+    required String reason,
+    String? notes,
+    required List<Map<String, dynamic>> items,
   });
 }

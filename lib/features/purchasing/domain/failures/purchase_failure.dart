@@ -27,6 +27,24 @@ class PurchaseGrnMismatchFailure extends PurchaseFailure {
   String get message => 'Invoice does not match the goods received.';
 }
 
+class PurchaseReturnExceedsReceivedFailure extends PurchaseFailure {
+  @override
+  String get message =>
+      'Return quantity exceeds what was received (minus prior returns).';
+}
+
+class PurchaseImeiCountMismatchFailure extends PurchaseFailure {
+  @override
+  String get message =>
+      'Scan exactly one IMEI per returned unit for serialized items.';
+}
+
+class PurchaseImeiNotFoundFailure extends PurchaseFailure {
+  @override
+  String get message =>
+      'One or more IMEIs are not on hand for this product.';
+}
+
 class PurchaseNotFoundFailure extends PurchaseFailure {
   @override
   String get message => 'Record not found.';

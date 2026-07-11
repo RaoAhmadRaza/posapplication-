@@ -135,6 +135,24 @@ class _Body extends ConsumerWidget {
               ),
             ),
           ),
+        const SizedBox(height: AppSpacing.md),
+        PermissionGate(
+          module: 'purchase',
+          action: 'update',
+          child: AppButton(
+            label: 'Return Against Bill',
+            icon: Icons.assignment_return,
+            variant: AppButtonVariant.tinted,
+            fullWidth: true,
+            onPressed: () => context.push(
+              '/purchasing/returns/create',
+              extra: {
+                'poId': invoice.poId,
+                'invoiceId': invoice.id,
+              },
+            ),
+          ),
+        ),
         const SizedBox(height: AppSpacing.xxl),
       ],
     );

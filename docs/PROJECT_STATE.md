@@ -86,10 +86,8 @@ Stock Levels, Adjustments, Transfers, Stock Counts, IMEI Lookup).
 | `20260618114258_sales_foundation.sql` | customers, cashier_sessions, invoices, invoice_items, payments + RLS, INVOICE number_series seed, create_sale/open_cashier_session/close_cashier_session RPCs, invoice-immutability trigger |
 
 ## Bugfixes Applied
-Full detail in DECISIONS.md. Headlines: product edit/create reactive-seed + invalidate; RPC
-single-row Map parsing; products filtering unified into one query path; canonical warehouse_id NULL
-stock read/write across stock levels, products-card stock, and Set Opening Stock (see 2026-07-11
-audit H); loadStockBalances/loadProductLedger null-warehouse predicate fix.
+Full detail in DECISIONS.md. Headlines: product edit/create reactive-seed + invalidate; RPC single-row
+Map parsing; unified products query path; canonical warehouse_id NULL stock read/write (2026-07-11 audit H).
 
 ## Barcode Scanning — Wired
 
@@ -138,8 +136,6 @@ audit H); loadStockBalances/loadProductLedger null-warehouse predicate fix.
 
 ## Known Issues
 
-- `cupertino_icons` — in pubspec, unused
-- `RecoveryState` in core/error — semantic misplacement
 - Profile loaded once (no pull-to-refresh)
 - IMEI section not yet integrated into product edit form (SERIALIZED products)
 - roles + tenants RLS `using (true)` — cross-tenant read of tenant names / role hierarchy
@@ -156,24 +152,12 @@ Route /inventory/import-migration. Hub row in InventoryHubPage.
 
 DB foundation (S1): customers, cashier_sessions, invoices, invoice_items, payments + RLS; RPCs create_sale,
 open/close_cashier_session, create_sales_return, void_invoice; invoice-immutability trigger; INVOICE
-number_series seed. Data+domain (S2): 7 entities, SalesFailure, repo, 6 models, datasource, 10 use cases,
-4 controllers. POS terminal (S3): product search+scan, cart qty-steppers, customer picker (S4),
-multi-payment/credit (S4), tax at checkout (R5), hold/resume (R6A), void (R6B), return (S6). Session
-lifecycle fix (SF1): SessionController DB-backed, Resume/Close card, variance summary, staleness chip.
-Polish (SF2): negative-float validation, "PKR" labels, receipt WhatsApp share fix. Autosave (SF3):
-WidgetsBindingObserver auto-holds non-empty cart on app pause ("Auto-saved HH:MM"), resume banner
-"Auto-saved cart available — tap Resume". POS fixes (SF4): createCustomer tenant_id fix; narrow layout
-products-full-body + cart bottom-sheet (FAB); stock qty chip on product cards (via stockLevelsProvider);
-live session sales via invoices sum (banner). Session
-open/close (S3). Sales history+detail (S5) with Reprint/Share. Receipt PDF (S3). Permission gating on
-all routes + bottom-nav (R2). Operation-aware post_stock_movement gate applied (SALE/RETURN_IN accept
-sales perms). create_sale enforces min_selling_price + credit_limit, overridable by sales:approve.
-Bugfix round: cart sheet watches provider live (SF4 fix 1), banner loads on entry+session change (fix 2),
-same-product dedup (fix 3), product search capped at 50 (fix 4).
-Audit fix (2026-06-24): close_cashier_session now gated on sales:create + owner-only (session.cashier_id
-= auth.uid()), overridable by sales:approve — was the one ungated sales RPC. POS live-sales banner (D.3)
-reads sessionSalesProvider (LoadSessionSales use case, autoDispose family) instead of a direct datasource
-call; shows an error state ('Sales: —') on failure, not a silent zero.
+number_series seed. Full clean-arch sales feature: POS terminal (search+scan, cart, customer picker,
+multi-payment/credit, tax, hold/resume, void, return), DB-backed session lifecycle (open/close, variance,
+staleness), cart autosave, history+detail (Reprint/Share), 80mm receipt PDF. Permission-gated routes +
+bottom-nav. create_sale enforces min_selling_price + credit_limit (overridable by sales:approve).
+close_cashier_session gated sales:create + owner-only. Live-sales banner via sessionSalesProvider (no silent
+zero). Full per-slice detail in DECISIONS.md.
 
 ### Sales V1 Deferred
 
@@ -233,7 +217,33 @@ purchase:create), SupplierFormPage (grouped fields, gated purchase:update/delete
 (header + ledger balance/timeline + Record Payment TODO). Routes /suppliers[/create|/:id|/:id/edit];
 row on Inventory hub Purchasing section. DB pre-migrated. Verified vs live RLS.
 
+### Customers CRM (Flutter) — COMPLETE (parity with suppliers)
+`lib/features/customers/` full clean-arch mirroring suppliers. Customer + CustomerModel MOVED here from
+features/sales (old paths now re-export — POS/sales unchanged). CustomerLedger + ReceivablesAging entities;
+sealed CustomerFailure; 7 usecases; CustomersRemoteDataSource (ILIKE name/phone, status filter, deleted_at
+null, load/insert/update/softDelete, customer_ledger/receivables_aging RPCs); CustomersController + ledger/
+aging/outstanding providers. Pages: CustomersPage (search/status/receivable hint, FAB gated customers:create),
+CustomerFormPage (all editable cols incl credit_limit/terms/opening — sets credit at last, gated create/update),
+CustomerDetailPage (credit summary limit/outstanding/remaining + ledger), ReceivablesAgingPage (buckets +
+by-customer). Routes /customers[/create|/:id|/:id/edit] + /receivables; Customers section on Inventory hub;
+dashboard Receivables KPI taps through to /receivables; POS chip shows remaining credit; CreditLimitExceededFailure
+mapped from create_sale ERR_CREDIT_LIMIT_EXCEEDED. DEFERRED: customer_groups, loyalty, communication_logs,
+bulk import, statements. No migration. flutter analyze clean.
+
+### Purchase Returns (Flutter) — COMPLETE
+`lib/features/purchasing/` extended (no new folder). Debit-note-style return of received goods to a supplier.
+Domain: PurchaseReturn + PurchaseReturnItem + PurchaseReturnStatus + ReturnCreateResult; PurchaseFailure
+gained ReturnExceedsReceived/ImeiCountMismatch/ImeiNotFound (invoice-mismatch reuses GrnMismatch). 4 usecases;
+datasource loadPurchaseReturns / loadPurchaseReturn(+items) / loadReturnedQtysForPo (embedded
+`purchase_returns!inner` filter, summed client-side) / rpc create_purchase_return (p_reduce_invoice=false).
+PurchaseReturnsController + detail/poReturnedQtys providers. Pages: list (+status filter), detail (lines +
+returned IMEIs), form (mirrors GRN receive: per received line shows received/already-returned/available, qty
+bounded, SERIALIZED lines need exactly qty IMEIs via type/scan, reason required, live total). Entry: PO detail
+"Return" (any qty_received>0) + invoice "Return Against Bill", gated purchase:update; hub row; routes
+/purchasing/returns[/create|/:id]. Supplier ledger renders kind=RETURN as a credit. No migration (RPC + tables
++ PR- series pre-live). Rolled-back dry-run verified full chain incl. over-return guard. flutter analyze clean.
+
 ## What's Next
 
-Device run of the Purchasing UI (flutter run) to confirm the full click-through. Then M07 accounting
+Device click-through of Purchasing + Purchase Returns (flutter run -d chrome). Then M07 accounting
 (bank_accounts + GL) or the Reporting phase.

@@ -144,6 +144,24 @@ class InventoryHubPage extends ConsumerWidget {
                 onTap: () => context.push('/suppliers'),
               ),
               const SizedBox(height: AppSpacing.xxl),
+              // NOTE: Customers CRM lives here alongside Suppliers until a
+              // dedicated CRM hub ships.
+              _SectionLabel('Customers'),
+              const SizedBox(height: AppSpacing.sm),
+              _HubRow(
+                icon: Icons.people_outline,
+                title: 'Customers',
+                subtitle: 'Customer master, credit, and ledger',
+                onTap: () => context.push('/customers'),
+              ),
+              const SizedBox(height: AppSpacing.md),
+              _HubRow(
+                icon: Icons.account_balance_wallet_outlined,
+                title: 'Receivables Aging',
+                subtitle: 'Outstanding balances by age bucket',
+                onTap: () => context.push('/receivables'),
+              ),
+              const SizedBox(height: AppSpacing.xxl),
               _SectionLabel('Data'),
               const SizedBox(height: AppSpacing.sm),
               PermissionGate(

@@ -371,7 +371,11 @@ class _KpiGrid extends StatelessWidget {
         _KpiCard(label: 'Today\'s Sales', value: summary.todaySales, icon: Icons.shopping_cart, color: AppColors.accent),
         _KpiCard(label: 'Transactions', value: summary.todayTxns.toDouble(), icon: Icons.receipt_long, color: AppColors.success),
         _KpiCard(label: 'Today\'s Profit', value: summary.todayProfit, icon: Icons.trending_up, color: AppColors.success),
-        _KpiCard(label: 'Receivables', value: summary.receivables, icon: Icons.account_balance_wallet, color: AppColors.warning),
+        InkWell(
+          onTap: () => context.push('/receivables'),
+          borderRadius: BorderRadius.circular(AppRadius.card),
+          child: _KpiCard(label: 'Receivables', value: summary.receivables, icon: Icons.account_balance_wallet, color: AppColors.warning),
+        ),
         _KpiCard(label: 'Stock Value', value: summary.stockValue, icon: Icons.inventory_2, color: AppColors.accent),
         InkWell(
           onTap: () => context.push('/inventory/notifications'),

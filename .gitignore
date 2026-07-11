@@ -46,3 +46,7 @@ app.*.map.json
 
 # iOS build artifacts (455MB, not source)
 ios/build/
+
+# Playwright MCP session artifacts
+.playwright-mcp/
+login-initial.png

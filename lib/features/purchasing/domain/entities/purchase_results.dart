@@ -39,3 +39,14 @@ class PaymentResult {
   const PaymentResult(
       {required this.paymentId, required this.voucherNumber});
 }
+
+class ReturnCreateResult {
+  final String returnId;
+  final String returnNumber;
+  final double totalAmount;
+  const ReturnCreateResult({
+    required this.returnId,
+    required this.returnNumber,
+    required this.totalAmount,
+  });
+}

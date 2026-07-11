@@ -256,12 +256,16 @@ class _EntryRow extends StatelessWidget {
     final isInvoice = entry.kind == 'INVOICE';
     final amount = isInvoice ? entry.debit : entry.credit;
     final color = isInvoice ? AppColors.destructive : AppColors.success;
+    final icon = switch (entry.kind) {
+      'INVOICE' => Icons.receipt_long,
+      'RETURN' => Icons.assignment_return,
+      _ => Icons.payments,
+    };
     return Padding(
       padding: const EdgeInsets.symmetric(vertical: 6),
       child: Row(
         children: [
-          Icon(isInvoice ? Icons.receipt_long : Icons.payments,
-              size: 18, color: color),
+          Icon(icon, size: 18, color: color),
           const SizedBox(width: AppSpacing.sm),
           Expanded(
             child: Column(

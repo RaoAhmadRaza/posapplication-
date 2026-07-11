@@ -58,6 +58,13 @@ class PurchaseHubPage extends StatelessWidget {
                 subtitle: 'Items at or below reorder point',
                 onTap: () => context.push('/purchasing/reorder'),
               ),
+              const SizedBox(height: AppSpacing.md),
+              _HubRow(
+                icon: Icons.assignment_return,
+                title: 'Purchase Returns',
+                subtitle: 'Return received goods to suppliers',
+                onTap: () => context.push('/purchasing/returns'),
+              ),
               const SizedBox(height: AppSpacing.xxl),
             ],
           ),

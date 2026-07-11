@@ -7,6 +7,8 @@ import '../../domain/entities/purchase_order_item.dart';
 import '../../domain/entities/grn.dart';
 import '../../domain/entities/purchase_invoice.dart';
 import '../../domain/entities/supplier_payment.dart';
+import '../../domain/entities/purchase_return.dart';
+import '../../domain/entities/purchase_return_item.dart';
 import '../../domain/entities/purchase_results.dart';
 import '../../domain/failures/purchase_failure.dart';
 import '../../domain/repositories/purchasing_repository.dart';
@@ -16,6 +18,8 @@ import '../models/purchase_order_item_model.dart';
 import '../models/grn_model.dart';
 import '../models/purchase_invoice_model.dart';
 import '../models/supplier_payment_model.dart';
+import '../models/purchase_return_model.dart';
+import '../models/purchase_return_item_model.dart';
 import '../models/purchase_result_models.dart';
 
 final purchasingRepositoryProvider = Provider<PurchasingRepository>((ref) {
@@ -41,7 +45,19 @@ class PurchasingRepositoryImpl implements PurchasingRepository {
         return PurchaseOverReceiptFailure();
       }
       if (msg.contains('err_overpayment')) return PurchaseOverpaymentFailure();
-      if (msg.contains('err_grn_mismatch')) return PurchaseGrnMismatchFailure();
+      if (msg.contains('err_grn_mismatch') ||
+          msg.contains('err_invoice_mismatch')) {
+        return PurchaseGrnMismatchFailure();
+      }
+      if (msg.contains('err_return_exceeds_received')) {
+        return PurchaseReturnExceedsReceivedFailure();
+      }
+      if (msg.contains('err_imei_count_mismatch')) {
+        return PurchaseImeiCountMismatchFailure();
+      }
+      if (msg.contains('err_imei_not_found')) {
+        return PurchaseImeiNotFoundFailure();
+      }
       if (msg.contains('_not_found') ||
           code == 'PGRST116' ||
           code == 'P0002') {
@@ -244,6 +260,83 @@ class PurchasingRepositoryImpl implements PurchasingRepository {
         notes: notes,
       );
       return (PaymentResultModel.fromJson(row), null);
+    } catch (e) {
+      return (null, _mapError(e));
+    }
+  }
+
+  @override
+  Future<(List<PurchaseReturn>, PurchaseFailure?)> loadPurchaseReturns({
+    PurchaseReturnStatus? status,
+    String? supplierId,
+    String? poId,
+  }) async {
+    try {
+      final rows = await _ds.loadPurchaseReturns(
+        status: status == null ? null : PurchaseReturnModel.statusToDb(status),
+        supplierId: supplierId,
+        poId: poId,
+      );
+      return (rows.map(PurchaseReturnModel.fromJson).toList(), null);
+    } catch (e) {
+      return (<PurchaseReturn>[], _mapError(e));
+    }
+  }
+
+  @override
+  Future<(PurchaseReturn?, List<PurchaseReturnItem>, PurchaseFailure?)>
+      loadPurchaseReturn(String id) async {
+    try {
+      final row = await _ds.loadPurchaseReturn(id);
+      final itemRows = await _ds.loadPurchaseReturnItems(id);
+      return (
+        PurchaseReturnModel.fromJson(row),
+        itemRows.map(PurchaseReturnItemModel.fromJson).toList(),
+        null,
+      );
+    } catch (e) {
+      return (null, <PurchaseReturnItem>[], _mapError(e));
+    }
+  }
+
+  @override
+  Future<(Map<String, double>, PurchaseFailure?)> loadReturnedQtysForPo(
+      String poId) async {
+    try {
+      final rows = await _ds.loadReturnedQtysForPo(poId);
+      final byItem = <String, double>{};
+      for (final r in rows) {
+        final id = r['po_item_id'] as String;
+        final qty = double.tryParse(r['qty_returned'].toString()) ?? 0;
+        byItem[id] = (byItem[id] ?? 0) + qty;
+      }
+      return (byItem, null);
+    } catch (e) {
+      return (<String, double>{}, _mapError(e));
+    }
+  }
+
+  @override
+  Future<(ReturnCreateResult?, PurchaseFailure?)> createPurchaseReturn({
+    required String branchId,
+    required String poId,
+    String? grnId,
+    String? invoiceId,
+    required String reason,
+    String? notes,
+    required List<Map<String, dynamic>> items,
+  }) async {
+    try {
+      final row = await _ds.createPurchaseReturn(
+        branchId: branchId,
+        poId: poId,
+        grnId: grnId,
+        invoiceId: invoiceId,
+        reason: reason,
+        notes: notes,
+        items: items,
+      );
+      return (ReturnCreateResultModel.fromJson(row), null);
     } catch (e) {
       return (null, _mapError(e));
     }
