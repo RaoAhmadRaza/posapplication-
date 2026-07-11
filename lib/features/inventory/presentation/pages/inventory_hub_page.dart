@@ -133,6 +133,17 @@ class InventoryHubPage extends ConsumerWidget {
                 onTap: () => context.push('/inventory/imei'),
               ),
               const SizedBox(height: AppSpacing.xxl),
+              // NOTE: Suppliers lives here until the Purchasing hub ships (next
+              // feature); move this row to that hub when it exists.
+              _SectionLabel('Purchasing'),
+              const SizedBox(height: AppSpacing.sm),
+              _HubRow(
+                icon: Icons.local_shipping,
+                title: 'Suppliers',
+                subtitle: 'Vendor master, balances, and ledger',
+                onTap: () => context.push('/suppliers'),
+              ),
+              const SizedBox(height: AppSpacing.xxl),
               _SectionLabel('Data'),
               const SizedBox(height: AppSpacing.sm),
               PermissionGate(

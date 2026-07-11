@@ -66,39 +66,10 @@ imei_status. New RPCs (10): create/approve_adjustment, create/dispatch/receive/c
 open/record/complete_count, register_imei. All ops post through Slice B ledger.
 
 ### Slice C Flutter files
-
-**Entities (6 new + 4 enums):** StockAdjustment, StockTransfer, StockTransferItem,
-StockCount, StockCountItem, ImeiRecord + AdjustmentReason, StockTransferStatus,
-StockCountStatus, ImeiStatus
-
-**Failures (+3):** DuplicateImeiFailure, ApprovalRequiredFailure, InvalidTransitionFailure
-
-**Models (6 new):** StockAdjustmentModel, StockTransferModel, StockTransferItemModel,
-StockCountModel, StockCountItemModel, ImeiRecordModel
-
-**Datasource (+20 methods):** adjustments (load/create/approve), transfers (load/loadItems/
-create/dispatch/receive/cancel), counts (load/loadItems/open/recordItem/complete),
-imei (load/register), settings (load/updateThreshold)
-
-**Repository:** +22 abstract + impl; _mapError: 23505+imei→DuplicateImei,
-22000→InvalidTransition
-
-**Use cases (16 new):** LoadAdjustments, CreateAdjustment, ApproveAdjustment,
-LoadTransfers, LoadTransferItems, CreateTransfer, DispatchTransfer, ReceiveTransfer,
-CancelTransfer, LoadCounts, LoadCountItems, OpenCount, RecordCountItem, CompleteCount,
-LoadImei, RegisterImei, LoadInventorySettings, UpdateApprovalThreshold
-
-**Controllers (3 new):** AdjustmentsController, TransfersController, CountsController,
-ImeiController
-
-**Pages (7 new):** AdjustmentsPage, AdjustmentFormPage, TransfersPage, TransferFormPage,
-TransferReceivePage, CountsPage, CountSessionPage, ImeiLookupPage
-
-**Routes (+13):** `/inventory/adjustments`, `/create`; `/inventory/transfers`, `/create`,
-`/:id/receive`; `/inventory/counts`, `/:id`; `/inventory/imei`
-
-**Hub:** All rows active (Products, Barcode Templates, Categories, Brands, Warehouses,
-Stock Levels, Adjustments, Transfers, Stock Counts, IMEI Lookup)
+Full clean-arch stack (detail in DECISIONS): 6 entities + 4 enums, 3 failures, 6 models, +20 datasource
+methods, +22 repo methods, 16 usecases, 4 controllers (Adjustments/Transfers/Counts/Imei), 8 pages, +13
+routes. Inventory hub rows all active (Products, Barcode Templates, Categories, Brands, Warehouses,
+Stock Levels, Adjustments, Transfers, Stock Counts, IMEI Lookup).
 
 ## Database Migrations
 
@@ -115,31 +86,10 @@ Stock Levels, Adjustments, Transfers, Stock Counts, IMEI Lookup)
 | `20260618114258_sales_foundation.sql` | customers, cashier_sessions, invoices, invoice_items, payments + RLS, INVOICE number_series seed, create_sale/open_cashier_session/close_cashier_session RPCs, invoice-immutability trigger |
 
 ## Bugfixes Applied
-
-- Product edit form: reactive ref.listen(productEditProvider) + _didSeed guard
-- Product create: ref.invalidate(productsProvider) in controller.saveProduct
-- RPC parsing: single-row Map (not List) for postStockMovement + ensureDefaultWarehouse
-- Products card restored to Inventory hub (accidentally removed during Slice edits)
-- Products screen filtering: unified search + category/brand/status into one composeable query path
-  (search() takes filter params through datasource→usecase→repo→controller); added brand dropdown.
-- Stock read path: stockLevelsController was filtering loadStockLevels by default warehouse UUID, but all
-  stock_balance rows use warehouse_id IS NULL (canonical). Now passes warehouseId: null; datasource
-  isFilter('warehouse_id', null). POS onTap gates on (stock?.available ?? 0) > 0 (null/zero = not addable).
-- Products card stock: was showing product.reorderPoint labeled "Stock:" (all=10, migration default).
-  Now shows real stock_balance.qty_on_hand via loadProductsStock (branch-wide eq branch_id +
-  isFilter warehouse_id null), merged into Product.qtyOnHand. Card renders Out/Low/—/N. Controller
-  ref.watch currentBranchProvider for rebuild on branch resolve; throws on stock failure (visible).
-- Set Opening Stock form (stock_movement_form_page): was seeding _selectedWarehouseId from the real
-  default-warehouse UUID (ensureDefaultWarehouse), then reading + writing at that non-canonical
-  warehouse_id. Read → eq(uuid) matched 0 canonical rows → showed on-hand 0 for stocked products
-  (form is ABSOLUTE: delta = target − currentOnHand, so a false 0 corrupts the posted qty_change);
-  write → row would land at a non-null warehouse_id, invisible to every other screen. Removed the
-  warehouse concept from the form: reads/writes canonical (warehouseId: null), deleted the
-  _WarehousePicker (no screen can show non-null-warehouse stock). _loadCurrentBalance now surfaces a
-  read failure (error banner) instead of masking it as 0.
-- Latent null-predicate bug: loadStockBalances + loadProductLedger emitted NO warehouse_id predicate
-  when warehouseId==null (rows across all warehouses). Now isFilter('warehouse_id', null) when null
-  (matches loadProductsStock/loadStockLevels) — would have mixed locations on the first non-null row.
+Full detail in DECISIONS.md. Headlines: product edit/create reactive-seed + invalidate; RPC
+single-row Map parsing; products filtering unified into one query path; canonical warehouse_id NULL
+stock read/write across stock levels, products-card stock, and Set Opening Stock (see 2026-07-11
+audit H); loadStockBalances/loadProductLedger null-warehouse predicate fix.
 
 ## Barcode Scanning — Wired
 
@@ -246,16 +196,44 @@ Controller propagates failure as AsyncError (no zero-fill); page shows AppInline
 payables + cash/bank balances, P&L/balance-sheet, drilldown reports, scheduled/email reports,
 configurable KPI grid.
 
-## Purchasing — In Progress
+## Purchasing — COMPLETE (back end + Flutter)
 
-Suppliers foundation + Purchase Orders (create/submit/approve, landed-cost allocation by line_total)
-+ GRN receive (receive_goods: canonical warehouse_id NULL stock via post_stock_movement PURCHASE_RECEIPT,
-landed unit cost, IMEI capture for serialized, PO status DRAFT→APPROVED→PARTIALLY_RECEIVED/RECEIVED).
-receive_goods enum-cast bug fixed (migration 20260711101802 — see DECISIONS).
-NOTE: number_series.include_branch_code defaults true → PO/GRN/PV numbers render WITH branch code:
-PO-BR01-000001, GRN-BR01-000001, PV-BR01-000001 (not PO-000001). Dropping the branch code is a
-one-line change to the seeded number_series rows if desired.
+Back end (migrations, all applied): suppliers, purchase_orders(+items), grns(+items), purchase_invoices,
+supplier_payments; RPCs create/update/submit/approve/cancel_purchase_order, receive_goods,
+create_purchase_invoice, record_supplier_payment (overpayment guard), supplier_ledger, payables_aging.
+Landed cost allocated by line_total; canonical warehouse_id NULL stock via post_stock_movement
+PURCHASE_RECEIPT; serialized IMEI capture → imei_records AVAILABLE. PO lifecycle
+DRAFT→SUBMITTED→APPROVED→PARTIALLY_RECEIVED/RECEIVED→INVOICED, CANCELLED. Two receive_goods bugs found
++ forward-fixed: enum-cast (20260711101802) and imei status IN_STOCK→AVAILABLE (20260711111535).
+NOTE: number_series.include_branch_code defaults true → numbers render PO-BR01-000001 / GRN-BR01-000001 /
+PV-BR01-000001 (drop branch code = one-line number_series change if desired).
+
+### Purchasing (Flutter) — COMPLETE
+`lib/features/purchasing/` full clean-arch (mirrors suppliers/sales). 6 entities + 2 status enums + 5 RPC
+result types; sealed PurchaseFailure (perm/badTransition/overReceipt/overpayment/grnMismatch/notFound/
+unknown); 13 usecases; ONE PurchaseRemoteDataSource (all selects + 8 RPCs); repo impl → typed failures.
+Controllers: PurchaseOrdersController (list+status+create/edit/submit/approve/cancel/receive) +
+purchaseOrderDetailProvider {po,items} + poGrnsProvider; PurchaseInvoicesController (create→match_variance)
++ invoicePaymentsProvider; PurchasePaymentsController. 10 pages: PurchaseHubPage, PO list, PO form
+(supplier picker + inline product-search multi-line editor + charges + live totals; edit DRAFT-only;
+accepts reorder seed), PO detail (status-gated Submit/Approve/Cancel/Receive/Create-Invoice + linked
+GRNs/invoices), GrnReceivePage (per-line qty/reject/batch/expiry + IMEI capture for type==SERIALIZED, no
+warehouse picker), PurchaseInvoiceMatchPage (3-way match variance), invoices list + detail (payments +
+Record Payment), SupplierPaymentPage (payment_method_enum, blocks overpayment), ReorderSuggestionsPage
+(at/under reorder_point → seeds a new PO). Routes /purchasing/* + a 5th "Purchase" bottom-nav branch
+gated purchase:read. DB lifecycle verified end-to-end (impersonated ADMIN, rolled back). flutter analyze clean.
+
+### Suppliers CRM (Flutter) — COMPLETE
+`lib/features/suppliers/` full clean-arch (own folder mirroring sales/customers). Supplier +
+SupplierStatus; SupplierLedger + PayablesAging entities (from the 2 read RPCs); sealed SupplierFailure;
+7 usecases; SuppliersRemoteDataSource (all supabase: ILIKE name/phone, status filter, deleted_at null,
+supplier_ledger/payables_aging RPCs); SuppliersController (list+search+status filter+create/edit/remove)
++ ledger/aging FutureProviders. Pages: SuppliersPage (search, status chips, payable hint, FAB gated
+purchase:create), SupplierFormPage (grouped fields, gated purchase:update/delete), SupplierDetailPage
+(header + ledger balance/timeline + Record Payment TODO). Routes /suppliers[/create|/:id|/:id/edit];
+row on Inventory hub Purchasing section. DB pre-migrated. Verified vs live RLS.
 
 ## What's Next
 
-Purchasing module — remaining: purchase_invoices, supplier_payments, UI/Flutter layers.
+Device run of the Purchasing UI (flutter run) to confirm the full click-through. Then M07 accounting
+(bank_accounts + GL) or the Reporting phase.

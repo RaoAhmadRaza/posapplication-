@@ -28,6 +28,19 @@ import 'features/inventory/presentation/pages/categories_page.dart';
 import 'features/inventory/presentation/pages/category_form_page.dart';
 import 'features/inventory/presentation/pages/brands_page.dart';
 import 'features/inventory/presentation/pages/brand_form_page.dart';
+import 'features/suppliers/presentation/pages/suppliers_page.dart';
+import 'features/suppliers/presentation/pages/supplier_form_page.dart';
+import 'features/suppliers/presentation/pages/supplier_detail_page.dart';
+import 'features/purchasing/presentation/pages/purchase_hub_page.dart';
+import 'features/purchasing/presentation/pages/purchase_orders_page.dart';
+import 'features/purchasing/presentation/pages/purchase_order_form_page.dart';
+import 'features/purchasing/presentation/pages/purchase_order_detail_page.dart';
+import 'features/purchasing/presentation/pages/grn_receive_page.dart';
+import 'features/purchasing/presentation/pages/purchase_invoice_match_page.dart';
+import 'features/purchasing/presentation/pages/purchase_invoices_page.dart';
+import 'features/purchasing/presentation/pages/purchase_invoice_detail_page.dart';
+import 'features/purchasing/presentation/pages/supplier_payment_page.dart';
+import 'features/purchasing/presentation/pages/reorder_suggestions_page.dart';
 import 'features/inventory/presentation/pages/products_page.dart';
 import 'features/inventory/presentation/pages/product_form_page.dart';
 import 'features/inventory/presentation/pages/barcode_templates_page.dart';
@@ -365,6 +378,85 @@ final appRouter = GoRouter(
       path: '/inventory/notifications',
       builder: (context, state) => const NotificationsPage(),
     ),
+    GoRoute(
+      path: '/suppliers',
+      builder: (context, state) => const SuppliersPage(),
+    ),
+    GoRoute(
+      path: '/suppliers/create',
+      builder: (context, state) => const SupplierFormPage(),
+    ),
+    GoRoute(
+      path: '/suppliers/:supplierId',
+      builder: (context, state) {
+        final id = state.pathParameters['supplierId']!;
+        return SupplierDetailPage(supplierId: id);
+      },
+    ),
+    GoRoute(
+      path: '/suppliers/:supplierId/edit',
+      builder: (context, state) {
+        final id = state.pathParameters['supplierId']!;
+        return SupplierFormPage(supplierId: id);
+      },
+    ),
+    GoRoute(
+      path: '/purchasing/orders',
+      builder: (context, state) => const PurchaseOrdersPage(),
+    ),
+    GoRoute(
+      path: '/purchasing/orders/create',
+      builder: (context, state) {
+        final lines = state.extra
+            as List<({String productId, String name, double unitCost})>?;
+        return PurchaseOrderFormPage(initialLines: lines);
+      },
+    ),
+    GoRoute(
+      path: '/purchasing/orders/:id/edit',
+      builder: (context, state) =>
+          PurchaseOrderFormPage(poId: state.pathParameters['id']!),
+    ),
+    GoRoute(
+      path: '/purchasing/orders/:id/receive',
+      builder: (context, state) =>
+          GrnReceivePage(poId: state.pathParameters['id']!),
+    ),
+    GoRoute(
+      path: '/purchasing/orders/:id/invoice',
+      builder: (context, state) =>
+          PurchaseInvoiceMatchPage(poId: state.pathParameters['id']!),
+    ),
+    GoRoute(
+      path: '/purchasing/orders/:id',
+      builder: (context, state) =>
+          PurchaseOrderDetailPage(poId: state.pathParameters['id']!),
+    ),
+    GoRoute(
+      path: '/purchasing/invoices',
+      builder: (context, state) => const PurchaseInvoicesPage(),
+    ),
+    GoRoute(
+      path: '/purchasing/invoices/:id',
+      builder: (context, state) =>
+          PurchaseInvoiceDetailPage(invoiceId: state.pathParameters['id']!),
+    ),
+    GoRoute(
+      path: '/purchasing/payments/create',
+      builder: (context, state) {
+        final extra = state.extra as Map<String, dynamic>?;
+        final balance = extra?['balance'];
+        return SupplierPaymentPage(
+          supplierId: extra?['supplierId'] as String?,
+          invoiceId: extra?['invoiceId'] as String?,
+          presetAmount: balance is num ? balance.toDouble() : null,
+        );
+      },
+    ),
+    GoRoute(
+      path: '/purchasing/reorder',
+      builder: (context, state) => const ReorderSuggestionsPage(),
+    ),
     StatefulShellRoute.indexedStack(
       builder: (context, state, navigationShell) =>
           BottomNavShell(navigationShell: navigationShell),
@@ -382,6 +474,14 @@ final appRouter = GoRouter(
             GoRoute(
               path: '/inventory',
               builder: (context, state) => const InventoryHubPage(),
+            ),
+          ],
+        ),
+        StatefulShellBranch(
+          routes: [
+            GoRoute(
+              path: '/purchasing',
+              builder: (context, state) => const PurchaseHubPage(),
             ),
           ],
         ),
