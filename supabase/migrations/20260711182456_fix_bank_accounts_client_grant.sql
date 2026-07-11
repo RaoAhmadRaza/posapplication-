@@ -1,0 +1,11 @@
+-- Fix: bank_accounts is client-CRUD master data (like suppliers), gated by the
+-- "bank gated insert" / "bank gated update" RLS policies added in
+-- 20260711181843_accounting_vouchers_bank_expenses.sql.
+--
+-- That migration revoked insert/update/delete on bank_accounts (bundled with the
+-- RPC-only tables vouchers/expenses/bank_reconciliations at lines 118-122), then
+-- re-added client insert/update POLICIES for bank_accounts — but never re-granted
+-- the table-level privilege. Postgres checks GRANTs before RLS, so the app
+-- (authenticated role) could never insert/update a bank account: the policies were
+-- dead. Re-grant insert, update (delete stays revoked — soft-delete via deleted_at).
+grant insert, update on public.bank_accounts to authenticated;
