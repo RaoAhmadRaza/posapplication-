@@ -111,6 +111,7 @@ Full clean-arch (detail in DECISIONS): 6 entities + 4 enums, 3 failures, 6 model
 | `20260711174723 / 175654 / 181843 / 183026` | M07 accounting: CoA+fiscal+tax+ledger_accounts (+acct_id/current_fiscal_period, accounting perm), journal engine (journal_entries/lines, post_journal/reverse_journal, immutability+period+balance triggers), vouchers/bank/expenses (create_voucher/create_expense), reports (trial_balance/profit_loss/balance_sheet/account_ledger) |
 | `20260711182456_fix_bank_accounts_client_grant.sql` | grant insert/update on bank_accounts to authenticated (client-CRUD policies were dead — no table grant) |
 | `20260711184605 / 185637 / 192129` | create_sale auto-posts SALE journal (Dr cash/AR, Cr revenue/tax, Dr COGS/Cr inventory, ungated) + journal reference-uniqueness index; record_customer_payment (credit settlement, Dr cash/bank Cr AR, PARTIALLY_PAID/PAID) — 185637 briefly regressed the GL hook, 192129 restored it as canonical (see DECISIONS) |
+| `20260711200843 / 201211 / 201702` | purchase-side auto-post hooks: SUPPLIER_PAYMENT (Dr AP, Cr cash/bank), PURCHASE_INVOICE (Dr inventory/input-tax, Cr AP), PURCHASE_RETURN (Dr AP, Cr inventory at stock cost basis, Cr input-tax) — completes A5, all 5 money paths live |
 
 ## Bugfixes Applied
 Full detail in DECISIONS.md. Headlines: product edit/create reactive-seed + invalidate; RPC single-row
@@ -235,16 +236,15 @@ bounded, SERIALIZED lines need exactly qty IMEIs via type/scan, reason required,
 /purchasing/returns[/create|/:id]. Supplier ledger renders kind=RETURN as a credit. No migration (RPC + tables
 + PR- series pre-live). Rolled-back dry-run verified full chain incl. over-return guard. flutter analyze clean.
 
-### M07 Accounting (backend) — IN PROGRESS
+### M07 Accounting (backend) — A5 COMPLETE (all 5 money paths auto-post on prod)
 
-DB-level double-entry GL (migrations above). Built + verified via rolled-back ADMIN-impersonation dry-runs, no
-Flutter UI yet. Foundation/engine/vouchers/reports live; `post_journal` = sole ledger writer (balance/period/
-immutability enforced; ungated auto-posts pass `p_gate=false`). **Sales auto-post (slice 1) DONE:** `create_sale`
-emits a balanced SALE journal; new `record_customer_payment` settles a credit invoice (Dr cash/bank, Cr AR),
-filling the A0 gap. GL AR reconciles 1:1 with `invoices.balance` (verified).
-
-**Next slice — purchase-side auto-post:** wrap `create_purchase_invoice` (Dr inventory/input-tax, Cr AP),
-`record_supplier_payment` (Dr AP, Cr cash/bank), `create_purchase_return` (reverse), `create_sales_return`
-(Dr sales-returns/tax, Cr cash/AR; Dr inventory/Cr COGS). Then Flutter UI (CoA/journals/vouchers/expenses/bank/
-reports) + dashboard KPIs. GRN posts no GL (inventory books at invoice). Alt open: **M10 Reporting**.
+DB-level double-entry GL. `post_journal` = sole ledger writer (balance/period/immutability enforced; ungated
+auto-posts pass `p_gate=false`). CoA/fiscal/vouchers/expenses/reports live. All five money RPCs emit a balanced
+journal, verified via rolled-back dry-runs incl. a five-path gate (every entry balanced, trial_balance +
+balance_sheet true). Canonical `reference_type` + posting:
+- `SALE`: Dr cash/AR, Cr revenue/tax, Dr COGS/Cr inventory. `CUSTOMER_PAYMENT`: Dr cash/bank, Cr AR.
+- `PURCHASE_INVOICE`: Dr inventory/input-tax, Cr AP (GRN posts no GL). `SUPPLIER_PAYMENT`: Dr AP, Cr cash/bank.
+- `PURCHASE_RETURN`: Dr AP, Cr inventory at stock COST BASIS (Σ cost_unit·qty, not subtotal), Cr input-tax.
+GL reconciles 1:1 with AR/AP subledgers. Ceilings: sale payments → Cash 1000 (bank split deferred); sales-return
+GL not yet hooked. **Next: A6 reporting/accounting UI** (Flutter) + dashboard payables/cash KPIs. Alt: **M10**.
 Outstanding non-module task: on-device click-through of the Purchasing + CRM UI (flutter run).
