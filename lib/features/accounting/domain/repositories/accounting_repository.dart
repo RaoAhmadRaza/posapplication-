@@ -2,10 +2,13 @@ import '../entities/account.dart';
 import '../entities/account_ledger.dart';
 import '../entities/accounting_results.dart';
 import '../entities/bank_account.dart';
+import '../entities/bank_reconciliation.dart';
 import '../entities/expense.dart';
 import '../entities/expense_category.dart';
 import '../entities/financial_reports.dart';
+import '../entities/fiscal_period.dart';
 import '../entities/journal_entry.dart';
+import '../entities/reconciliation_result.dart';
 import '../entities/journal_line.dart';
 import '../entities/tax_rule.dart';
 import '../entities/voucher.dart';
@@ -151,5 +154,27 @@ abstract class AccountingRepository {
     required String accountCode,
     required DateTime from,
     required DateTime to,
+  });
+
+  Future<(List<FiscalPeriod>, AccountingFailure?)> loadFiscalPeriods();
+
+  Future<(bool, AccountingFailure?)> closeFiscalPeriod(String id);
+
+  Future<(bool, AccountingFailure?)> reopenFiscalPeriod(String id);
+
+  Future<(List<BankReconciliation>, AccountingFailure?)>
+  loadBankReconciliations(String bankAccountId);
+
+  Future<(ReconciliationResult?, AccountingFailure?)> createBankReconciliation({
+    required String bankAccountId,
+    required DateTime statementDate,
+    required double statementBalance,
+    String? notes,
+  });
+
+  Future<(bool, AccountingFailure?)> completeBankReconciliation({
+    required String reconciliationId,
+    required double reconciledBalance,
+    String? notes,
   });
 }

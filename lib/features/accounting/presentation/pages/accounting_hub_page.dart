@@ -94,6 +94,20 @@ class AccountingHubPage extends StatelessWidget {
                 onTap: () =>
                     context.push('/accounting/reports/cash-bank-book'),
               ),
+              const SizedBox(height: AppSpacing.md),
+              _HubRow(
+                icon: Icons.event_available,
+                title: 'Fiscal Periods',
+                subtitle: 'Close or reopen accounting periods',
+                onTap: () => context.push('/accounting/periods'),
+              ),
+              const SizedBox(height: AppSpacing.md),
+              _HubRow(
+                icon: Icons.rule,
+                title: 'Bank Reconciliation',
+                subtitle: 'Reconcile a bank statement to the books',
+                onTap: () => context.push('/accounting/banks'),
+              ),
               const SizedBox(height: AppSpacing.xxl),
             ],
           ),

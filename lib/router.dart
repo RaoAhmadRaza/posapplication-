@@ -53,6 +53,8 @@ import 'features/accounting/presentation/pages/trial_balance_page.dart';
 import 'features/accounting/presentation/pages/profit_loss_page.dart';
 import 'features/accounting/presentation/pages/balance_sheet_page.dart';
 import 'features/accounting/presentation/pages/cash_bank_book_page.dart';
+import 'features/accounting/presentation/pages/fiscal_periods_page.dart';
+import 'features/accounting/presentation/pages/bank_reconciliation_page.dart';
 import 'features/purchasing/presentation/pages/purchase_hub_page.dart';
 import 'features/purchasing/presentation/pages/purchase_orders_page.dart';
 import 'features/purchasing/presentation/pages/purchase_order_form_page.dart';
@@ -511,6 +513,15 @@ final appRouter = GoRouter(
       path: '/accounting/banks/:id/edit',
       builder: (context, state) =>
           BankAccountFormPage(bankAccountId: state.pathParameters['id']!),
+    ),
+    GoRoute(
+      path: '/accounting/banks/:id/reconcile',
+      builder: (context, state) =>
+          BankReconciliationPage(bankAccountId: state.pathParameters['id']!),
+    ),
+    GoRoute(
+      path: '/accounting/periods',
+      builder: (context, state) => const FiscalPeriodsPage(),
     ),
     GoRoute(
       path: '/accounting/tax-rules',

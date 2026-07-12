@@ -6,10 +6,13 @@ import '../../domain/entities/account.dart';
 import '../../domain/entities/account_ledger.dart';
 import '../../domain/entities/accounting_results.dart';
 import '../../domain/entities/bank_account.dart';
+import '../../domain/entities/bank_reconciliation.dart';
 import '../../domain/entities/expense.dart';
 import '../../domain/entities/expense_category.dart';
 import '../../domain/entities/financial_reports.dart';
+import '../../domain/entities/fiscal_period.dart';
 import '../../domain/entities/journal_entry.dart';
+import '../../domain/entities/reconciliation_result.dart';
 import '../../domain/entities/journal_line.dart';
 import '../../domain/entities/tax_rule.dart';
 import '../../domain/entities/voucher.dart';
@@ -20,6 +23,9 @@ import '../models/account_ledger_model.dart';
 import '../models/account_model.dart';
 import '../models/accounting_result_models.dart';
 import '../models/financial_reports_model.dart';
+import '../models/fiscal_period_model.dart';
+import '../models/reconciliation_result_model.dart';
+import '../models/bank_reconciliation_model.dart';
 import '../models/bank_account_model.dart';
 import '../models/expense_category_model.dart';
 import '../models/expense_model.dart';
@@ -53,6 +59,15 @@ class AccountingRepositoryImpl implements AccountingRepository {
       }
       if (msg.contains('err_account_not_found')) {
         return AccountingAccountNotFoundFailure();
+      }
+      if (msg.contains('err_period_locked')) {
+        return AccountingPeriodLockedFailure();
+      }
+      if (msg.contains('err_period_already_closed')) {
+        return AccountingPeriodAlreadyClosedFailure();
+      }
+      if (msg.contains('err_already_completed')) {
+        return AccountingAlreadyCompletedFailure();
       }
       if (msg.contains('_not_found') || code == 'PGRST116') {
         return AccountingNotFoundFailure();
@@ -537,6 +552,85 @@ class AccountingRepositoryImpl implements AccountingRepository {
       return (AccountLedgerModel.fromJson(row), null);
     } catch (e) {
       return (null, _mapError(e));
+    }
+  }
+
+  @override
+  Future<(List<FiscalPeriod>, AccountingFailure?)> loadFiscalPeriods() async {
+    try {
+      final rows = await _ds.loadFiscalPeriods();
+      return (rows.map(FiscalPeriodModel.fromJson).toList(), null);
+    } catch (e) {
+      return (<FiscalPeriod>[], _mapError(e));
+    }
+  }
+
+  @override
+  Future<(bool, AccountingFailure?)> closeFiscalPeriod(String id) async {
+    try {
+      await _ds.closeFiscalPeriod(id);
+      return (true, null);
+    } catch (e) {
+      return (false, _mapError(e));
+    }
+  }
+
+  @override
+  Future<(bool, AccountingFailure?)> reopenFiscalPeriod(String id) async {
+    try {
+      await _ds.reopenFiscalPeriod(id);
+      return (true, null);
+    } catch (e) {
+      return (false, _mapError(e));
+    }
+  }
+
+  @override
+  Future<(List<BankReconciliation>, AccountingFailure?)>
+  loadBankReconciliations(String bankAccountId) async {
+    try {
+      final rows = await _ds.loadBankReconciliations(bankAccountId);
+      return (rows.map(BankReconciliationModel.fromJson).toList(), null);
+    } catch (e) {
+      return (<BankReconciliation>[], _mapError(e));
+    }
+  }
+
+  @override
+  Future<(ReconciliationResult?, AccountingFailure?)> createBankReconciliation({
+    required String bankAccountId,
+    required DateTime statementDate,
+    required double statementBalance,
+    String? notes,
+  }) async {
+    try {
+      final row = await _ds.createBankReconciliation(
+        bankAccountId: bankAccountId,
+        statementDate: statementDate,
+        statementBalance: statementBalance,
+        notes: notes,
+      );
+      return (ReconciliationResultModel.fromJson(row), null);
+    } catch (e) {
+      return (null, _mapError(e));
+    }
+  }
+
+  @override
+  Future<(bool, AccountingFailure?)> completeBankReconciliation({
+    required String reconciliationId,
+    required double reconciledBalance,
+    String? notes,
+  }) async {
+    try {
+      await _ds.completeBankReconciliation(
+        reconciliationId: reconciliationId,
+        reconciledBalance: reconciledBalance,
+        notes: notes,
+      );
+      return (true, null);
+    } catch (e) {
+      return (false, _mapError(e));
     }
   }
 }

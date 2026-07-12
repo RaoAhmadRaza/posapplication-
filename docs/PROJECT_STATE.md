@@ -59,15 +59,9 @@ Warehouses CRUD + opening-balance form + stock levels list + product detail + le
 
 ## Stock Ops (Slice C) — COMPLETE
 
-Migration `20260613075616_stock_ops.sql`. New tables: stock_adjustments, stock_transfers,
-stock_transfer_items, stock_counts, stock_count_items, imei_records, inventory_settings,
-number_series. New enums (4): adjustment_reason, stock_transfer_status, stock_count_status,
-imei_status. New RPCs (10): create/approve_adjustment, create/dispatch/receive/cancel_transfer,
-open/record/complete_count, register_imei. All ops post through Slice B ledger.
-
-### Slice C Flutter files
-Full clean-arch (detail in DECISIONS): 6 entities + 4 enums, 3 failures, 6 models, 16 usecases, 4 controllers
-(Adjustments/Transfers/Counts/Imei), 8 pages, +13 routes. All inventory-hub rows active.
+Migration `20260613075616_stock_ops.sql`: adjustments, transfers, counts, imei_records, inventory_settings,
+number_series (+4 enums, 10 RPCs, all posting through the Slice B ledger). Flutter: full clean-arch
+(6 entities, 16 usecases, 4 controllers, 8 pages, +13 routes) — detail in DECISIONS.
 
 ## Database Migrations
 
@@ -119,17 +113,12 @@ Map parsing; unified products query path; canonical warehouse_id NULL stock read
 
 ## Peripheral features — COMPLETE (detail in DECISIONS.md)
 
-- **Barcode scanning** (`mobile_scanner`): shared `scanBarcode()` / `BarcodeScanPage` in core/widgets;
-  `barcodeScanSupported` guard (iOS/Android only, web degrades to manual); wired into products search,
-  product-form barcode, IMEI lookup, count session.
-- **Label printing** (§6.6; `pdf`/`printing`/`barcode`): `LabelPdfService` renders template-sized labels on
-  an A4 grid; products multi-select (gated inventory:export) → `LabelPrintPage`.
-- **Notifications** (§3.13): `notifications` + `notification_preferences`; `trg_low_stock_notify` trigger;
-  `NotificationsPage` + inventory-hub bell badge; deep-links to stock detail.
-- **Bulk product import** (`file_picker`/`csv`): `bulk_import_products` RPC + `ImportProductsPage` 3-step CSV
-  flow with column mapping (gated inventory:create).
-- **Voice search** (`speech_to_text`): `voiceSearchSupported` guard; mic in products search streams partial
-  → `ProductsController.search()`.
+- **Barcode scanning** (`mobile_scanner`): shared `scanBarcode()`/`BarcodeScanPage`, platform-guarded; wired
+  into products search, product form, IMEI lookup, count session.
+- **Label printing** (`pdf`/`printing`/`barcode`): `LabelPdfService` A4 grid; multi-select → `LabelPrintPage`.
+- **Notifications**: `notifications`(+prefs), `trg_low_stock_notify`, `NotificationsPage` + hub bell badge.
+- **Bulk import** (`file_picker`/`csv`): `bulk_import_products` RPC + 3-step CSV `ImportProductsPage`.
+- **Voice search** (`speech_to_text`): guarded mic in products search → `ProductsController.search()`.
 
 ## Known Issues
 
@@ -245,6 +234,10 @@ GL not yet hooked. **A6 UI shipped:** `lib/features/accounting/` full clean-arch
 journal list+detail (reverse gated accounting:approve), balance-enforced manual voucher, expenses+categories,
 bank/tax-rule CRUD. Reports (A6.2): filterable TrialBalance/ProfitLoss/BalanceSheet/CashBankBook (as-of/range +
 branch, export gated accounting:export). Customer collect-payment on CustomerDetailPage (gated sales:create).
-**BLOCKED (RPCs absent, not built, awaiting migrations):** FiscalPeriodsPage (close_fiscal_period) +
-BankReconciliationPage (create/update_bank_reconciliation). **Next:** those 2 once RPCs land; dashboard
-payables/cash KPIs (need dashboard_summary fields); on-device click-through. Alt: **M10**.
+**Period control + bank recon (A6.3):** FiscalPeriodsPage (close/reopen gated accounting:approve) +
+BankReconciliationPage (per-bank statement-vs-books snapshot, create→difference→complete). Fixed a
+close-bypass: current_fiscal_period auto-minted a fresh OPEN period after close, defeating the guard — now
+resolves the covering period regardless of status (trg_journal_check_period is the sole enforcer), creating
+only on a genuine gap. Verified: close→journal rejected, reopen→posts, gap-month→auto-creates.
+**Next:** create_sales_return GL hook (6th money path, unposted); dashboard payables/cash KPIs
+(need dashboard_summary fields); on-device click-through. Alt: **M10**.

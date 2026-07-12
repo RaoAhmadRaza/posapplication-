@@ -369,4 +369,85 @@ class AccountingRemoteDataSource {
     });
     return result as Map<String, dynamic>;
   }
+
+  // --- Fiscal periods ------------------------------------------------------
+
+  static const _periodCols =
+      'id, tenant_id, name, start_date, end_date, status,'
+      ' closed_by, closed_at, created_at';
+
+  Future<List<Map<String, dynamic>>> loadFiscalPeriods() async {
+    return _client
+        .from('fiscal_periods')
+        .select(_periodCols)
+        .order('start_date', ascending: false);
+  }
+
+  Future<Map<String, dynamic>> closeFiscalPeriod(String periodId) async {
+    final result = await _client.rpc(
+      'close_fiscal_period',
+      params: {'p_period_id': periodId},
+    );
+    return result as Map<String, dynamic>;
+  }
+
+  Future<Map<String, dynamic>> reopenFiscalPeriod(String periodId) async {
+    final result = await _client.rpc(
+      'reopen_fiscal_period',
+      params: {'p_period_id': periodId},
+    );
+    return result as Map<String, dynamic>;
+  }
+
+  // --- Bank reconciliations ------------------------------------------------
+
+  static const _reconCols =
+      'id, tenant_id, bank_account_id, statement_date,'
+      ' statement_balance, ledger_balance, reconciled_balance,'
+      ' unreconciled_items_json, status, reconciled_by, reconciled_at,'
+      ' notes, created_at';
+
+  Future<List<Map<String, dynamic>>> loadBankReconciliations(
+    String bankAccountId,
+  ) async {
+    return _client
+        .from('bank_reconciliations')
+        .select(_reconCols)
+        .eq('bank_account_id', bankAccountId)
+        .order('created_at', ascending: false);
+  }
+
+  Future<Map<String, dynamic>> createBankReconciliation({
+    required String bankAccountId,
+    required DateTime statementDate,
+    required double statementBalance,
+    String? notes,
+  }) async {
+    final result = await _client.rpc(
+      'create_bank_reconciliation',
+      params: {
+        'p_bank_account_id': bankAccountId,
+        'p_statement_date': _day(statementDate),
+        'p_statement_balance': statementBalance,
+        'p_notes': notes,
+      },
+    );
+    return result as Map<String, dynamic>;
+  }
+
+  Future<Map<String, dynamic>> completeBankReconciliation({
+    required String reconciliationId,
+    required double reconciledBalance,
+    String? notes,
+  }) async {
+    final result = await _client.rpc(
+      'complete_bank_reconciliation',
+      params: {
+        'p_reconciliation_id': reconciliationId,
+        'p_reconciled_balance': reconciledBalance,
+        'p_notes': notes,
+      },
+    );
+    return result as Map<String, dynamic>;
+  }
 }

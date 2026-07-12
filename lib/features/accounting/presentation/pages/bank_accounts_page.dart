@@ -95,6 +95,15 @@ class _BankCard extends StatelessWidget {
               Text(account.bankName ?? '—',
                   style: AppTypography.footnote
                       .copyWith(color: AppColors.textMuted)),
+              Align(
+                alignment: Alignment.centerRight,
+                child: TextButton.icon(
+                  onPressed: () => context
+                      .push('/accounting/banks/${account.id}/reconcile'),
+                  icon: const Icon(Icons.rule, size: 16),
+                  label: const Text('Reconcile'),
+                ),
+              ),
             ],
           ),
         ),
