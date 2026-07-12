@@ -222,7 +222,7 @@ bounded, SERIALIZED lines need exactly qty IMEIs via type/scan, reason required,
 /purchasing/returns[/create|/:id]. Supplier ledger renders kind=RETURN as a credit. No migration (RPC + tables
 + PR- series pre-live). Rolled-back dry-run verified full chain incl. over-return guard. flutter analyze clean.
 
-### M07 Accounting — A5 auto-post + A6 UI COMPLETE
+### M07 Accounting — COMPLETE (all 6 money paths auto-post)
 
 DB-level double-entry GL. `post_journal` = sole ledger writer (balance/period/immutability enforced; ungated
 auto-posts pass `p_gate=false`). CoA/fiscal/vouchers/expenses/reports live. All five money RPCs emit a balanced
@@ -239,5 +239,11 @@ BankReconciliationPage (per-bank statement-vs-books snapshot, create→differenc
 close-bypass: current_fiscal_period auto-minted a fresh OPEN period after close, defeating the guard — now
 resolves the covering period regardless of status (trg_journal_check_period is the sole enforcer), creating
 only on a genuine gap. Verified: close→journal rejected, reopen→posts, gap-month→auto-creates.
-**Next:** create_sales_return GL hook (6th money path, unposted); dashboard payables/cash KPIs
-(need dashboard_summary fields); on-device click-through. Alt: **M10**.
+**LEDGER COMPLETE:** create_sales_return now auto-posts SALES_RETURN (tax-free: Dr 4100 / Cr 1000 refund /
+Cr 1100 AR; goods back at COST BASIS Dr 1200 / Cr 5000). All 6 money paths — SALE, CUSTOMER_PAYMENT,
+PURCHASE_INVOICE, SUPPLIER_PAYMENT, PURCHASE_RETURN, SALES_RETURN — post a balanced journal; verified by a
+six-path rolled-back gate (all balanced, trial_balance + balance_sheet true). Journal immutable/balanced/
+period-guarded. Deferrals: sales returns refund tax-free (no Output-Tax reversal); non-cash payments still
+debit 1000 Cash not 1010 Bank (payment-method→account split pending — Bank Book/Recon run near-empty).
+**Next:** **M10 Reporting** (P&L/BS drilldowns, scheduled reports) or M08/M09; dashboard payables/cash KPIs
+(need dashboard_summary fields); on-device click-through.
