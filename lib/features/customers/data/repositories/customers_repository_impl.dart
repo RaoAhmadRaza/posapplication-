@@ -3,13 +3,17 @@ import 'dart:io';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import '../../domain/entities/customer.dart';
+import '../../domain/entities/customer_invoice.dart';
 import '../../domain/entities/customer_ledger.dart';
+import '../../domain/entities/customer_payment_result.dart';
 import '../../domain/entities/receivables_aging.dart';
 import '../../domain/failures/customer_failure.dart';
 import '../../domain/repositories/customers_repository.dart';
 import '../datasources/customers_remote_datasource.dart';
 import '../models/customer_model.dart';
+import '../models/customer_invoice_model.dart';
 import '../models/customer_ledger_model.dart';
+import '../models/customer_payment_result_model.dart';
 import '../models/receivables_aging_model.dart';
 
 final customersRepositoryProvider = Provider<CustomersRepository>((ref) {
@@ -24,8 +28,16 @@ class CustomersRepositoryImpl implements CustomersRepository {
   CustomerFailure _mapError(Object e) {
     if (e is PostgrestException) {
       final code = e.code;
-      if (code == '42501') return CustomerPermissionDeniedFailure();
-      if (code == 'PGRST116' || code == 'P0002') {
+      final msg = e.message.toLowerCase();
+      if (msg.contains('err_permission_denied') || code == '42501') {
+        return CustomerPermissionDeniedFailure();
+      }
+      if (msg.contains('err_overpayment')) {
+        return CustomerOverpaymentFailure();
+      }
+      if (msg.contains('_not_found') ||
+          code == 'PGRST116' ||
+          code == 'P0002') {
         return CustomerNotFoundFailure();
       }
     }
@@ -111,6 +123,43 @@ class CustomersRepositoryImpl implements CustomersRepository {
     try {
       final row = await _ds.receivablesAging();
       return (ReceivablesAgingModel.fromJson(row), null);
+    } catch (e) {
+      return (null, _mapError(e));
+    }
+  }
+
+  @override
+  Future<(List<CustomerInvoice>, CustomerFailure?)> loadUnpaidInvoices(
+      String customerId) async {
+    try {
+      final rows = await _ds.loadUnpaidInvoices(customerId);
+      return (rows.map(CustomerInvoiceModel.fromJson).toList(), null);
+    } catch (e) {
+      return (<CustomerInvoice>[], _mapError(e));
+    }
+  }
+
+  @override
+  Future<(CustomerPaymentResult?, CustomerFailure?)> recordCustomerPayment({
+    required String customerId,
+    required String invoiceId,
+    required String method,
+    required double amount,
+    String? reference,
+    String? bankAccountId,
+    String? notes,
+  }) async {
+    try {
+      final row = await _ds.recordCustomerPayment(
+        customerId: customerId,
+        invoiceId: invoiceId,
+        method: method,
+        amount: amount,
+        reference: reference,
+        bankAccountId: bankAccountId,
+        notes: notes,
+      );
+      return (CustomerPaymentResultModel.fromJson(row), null);
     } catch (e) {
       return (null, _mapError(e));
     }

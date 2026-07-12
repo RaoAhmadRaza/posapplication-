@@ -34,7 +34,25 @@ import 'features/suppliers/presentation/pages/supplier_detail_page.dart';
 import 'features/customers/presentation/pages/customers_page.dart';
 import 'features/customers/presentation/pages/customer_form_page.dart';
 import 'features/customers/presentation/pages/customer_detail_page.dart';
+import 'features/customers/presentation/pages/customer_payment_page.dart';
 import 'features/customers/presentation/pages/receivables_aging_page.dart';
+import 'features/accounting/presentation/pages/accounting_hub_page.dart';
+import 'features/accounting/presentation/pages/chart_of_accounts_page.dart';
+import 'features/accounting/presentation/pages/account_ledger_page.dart';
+import 'features/accounting/presentation/pages/journal_entries_page.dart';
+import 'features/accounting/presentation/pages/journal_entry_detail_page.dart';
+import 'features/accounting/presentation/pages/manual_voucher_page.dart';
+import 'features/accounting/presentation/pages/expenses_page.dart';
+import 'features/accounting/presentation/pages/expense_form_page.dart';
+import 'features/accounting/presentation/pages/expense_categories_page.dart';
+import 'features/accounting/presentation/pages/bank_accounts_page.dart';
+import 'features/accounting/presentation/pages/bank_account_form_page.dart';
+import 'features/accounting/presentation/pages/tax_rules_page.dart';
+import 'features/accounting/presentation/pages/tax_rule_form_page.dart';
+import 'features/accounting/presentation/pages/trial_balance_page.dart';
+import 'features/accounting/presentation/pages/profit_loss_page.dart';
+import 'features/accounting/presentation/pages/balance_sheet_page.dart';
+import 'features/accounting/presentation/pages/cash_bank_book_page.dart';
 import 'features/purchasing/presentation/pages/purchase_hub_page.dart';
 import 'features/purchasing/presentation/pages/purchase_orders_page.dart';
 import 'features/purchasing/presentation/pages/purchase_order_form_page.dart';
@@ -428,6 +446,100 @@ final appRouter = GoRouter(
       path: '/customers/:customerId/edit',
       builder: (context, state) =>
           CustomerFormPage(customerId: state.pathParameters['customerId']!),
+    ),
+    GoRoute(
+      path: '/customers/:customerId/collect',
+      builder: (context, state) {
+        final extra = state.extra as Map<String, dynamic>?;
+        return CustomerPaymentPage(
+          customerId: state.pathParameters['customerId']!,
+          customerName: extra?['customerName'] as String?,
+        );
+      },
+    ),
+    GoRoute(
+      path: '/accounting',
+      builder: (context, state) => const AccountingHubPage(),
+    ),
+    GoRoute(
+      path: '/accounting/accounts',
+      builder: (context, state) => const ChartOfAccountsPage(),
+    ),
+    GoRoute(
+      path: '/accounting/accounts/:id/ledger',
+      builder: (context, state) =>
+          AccountLedgerPage(accountId: state.pathParameters['id']!),
+    ),
+    GoRoute(
+      path: '/accounting/journal',
+      builder: (context, state) => const JournalEntriesPage(),
+    ),
+    GoRoute(
+      path: '/accounting/journal/:id',
+      builder: (context, state) =>
+          JournalEntryDetailPage(entryId: state.pathParameters['id']!),
+    ),
+    GoRoute(
+      path: '/accounting/vouchers',
+      builder: (context, state) => const ManualVoucherPage(),
+    ),
+    GoRoute(
+      path: '/accounting/vouchers/create',
+      builder: (context, state) => const ManualVoucherPage(),
+    ),
+    GoRoute(
+      path: '/accounting/expenses',
+      builder: (context, state) => const ExpensesPage(),
+    ),
+    GoRoute(
+      path: '/accounting/expenses/create',
+      builder: (context, state) => const ExpenseFormPage(),
+    ),
+    GoRoute(
+      path: '/accounting/expense-categories',
+      builder: (context, state) => const ExpenseCategoriesPage(),
+    ),
+    GoRoute(
+      path: '/accounting/banks',
+      builder: (context, state) => const BankAccountsPage(),
+    ),
+    GoRoute(
+      path: '/accounting/banks/create',
+      builder: (context, state) => const BankAccountFormPage(),
+    ),
+    GoRoute(
+      path: '/accounting/banks/:id/edit',
+      builder: (context, state) =>
+          BankAccountFormPage(bankAccountId: state.pathParameters['id']!),
+    ),
+    GoRoute(
+      path: '/accounting/tax-rules',
+      builder: (context, state) => const TaxRulesPage(),
+    ),
+    GoRoute(
+      path: '/accounting/tax-rules/create',
+      builder: (context, state) => const TaxRuleFormPage(),
+    ),
+    GoRoute(
+      path: '/accounting/tax-rules/:id/edit',
+      builder: (context, state) =>
+          TaxRuleFormPage(taxRuleId: state.pathParameters['id']!),
+    ),
+    GoRoute(
+      path: '/accounting/reports/trial-balance',
+      builder: (context, state) => const TrialBalancePage(),
+    ),
+    GoRoute(
+      path: '/accounting/reports/profit-loss',
+      builder: (context, state) => const ProfitLossPage(),
+    ),
+    GoRoute(
+      path: '/accounting/reports/balance-sheet',
+      builder: (context, state) => const BalanceSheetPage(),
+    ),
+    GoRoute(
+      path: '/accounting/reports/cash-bank-book',
+      builder: (context, state) => const CashBankBookPage(),
     ),
     GoRoute(
       path: '/purchasing/orders',

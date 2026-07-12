@@ -162,6 +162,25 @@ class InventoryHubPage extends ConsumerWidget {
                 onTap: () => context.push('/receivables'),
               ),
               const SizedBox(height: AppSpacing.xxl),
+              // NOTE: Accounting lives here until a dedicated hub tab ships.
+              PermissionGate(
+                module: 'accounting',
+                action: 'read',
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    _SectionLabel('Accounting'),
+                    const SizedBox(height: AppSpacing.sm),
+                    _HubRow(
+                      icon: Icons.account_balance_outlined,
+                      title: 'Accounting',
+                      subtitle: 'Ledger, journals, vouchers, expenses, reports',
+                      onTap: () => context.push('/accounting'),
+                    ),
+                    const SizedBox(height: AppSpacing.xxl),
+                  ],
+                ),
+              ),
               _SectionLabel('Data'),
               const SizedBox(height: AppSpacing.sm),
               PermissionGate(

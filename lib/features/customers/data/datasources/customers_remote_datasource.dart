@@ -86,4 +86,42 @@ class CustomersRemoteDataSource {
     final result = await _client.rpc('receivables_aging');
     return result as Map<String, dynamic>;
   }
+
+  static const _invoiceCols =
+      'id, invoice_number, grand_total, balance, status, created_at';
+
+  /// Unpaid / partially paid credit invoices for a customer — the pick list
+  /// for a collection.
+  Future<List<Map<String, dynamic>>> loadUnpaidInvoices(
+      String customerId) async {
+    return _client
+        .from('invoices')
+        .select(_invoiceCols)
+        .eq('customer_id', customerId)
+        .inFilter('status', ['CONFIRMED', 'PARTIALLY_PAID'])
+        .gt('balance', 0)
+        .isFilter('deleted_at', null)
+        .order('created_at', ascending: false);
+  }
+
+  Future<Map<String, dynamic>> recordCustomerPayment({
+    required String customerId,
+    required String invoiceId,
+    required String method,
+    required double amount,
+    String? reference,
+    String? bankAccountId,
+    String? notes,
+  }) async {
+    final result = await _client.rpc('record_customer_payment', params: {
+      'p_customer_id': customerId,
+      'p_invoice_id': invoiceId,
+      'p_method': method,
+      'p_amount': amount,
+      'p_reference': reference,
+      'p_bank_account_id': bankAccountId,
+      'p_notes': notes,
+    });
+    return result as Map<String, dynamic>;
+  }
 }

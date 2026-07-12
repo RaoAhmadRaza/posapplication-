@@ -12,6 +12,11 @@ class CustomerNotFoundFailure extends CustomerFailure {
   String get message => 'Customer not found.';
 }
 
+class CustomerOverpaymentFailure extends CustomerFailure {
+  @override
+  String get message => 'Payment exceeds the invoice balance.';
+}
+
 class CustomerUnknownFailure extends CustomerFailure {
   final String details;
   CustomerUnknownFailure(this.details);

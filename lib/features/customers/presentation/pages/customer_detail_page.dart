@@ -6,6 +6,7 @@ import '../../../../core/design/app_radius.dart';
 import '../../../../core/design/app_spacing.dart';
 import '../../../../core/design/app_typography.dart';
 import '../../../../core/design/format.dart';
+import '../../../../core/design/widgets/app_button.dart';
 import '../../../../core/design/widgets/app_card.dart';
 import '../../../../core/design/widgets/app_inline_banner.dart';
 import '../../../../core/widgets/permission_gate.dart';
@@ -42,6 +43,18 @@ class CustomerDetailPage extends ConsumerWidget {
         ),
         title: Text('Customer', style: AppTypography.headline),
         actions: [
+          PermissionGate(
+            module: 'sales',
+            action: 'create',
+            child: IconButton(
+              icon: const Icon(Icons.payments_outlined,
+                  color: AppColors.accent, size: 20),
+              onPressed: () => customerAsync.whenData((c) {
+                context.push('/customers/$customerId/collect',
+                    extra: {'customerName': c.name});
+              }),
+            ),
+          ),
           PermissionGate(
             module: 'customers',
             action: 'update',
@@ -137,6 +150,22 @@ class _Body extends ConsumerWidget {
               _CreditSummaryCard(customer: customer, ledger: ledger),
               const SizedBox(height: AppSpacing.md),
               _LedgerSection(ledger: ledger),
+              if (ledger.outstanding > 0) ...[
+                const SizedBox(height: AppSpacing.lg),
+                PermissionGate(
+                  module: 'sales',
+                  action: 'create',
+                  child: AppButton(
+                    label: 'Collect Payment',
+                    icon: Icons.payments_outlined,
+                    fullWidth: true,
+                    onPressed: () => context.push(
+                      '/customers/${customer.id}/collect',
+                      extra: {'customerName': customer.name},
+                    ),
+                  ),
+                ),
+              ],
             ],
           ),
         ),

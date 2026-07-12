@@ -211,17 +211,14 @@ purchase:create), SupplierFormPage (grouped fields, gated purchase:update/delete
 row on Inventory hub Purchasing section. DB pre-migrated. Verified vs live RLS.
 
 ### Customers CRM (Flutter) — COMPLETE (parity with suppliers)
-`lib/features/customers/` full clean-arch mirroring suppliers. Customer + CustomerModel MOVED here from
-features/sales (old paths now re-export — POS/sales unchanged). CustomerLedger + ReceivablesAging entities;
-sealed CustomerFailure; 7 usecases; CustomersRemoteDataSource (ILIKE name/phone, status filter, deleted_at
-null, load/insert/update/softDelete, customer_ledger/receivables_aging RPCs); CustomersController + ledger/
-aging/outstanding providers. Pages: CustomersPage (search/status/receivable hint, FAB gated customers:create),
-CustomerFormPage (all editable cols incl credit_limit/terms/opening — sets credit at last, gated create/update),
-CustomerDetailPage (credit summary limit/outstanding/remaining + ledger), ReceivablesAgingPage (buckets +
-by-customer). Routes /customers[/create|/:id|/:id/edit] + /receivables; Customers section on Inventory hub;
-dashboard Receivables KPI taps through to /receivables; POS chip shows remaining credit; CreditLimitExceededFailure
-mapped from create_sale ERR_CREDIT_LIMIT_EXCEEDED. DEFERRED: customer_groups, loyalty, communication_logs,
-bulk import, statements. No migration. flutter analyze clean.
+`lib/features/customers/` full clean-arch mirroring suppliers (Customer moved here from sales — old paths
+re-export). CustomerLedger/ReceivablesAging entities; sealed CustomerFailure; usecases + CustomersRemoteDataSource
+(ILIKE search, RPCs customer_ledger/receivables_aging) + controllers. Pages: list (search/status), form (all cols),
+detail (credit summary + ledger + Collect Payment), ReceivablesAging. **Collect-payment slice:**
+record_customer_payment RPC + unpaid-invoice picker → CustomerPaymentPage (/customers/:id/collect, gated
+sales:create, overpayment blocked). Routes + Inventory-hub Customers section + dashboard Receivables KPI; POS chip
+shows remaining credit; CreditLimitExceededFailure from create_sale. DEFERRED: groups, loyalty, comms, bulk
+import, statements. analyze clean.
 
 ### Purchase Returns (Flutter) — COMPLETE
 `lib/features/purchasing/` extended (no new folder). Debit-note-style return of received goods to a supplier.
@@ -236,15 +233,18 @@ bounded, SERIALIZED lines need exactly qty IMEIs via type/scan, reason required,
 /purchasing/returns[/create|/:id]. Supplier ledger renders kind=RETURN as a credit. No migration (RPC + tables
 + PR- series pre-live). Rolled-back dry-run verified full chain incl. over-return guard. flutter analyze clean.
 
-### M07 Accounting (backend) — A5 COMPLETE (all 5 money paths auto-post on prod)
+### M07 Accounting — A5 auto-post + A6 UI COMPLETE
 
 DB-level double-entry GL. `post_journal` = sole ledger writer (balance/period/immutability enforced; ungated
 auto-posts pass `p_gate=false`). CoA/fiscal/vouchers/expenses/reports live. All five money RPCs emit a balanced
 journal, verified via rolled-back dry-runs incl. a five-path gate (every entry balanced, trial_balance +
-balance_sheet true). Canonical `reference_type` + posting:
-- `SALE`: Dr cash/AR, Cr revenue/tax, Dr COGS/Cr inventory. `CUSTOMER_PAYMENT`: Dr cash/bank, Cr AR.
-- `PURCHASE_INVOICE`: Dr inventory/input-tax, Cr AP (GRN posts no GL). `SUPPLIER_PAYMENT`: Dr AP, Cr cash/bank.
-- `PURCHASE_RETURN`: Dr AP, Cr inventory at stock COST BASIS (Σ cost_unit·qty, not subtotal), Cr input-tax.
+balance_sheet true). Canonical `reference_type`: SALE, CUSTOMER_PAYMENT, PURCHASE_INVOICE, SUPPLIER_PAYMENT,
+PURCHASE_RETURN (postings + cost-basis rule in DECISIONS; GRN posts no GL).
 GL reconciles 1:1 with AR/AP subledgers. Ceilings: sale payments → Cash 1000 (bank split deferred); sales-return
-GL not yet hooked. **Next: A6 reporting/accounting UI** (Flutter) + dashboard payables/cash KPIs. Alt: **M10**.
-Outstanding non-module task: on-device click-through of the Purchasing + CRM UI (flutter run).
+GL not yet hooked. **A6 UI shipped:** `lib/features/accounting/` full clean-arch — hub, CoA tree, account ledger,
+journal list+detail (reverse gated accounting:approve), balance-enforced manual voucher, expenses+categories,
+bank/tax-rule CRUD. Reports (A6.2): filterable TrialBalance/ProfitLoss/BalanceSheet/CashBankBook (as-of/range +
+branch, export gated accounting:export). Customer collect-payment on CustomerDetailPage (gated sales:create).
+**BLOCKED (RPCs absent, not built, awaiting migrations):** FiscalPeriodsPage (close_fiscal_period) +
+BankReconciliationPage (create/update_bank_reconciliation). **Next:** those 2 once RPCs land; dashboard
+payables/cash KPIs (need dashboard_summary fields); on-device click-through. Alt: **M10**.

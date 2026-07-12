@@ -1,0 +1,35 @@
+sealed class AccountingFailure {
+  String get message;
+}
+
+class AccountingPermissionDeniedFailure extends AccountingFailure {
+  @override
+  String get message => 'You do not have permission to perform this action.';
+}
+
+class AccountingUnbalancedFailure extends AccountingFailure {
+  @override
+  String get message => 'Debits and credits must be equal.';
+}
+
+class AccountingPeriodClosedFailure extends AccountingFailure {
+  @override
+  String get message => 'The accounting period is closed.';
+}
+
+class AccountingAccountNotFoundFailure extends AccountingFailure {
+  @override
+  String get message => 'One or more accounts could not be found.';
+}
+
+class AccountingNotFoundFailure extends AccountingFailure {
+  @override
+  String get message => 'Record not found.';
+}
+
+class AccountingUnknownFailure extends AccountingFailure {
+  final String details;
+  AccountingUnknownFailure(this.details);
+  @override
+  String get message => details;
+}
