@@ -162,7 +162,10 @@ class _StockMovementFormPageState
   @override
   Widget build(BuildContext context) {
     final products = ref.watch(productsProvider).value ?? <Product>[];
-    final activeProducts = products.where((p) => p.isActive).toList();
+    // SERVICE products are non-stock — exclude from the stock-movement picker.
+    final activeProducts = products
+        .where((p) => p.isActive && p.type != ProductType.service)
+        .toList();
     final selectedProduct = activeProducts
         .where((p) => p.id == _selectedProductId)
         .firstOrNull;

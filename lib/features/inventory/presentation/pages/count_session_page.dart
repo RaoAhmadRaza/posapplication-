@@ -95,7 +95,10 @@ class _CountSessionPageState extends ConsumerState<CountSessionPage> {
   void _buildProductLookup() {
     _barcodeToProductId.clear();
     _skuToProductId.clear();
-    final products = ref.read(productsProvider).value ?? <Product>[];
+    // SERVICE products are non-stock — exclude from the count scan/sku lookup.
+    final products = (ref.read(productsProvider).value ?? <Product>[])
+        .where((p) => p.type != ProductType.service)
+        .toList();
     for (final p in products) {
       if (p.barcode != null && p.barcode!.isNotEmpty) {
         _barcodeToProductId[p.barcode!] = p.id;

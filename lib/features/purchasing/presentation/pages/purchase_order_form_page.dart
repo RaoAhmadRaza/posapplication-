@@ -806,7 +806,9 @@ class _ProductPickerSheetState extends ConsumerState<_ProductPickerSheet> {
       if (failure != null) {
         _error = failure.message;
       } else {
-        _results = products;
+        // SERVICE products are non-stock — exclude from the PO line picker.
+        _results =
+            products.where((p) => p.type != ProductType.service).toList();
       }
     });
   }

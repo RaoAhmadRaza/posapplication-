@@ -111,7 +111,9 @@ class _AdjustmentFormPageState extends ConsumerState<AdjustmentFormPage> {
   Widget build(BuildContext context) {
     final products = ref.watch(productsProvider).value ?? <Product>[];
     final warehouses = ref.watch(warehousesProvider).value ?? <Warehouse>[];
-    final activeProducts = products.where((p) => p.isActive).toList();
+    // SERVICE products are non-stock — exclude from the adjustment picker.
+    final activeProducts =
+        products.where((p) => p.isActive && p.type != ProductType.service).toList();
     final selectedProduct = activeProducts.where((p) => p.id == _selectedProductId).firstOrNull;
     final selectedWarehouse = warehouses.where((w) => w.id == _selectedWarehouseId).firstOrNull;
 

@@ -242,6 +242,7 @@ printed via Printing.layoutPdf from a detail-page action), and repair notificati
 inserted by change_repair_status for the assigned technician) deep-link to /repair/:id from the existing inbox.
 Kanban appbar → workload/history. Inventory-hub "Repair & Service" section gated repair:read. analyze clean.
 SERVICE non-stock invariant enforced at post_stock_movement (migration inventory_service_type_guard, 2026-07-13) —
-REPAIR-SERVICE / any SERVICE product rejected (ERR_SERVICE_NOT_STOCKED) on every stock path.
+REPAIR-SERVICE / any SERVICE product rejected (ERR_SERVICE_NOT_STOCKED) on every stock path; stock-op pickers
+(movement/adjustment/transfer/count/PO line) exclude type=SERVICE client-side (POS+catalog share the query, left as-is).
 DEFERRED: /repair/:id/edit (no update_repair_job RPC); signature capture pad (URL only); board branch filter;
-customer-facing SMS/email; on-device click-through; picker/query filter to exclude SERVICE from GRN/count/PO (UX defense).
+customer-facing SMS/email; on-device click-through.

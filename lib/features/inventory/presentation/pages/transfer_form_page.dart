@@ -269,7 +269,9 @@ class _AddItemDialogState extends ConsumerState<_AddItemDialog> {
   @override
   Widget build(BuildContext context) {
     final products = ref.watch(productsProvider).value ?? <Product>[];
-    final active = products.where((p) => p.isActive).toList();
+    // SERVICE products are non-stock — exclude from the transfer picker.
+    final active =
+        products.where((p) => p.isActive && p.type != ProductType.service).toList();
     final selectedProduct = active.where((p) => p.id == _productId).firstOrNull;
 
     return AlertDialog(
