@@ -262,5 +262,19 @@ definer RPC + future M11 worker only) at milestones AWAITING_APPROVAL/READY; bes
 block). Channel phone→SMS else email→EMAIL; no contact → no row (status still changes). template_code='REPAIR_STATUS' +
 payload{job_number,status}; NO separate template table (body owned by M11 sender). SEND DEPENDENT on M11 provider/worker
 — rows sit status='PENDING' until then. Backend-only (no client change). Pushed + gate-verified.
+Pipeline C5 (migration repair_parts_tax): close_repair_job now taxes parts lines (removes R4 "parts tax-free").
+Mirrors the LIVE create_sale EXACTLY — which applies EXCLUSIVE tax from a caller tax_pct and does NOT honor
+tax_inclusive (phase premise corrected). Server-side basis = products.tax_rate; parts sell=cost*markup is pre-tax.
+Parts tax_pct/tax_amount set (line_total stays exclusive per the labour-line convention) → v_parts_tax → 2100
+Output Tax. COGS 5000/1200 at captured cost UNCHANGED; cost-tie preserved. Backend-only. Pushed + gate-verified
+(dr=cr; 2100=labour+parts tax; 1200=Σ captured cost; trial balance true).
+Pipeline C6 (migration repair_warranty_claim): WARRANTY_CLAIM re-repair workflow. NEW col repair_jobs.original_repair_id
+(self-FK, parent link) + NEW account 5200 'Warranty Cost' (EXPENSE, seeded all tenants). open_warranty_claim (DELIVERED
++ in-warranty → linked RECEIVED re-repair reusing create_repair_job; original → WARRANTY_CLAIM; rejects non-delivered/
+expired). close_warranty_claim: zero charge, NO invoice/revenue; parts consumed (REPAIR_USE); captured cost Dr 5200 /
+Cr 1200 (account_code shape), reference_type REPAIR_WARRANTY, final_cost=0, READY→DELIVERED. Cost-tie: Dr 5200 == Σ
+repair_parts.total_cost == Cr 1200. Backend-only. Pushed + gate-verified (0 invoices, 0 revenue lines, dr=cr, original
+flipped, link set, trial balance true). Pre-existing gap noted: handle_new_user seeds no COA → future tenants lack 5200
+until provisioning is fixed.
 DEFERRED: /repair/:id/edit (no update_repair_job RPC); intake signature; file_uploads/attachments audit rows;
 board branch filter; customer-facing SMS/email; on-device click-through.
