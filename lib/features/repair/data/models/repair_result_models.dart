@@ -19,6 +19,21 @@ class RepairPartResultModel {
   }
 }
 
+class RepairBulkStatusResultModel {
+  static RepairBulkStatusResult fromJson(Map<String, dynamic> json) {
+    final failed = (json['failed'] as List? ?? const [])
+        .map((e) => RepairBulkFailure(
+              repairId: (e as Map)['repair_id'].toString(),
+              error: e['error'].toString(),
+            ))
+        .toList();
+    return RepairBulkStatusResult(
+      succeeded: (json['succeeded'] as num?)?.toInt() ?? 0,
+      failed: failed,
+    );
+  }
+}
+
 class RepairCloseResultModel {
   static RepairCloseResult fromJson(Map<String, dynamic> json) {
     return RepairCloseResult(

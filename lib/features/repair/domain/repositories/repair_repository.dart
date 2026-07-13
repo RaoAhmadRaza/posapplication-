@@ -36,6 +36,13 @@ abstract class RepairRepository {
     String? notes,
   });
 
+  /// Bulk status change; each job validated independently, failures collected.
+  Future<(RepairBulkStatusResult?, RepairFailure?)> bulkChangeStatus({
+    required List<String> repairIds,
+    required RepairStatus newStatus,
+    String? notes,
+  });
+
   Future<(RepairPartResult?, RepairFailure?)> addPart({
     required String repairId,
     required String productId,

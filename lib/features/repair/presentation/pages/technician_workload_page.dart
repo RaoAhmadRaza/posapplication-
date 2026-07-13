@@ -108,15 +108,40 @@ class _WorkloadCard extends ConsumerWidget {
                     ),
                 ],
               ),
-              const SizedBox(height: AppSpacing.sm),
-              Wrap(
-                spacing: AppSpacing.sm,
-                runSpacing: AppSpacing.xs,
-                children: [
-                  for (final entry in row.byStatus.entries)
-                    _StatusCount(status: entry.key, count: entry.value),
-                ],
-              ),
+              if (row.byStatus.isNotEmpty) ...[
+                const SizedBox(height: AppSpacing.sm),
+                Wrap(
+                  spacing: AppSpacing.sm,
+                  runSpacing: AppSpacing.xs,
+                  children: [
+                    for (final entry in row.byStatus.entries)
+                      _StatusCount(status: entry.key, count: entry.value),
+                  ],
+                ),
+              ],
+              if (row.delivered > 0) ...[
+                const SizedBox(height: AppSpacing.sm),
+                Row(
+                  children: [
+                    Icon(Icons.check_circle_outline,
+                        size: 14, color: AppColors.success),
+                    const SizedBox(width: 4),
+                    Text('${row.delivered} delivered',
+                        style: AppTypography.caption
+                            .copyWith(color: AppColors.textMuted)),
+                    if (row.avgTurnaroundDays != null) ...[
+                      const SizedBox(width: AppSpacing.md),
+                      const Icon(Icons.schedule,
+                          size: 14, color: AppColors.textMuted),
+                      const SizedBox(width: 4),
+                      Text(
+                          'avg ${row.avgTurnaroundDays!.toStringAsFixed(1)}d',
+                          style: AppTypography.caption
+                              .copyWith(color: AppColors.textMuted)),
+                    ],
+                  ],
+                ),
+              ],
             ],
           ),
         ),

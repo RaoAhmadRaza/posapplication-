@@ -30,6 +30,20 @@ class RepairCloseResult {
   });
 }
 
+/// One failed job from a bulk status change (job id + server error message).
+class RepairBulkFailure {
+  final String repairId;
+  final String error;
+  const RepairBulkFailure({required this.repairId, required this.error});
+}
+
+/// Result of bulk_change_repair_status: how many succeeded + the per-job failures.
+class RepairBulkStatusResult {
+  final int succeeded;
+  final List<RepairBulkFailure> failed;
+  const RepairBulkStatusResult({required this.succeeded, required this.failed});
+}
+
 /// A tenant user eligible to be assigned as technician (id + display name).
 class Technician {
   final String id;

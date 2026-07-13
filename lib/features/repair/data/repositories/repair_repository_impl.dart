@@ -160,6 +160,24 @@ class RepairRepositoryImpl implements RepairRepository {
   }
 
   @override
+  Future<(RepairBulkStatusResult?, RepairFailure?)> bulkChangeStatus({
+    required List<String> repairIds,
+    required RepairStatus newStatus,
+    String? notes,
+  }) async {
+    try {
+      final row = await _ds.bulkChangeStatus(
+        repairIds: repairIds,
+        newStatus: RepairJobModel.statusToDb(newStatus),
+        notes: notes,
+      );
+      return (RepairBulkStatusResultModel.fromJson(row), null);
+    } catch (e) {
+      return (null, _mapError(e));
+    }
+  }
+
+  @override
   Future<(RepairPartResult?, RepairFailure?)> addPart({
     required String repairId,
     required String productId,

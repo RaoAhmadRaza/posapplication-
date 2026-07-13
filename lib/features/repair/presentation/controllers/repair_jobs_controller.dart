@@ -7,6 +7,7 @@ import '../../domain/usecases/create_repair_job.dart';
 import '../../domain/usecases/assign_technician.dart';
 import '../../domain/usecases/set_diagnosis.dart';
 import '../../domain/usecases/change_status.dart';
+import '../../domain/usecases/bulk_change_status.dart';
 import '../../domain/usecases/add_part.dart';
 import '../../domain/usecases/remove_part.dart';
 import '../../domain/usecases/close_job.dart';
@@ -104,6 +105,23 @@ class RepairJobsController extends AsyncNotifier<List<RepairJob>> {
     ref.invalidateSelf();
     _invalidateDetail(repairId);
     return null;
+  }
+
+  /// Bulk status change across many jobs; returns the per-job outcome so the UI
+  /// can report succeeded count + list failures. Refreshes the board after.
+  Future<(RepairBulkStatusResult?, RepairFailure?)> bulkChangeStatus({
+    required List<String> repairIds,
+    required RepairStatus newStatus,
+    String? notes,
+  }) async {
+    final (result, failure) = await ref.read(bulkChangeStatusUseCaseProvider).call(
+        repairIds: repairIds, newStatus: newStatus, notes: notes);
+    if (failure != null) return (null, failure);
+    ref.invalidateSelf();
+    for (final id in repairIds) {
+      _invalidateDetail(id);
+    }
+    return (result, null);
   }
 
   Future<RepairFailure?> addPart({

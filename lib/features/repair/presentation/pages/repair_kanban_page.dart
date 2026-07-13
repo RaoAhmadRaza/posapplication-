@@ -16,6 +16,24 @@ import '../widgets/repair_status_ui.dart';
 
 const _wideBreakpoint = 900.0;
 
+/// Ids of cards selected for a bulk status change (empty = not in select mode).
+final _selectedProvider =
+    NotifierProvider.autoDispose<_SelectionNotifier, Set<String>>(
+        _SelectionNotifier.new);
+
+class _SelectionNotifier extends Notifier<Set<String>> {
+  @override
+  Set<String> build() => const {};
+
+  void toggle(String id) => state = {
+        for (final e in state)
+          if (e != id) e,
+        if (!state.contains(id)) id,
+      };
+
+  void clear() => state = const {};
+}
+
 class RepairKanbanPage extends ConsumerWidget {
   const RepairKanbanPage({super.key});
 
@@ -57,6 +75,10 @@ class RepairKanbanPage extends ConsumerWidget {
               ],
             ),
         ],
+      ),
+      bottomNavigationBar: state.maybeWhen(
+        data: (jobs) => _BulkBar(jobs: jobs),
+        orElse: () => null,
       ),
       floatingActionButton: PermissionGate(
         module: 'repair',
@@ -121,6 +143,141 @@ Future<void> _changeStatus(
   if (failure != null) {
     ScaffoldMessenger.of(context)
         .showSnackBar(SnackBar(content: Text(failure.message)));
+  }
+}
+
+/// Statuses offered for a bulk change. DELIVERED is excluded — delivery must go
+/// through close_repair_job (invoice first); the RPC rejects it anyway.
+const _bulkTargetStatuses = [
+  RepairStatus.received,
+  RepairStatus.diagnosed,
+  RepairStatus.awaitingApproval,
+  RepairStatus.inRepair,
+  RepairStatus.qc,
+  RepairStatus.ready,
+  RepairStatus.cancelled,
+];
+
+Future<void> _applyBulk(
+  BuildContext context,
+  WidgetRef ref,
+  RepairStatus to,
+  List<RepairJob> jobs,
+) async {
+  final ids = ref.read(_selectedProvider).toList();
+  if (ids.isEmpty) return;
+  final numbersById = {for (final j in jobs) j.id: j.jobNumber};
+
+  final (result, failure) = await ref
+      .read(repairJobsProvider.notifier)
+      .bulkChangeStatus(repairIds: ids, newStatus: to, notes: 'bulk');
+  if (!context.mounted) return;
+
+  if (failure != null) {
+    ScaffoldMessenger.of(context)
+        .showSnackBar(SnackBar(content: Text(failure.message)));
+    return;
+  }
+  ref.read(_selectedProvider.notifier).clear();
+  final r = result!;
+  ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+      content: Text('${r.succeeded} updated to ${repairStatusLabels[to]}'
+          '${r.failed.isEmpty ? '' : ', ${r.failed.length} failed'}')));
+  if (r.failed.isNotEmpty) {
+    await showDialog<void>(
+      context: context,
+      builder: (_) => AlertDialog(
+        title: Text('${r.failed.length} could not be updated'),
+        content: SizedBox(
+          width: 360,
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              for (final f in r.failed)
+                Padding(
+                  padding: const EdgeInsets.only(bottom: AppSpacing.xs),
+                  child: Text(
+                    '${numbersById[f.repairId] ?? f.repairId}: ${f.error}',
+                    style: AppTypography.caption,
+                  ),
+                ),
+            ],
+          ),
+        ),
+        actions: [
+          TextButton(
+              onPressed: () => Navigator.of(context).pop(),
+              child: const Text('Close')),
+        ],
+      ),
+    );
+  }
+}
+
+/// Bottom action bar shown while cards are selected: count + status picker +
+/// clear. Gated behind repair:update.
+class _BulkBar extends ConsumerWidget {
+  const _BulkBar({required this.jobs});
+  final List<RepairJob> jobs;
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final count = ref.watch(_selectedProvider).length;
+    if (count == 0) return const SizedBox.shrink();
+    return PermissionGate(
+      module: 'repair',
+      action: 'update',
+      child: SafeArea(
+        child: Container(
+          padding: const EdgeInsets.symmetric(
+              horizontal: AppSpacing.screenPadding, vertical: AppSpacing.sm),
+          decoration: const BoxDecoration(
+            color: AppColors.background,
+            border: Border(
+                top: BorderSide(color: AppColors.separator, width: 0.5)),
+          ),
+          child: Row(
+            children: [
+              IconButton(
+                icon: const Icon(Icons.close, color: AppColors.textMuted),
+                tooltip: 'Clear selection',
+                onPressed: () => ref.read(_selectedProvider.notifier).clear(),
+              ),
+              Text('$count selected', style: AppTypography.subhead),
+              const Spacer(),
+              PopupMenuButton<RepairStatus>(
+                onSelected: (to) => _applyBulk(context, ref, to, jobs),
+                itemBuilder: (_) => [
+                  for (final s in _bulkTargetStatuses)
+                    PopupMenuItem(
+                        value: s, child: Text(repairStatusLabels[s]!)),
+                ],
+                child: Container(
+                  padding: const EdgeInsets.symmetric(
+                      horizontal: AppSpacing.md, vertical: AppSpacing.sm),
+                  decoration: BoxDecoration(
+                    color: AppColors.accent,
+                    borderRadius: BorderRadius.circular(AppRadius.card),
+                  ),
+                  child: const Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Text('Change status',
+                          style: TextStyle(
+                              color: Colors.white,
+                              fontWeight: FontWeight.w600)),
+                      SizedBox(width: 4),
+                      Icon(Icons.arrow_drop_down, color: Colors.white),
+                    ],
+                  ),
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
   }
 }
 
@@ -262,25 +419,36 @@ class _ListView extends StatelessWidget {
   }
 }
 
-class _JobCard extends StatelessWidget {
+class _JobCard extends ConsumerWidget {
   const _JobCard({required this.job, required this.techNames});
   final RepairJob job;
   final Map<String, String> techNames;
 
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context, WidgetRef ref) {
+    final selected = ref.watch(_selectedProvider);
+    final isSelected = selected.contains(job.id);
+    final selecting = selected.isNotEmpty;
     final device = [job.deviceBrand, job.deviceModel]
         .where((e) => e != null && e.isNotEmpty)
         .join(' ');
     return Container(
       margin: const EdgeInsets.only(bottom: AppSpacing.xs),
       decoration: BoxDecoration(
-        color: AppColors.background,
+        color: isSelected
+            ? AppColors.accent.withValues(alpha: 0.06)
+            : AppColors.background,
         borderRadius: BorderRadius.circular(AppRadius.card),
-        border: Border.all(color: AppColors.separator, width: 0.5),
+        border: Border.all(
+            color: isSelected ? AppColors.accent : AppColors.separator,
+            width: isSelected ? 1 : 0.5),
       ),
       child: InkWell(
-        onTap: () => context.push('/repair/${job.id}'),
+        // Long-press to start selecting; tap toggles while selecting, else opens.
+        onLongPress: () => ref.read(_selectedProvider.notifier).toggle(job.id),
+        onTap: selecting
+            ? () => ref.read(_selectedProvider.notifier).toggle(job.id)
+            : () => context.push('/repair/${job.id}'),
         borderRadius: BorderRadius.circular(AppRadius.card),
         child: Padding(
           padding: const EdgeInsets.all(AppSpacing.md),
@@ -289,6 +457,19 @@ class _JobCard extends StatelessWidget {
             children: [
               Row(
                 children: [
+                  if (selecting)
+                    Padding(
+                      padding: const EdgeInsets.only(right: AppSpacing.xs),
+                      child: Icon(
+                        isSelected
+                            ? Icons.check_circle
+                            : Icons.radio_button_unchecked,
+                        size: 18,
+                        color: isSelected
+                            ? AppColors.accent
+                            : AppColors.textHint,
+                      ),
+                    ),
                   Expanded(
                     child: Text(job.jobNumber,
                         style: AppTypography.footnote

@@ -133,6 +133,19 @@ class RepairRemoteDataSource {
     return result as Map<String, dynamic>;
   }
 
+  Future<Map<String, dynamic>> bulkChangeStatus({
+    required List<String> repairIds,
+    required String newStatus,
+    String? notes,
+  }) async {
+    final result = await _client.rpc('bulk_change_repair_status', params: {
+      'p_repair_ids': repairIds,
+      'p_new_status': newStatus,
+      'p_notes': notes,
+    });
+    return result as Map<String, dynamic>;
+  }
+
   Future<Map<String, dynamic>> addPart({
     required String repairId,
     required String productId,
