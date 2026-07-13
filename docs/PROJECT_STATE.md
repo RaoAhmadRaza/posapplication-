@@ -249,5 +249,18 @@ dialog → uploadSignature to private 'signatures' bucket ('<tenant>/<repair>.pn
 close_repair_job; Detail "View Signature" via fresh 60s signed URL. Private bucket + RLS (migration
 signatures_storage_policies, repair:update write / repair:read read), NO client AES (see DECISIONS). Storage calls
 live in the repair datasource.
+Pipeline C3: bulk_change_repair_status(uuid[], status, notes) loops change_repair_status (sole writer — full
+validation + history + notify per job), collects failures → {succeeded, failed[{repair_id,error}]}; full clean-arch
+chain (datasource/repo/usecase/controller bulkChangeStatus). Kanban multi-select: long-press card → select mode,
+tap toggles, bottom _BulkBar (gated repair:update) → status picker (board statuses minus DELIVERED + CANCELLED) →
+bulk RPC → snackbar succeeded + AlertDialog lists failed job#/error. Technician performance: technicianWorkloadProvider
+now also emits delivered count + avg turnaround days (received→delivered, cancelled excluded, delivered-only techs
+appear); surfaced on TechnicianWorkloadPage cards. (migration repair_bulk_status — pushed + gate-verified.)
+Pipeline C4: change_repair_status redefined (isolated migration repair_customer_notifications) — after history insert,
+logs a customer-facing outbound in NEW table communication_logs (tenant-RLS read; writes revoked from authenticated —
+definer RPC + future M11 worker only) at milestones AWAITING_APPROVAL/READY; best-effort, non-blocking (own exception
+block). Channel phone→SMS else email→EMAIL; no contact → no row (status still changes). template_code='REPAIR_STATUS' +
+payload{job_number,status}; NO separate template table (body owned by M11 sender). SEND DEPENDENT on M11 provider/worker
+— rows sit status='PENDING' until then. Backend-only (no client change). Pushed + gate-verified.
 DEFERRED: /repair/:id/edit (no update_repair_job RPC); intake signature; file_uploads/attachments audit rows;
 board branch filter; customer-facing SMS/email; on-device click-through.
