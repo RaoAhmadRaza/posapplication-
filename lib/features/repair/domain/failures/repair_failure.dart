@@ -28,6 +28,24 @@ class RepairUseCloseToDeliverFailure extends RepairFailure {
   String get message => 'Use “Close & Invoice” to deliver a repair.';
 }
 
+/// Warranty claim attempted on a job that isn't DELIVERED.
+class RepairNotDeliveredFailure extends RepairFailure {
+  @override
+  String get message => 'Only a delivered job can start a warranty claim.';
+}
+
+/// Warranty claim attempted on a job whose warranty has lapsed.
+class RepairWarrantyExpiredFailure extends RepairFailure {
+  @override
+  String get message => 'This job is out of warranty.';
+}
+
+/// Paid amount exceeds the invoice grand total.
+class RepairOverpaymentFailure extends RepairFailure {
+  @override
+  String get message => 'Paid amount cannot exceed the total.';
+}
+
 class RepairNotFoundFailure extends RepairFailure {
   @override
   String get message => 'Record not found.';

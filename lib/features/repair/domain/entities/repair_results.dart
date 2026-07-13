@@ -44,6 +44,33 @@ class RepairBulkStatusResult {
   const RepairBulkStatusResult({required this.succeeded, required this.failed});
 }
 
+/// Result of open_warranty_claim: the new claim job created from an original.
+class RepairWarrantyOpenResult {
+  final String claimRepairId;
+  final String jobNumber;
+  const RepairWarrantyOpenResult(
+      {required this.claimRepairId, required this.jobNumber});
+}
+
+/// Result of close_warranty_claim: zero charge, captured cost booked as expense.
+class RepairWarrantyCloseResult {
+  final String repairId;
+  final double charged;
+  final double warrantyCost;
+  const RepairWarrantyCloseResult({
+    required this.repairId,
+    required this.charged,
+    required this.warrantyCost,
+  });
+}
+
+/// A lightweight repair-job reference for warranty linkage display (id + number).
+class RepairLink {
+  final String id;
+  final String jobNumber;
+  const RepairLink({required this.id, required this.jobNumber});
+}
+
 /// A tenant user eligible to be assigned as technician (id + display name).
 class Technician {
   final String id;

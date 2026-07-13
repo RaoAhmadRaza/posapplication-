@@ -41,6 +41,11 @@ class RepairRepositoryImpl implements RepairRepository {
         return RepairJobNotReadyFailure();
       }
       if (msg.contains('err_job_closed')) return RepairJobClosedFailure();
+      if (msg.contains('err_not_delivered')) return RepairNotDeliveredFailure();
+      if (msg.contains('err_warranty_expired')) {
+        return RepairWarrantyExpiredFailure();
+      }
+      if (msg.contains('err_overpayment')) return RepairOverpaymentFailure();
       if (msg.contains('_not_found') ||
           code == 'PGRST116' ||
           code == 'P0002') {
@@ -156,6 +161,59 @@ class RepairRepositoryImpl implements RepairRepository {
       return null;
     } catch (e) {
       return _mapError(e);
+    }
+  }
+
+  @override
+  Future<(RepairWarrantyOpenResult?, RepairFailure?)> openWarrantyClaim({
+    required String originalRepairId,
+    required String reportedIssue,
+  }) async {
+    try {
+      final row = await _ds.openWarrantyClaim(
+        originalRepairId: originalRepairId,
+        reportedIssue: reportedIssue,
+      );
+      return (RepairWarrantyOpenResultModel.fromJson(row), null);
+    } catch (e) {
+      return (null, _mapError(e));
+    }
+  }
+
+  @override
+  Future<(RepairWarrantyCloseResult?, RepairFailure?)> closeWarrantyClaim({
+    required String repairId,
+    int? warrantyDays,
+    String? signatureUrl,
+  }) async {
+    try {
+      final row = await _ds.closeWarrantyClaim(
+        repairId: repairId,
+        warrantyDays: warrantyDays,
+        signatureUrl: signatureUrl,
+      );
+      return (RepairWarrantyCloseResultModel.fromJson(row), null);
+    } catch (e) {
+      return (null, _mapError(e));
+    }
+  }
+
+  @override
+  Future<(List<RepairLink>, RepairFailure?)> loadRepairLinks(
+    String repairId,
+    String? originalRepairId,
+  ) async {
+    try {
+      final rows = await _ds.loadRepairLinks(repairId, originalRepairId);
+      final links = rows
+          .map((r) => RepairLink(
+                id: r['id'] as String,
+                jobNumber: r['job_number'] as String,
+              ))
+          .toList();
+      return (links, null);
+    } catch (e) {
+      return (<RepairLink>[], _mapError(e));
     }
   }
 

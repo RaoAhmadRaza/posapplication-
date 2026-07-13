@@ -19,6 +19,25 @@ class RepairPartResultModel {
   }
 }
 
+class RepairWarrantyOpenResultModel {
+  static RepairWarrantyOpenResult fromJson(Map<String, dynamic> json) {
+    return RepairWarrantyOpenResult(
+      claimRepairId: json['claim_repair_id'] as String,
+      jobNumber: json['job_number'] as String,
+    );
+  }
+}
+
+class RepairWarrantyCloseResultModel {
+  static RepairWarrantyCloseResult fromJson(Map<String, dynamic> json) {
+    return RepairWarrantyCloseResult(
+      repairId: json['repair_id'] as String,
+      charged: double.tryParse(json['charged'].toString()) ?? 0,
+      warrantyCost: double.tryParse(json['warranty_cost'].toString()) ?? 0,
+    );
+  }
+}
+
 class RepairBulkStatusResultModel {
   static RepairBulkStatusResult fromJson(Map<String, dynamic> json) {
     final failed = (json['failed'] as List? ?? const [])

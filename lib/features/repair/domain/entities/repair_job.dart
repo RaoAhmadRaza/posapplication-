@@ -39,6 +39,9 @@ class RepairJob {
   final String? notes;
   final DateTime createdAt;
 
+  /// Set when this job is a warranty re-repair of another job. NULL = normal job.
+  final String? originalRepairId;
+
   /// Display-only, populated by the embedded `customers(name)` join on load.
   final String? customerName;
 
@@ -69,5 +72,8 @@ class RepairJob {
     this.notes,
     required this.createdAt,
     this.customerName,
+    this.originalRepairId,
   });
+
+  bool get isWarrantyClaim => originalRepairId != null;
 }

@@ -276,5 +276,13 @@ Cr 1200 (account_code shape), reference_type REPAIR_WARRANTY, final_cost=0, READ
 repair_parts.total_cost == Cr 1200. Backend-only. Pushed + gate-verified (0 invoices, 0 revenue lines, dr=cr, original
 flipped, link set, trial balance true). Pre-existing gap noted: handle_new_user seeds no COA → future tenants lack 5200
 until provisioning is fixed.
+Repair UI completion (UI-only, additive): RepairJob.originalRepairId (isWarrantyClaim); datasource _jobCols selects
+it + openWarrantyClaim/closeWarrantyClaim/loadRepairLinks (.or children+parent) → repo/usecases/controller. Detail
+page READY close BRANCHES on originalRepairId: null → Close & Invoice (close_repair_job), not-null → "Close (Warranty
+— no charge)" (close_warranty_claim). DELIVERED + in-warranty → "Warranty Claim" (repair:create) → issue dialog →
+open_warranty_claim → nav to claim. Warranty link card (original↔claims, tappable). Live close breakdown (labour +
+parts@markup + labour tax; balance→AR; parts output tax noted as added at close). Failures +NOT_DELIVERED/WARRANTY_
+EXPIRED/OVERPAYMENT. AppTextField +onChanged (additive). C3 kanban multi-select + workload perf already present.
+analyze clean; data path gate-verified. Device (button-tap) verify pending flutter run (user-driven).
 DEFERRED: /repair/:id/edit (no update_repair_job RPC); intake signature; file_uploads/attachments audit rows;
 board branch filter; customer-facing SMS/email; on-device click-through.

@@ -13,6 +13,7 @@ class AppTextField extends StatefulWidget {
   final TextInputAction? textInputAction;
   final String? errorText;
   final ValueChanged<String>? onSubmitted;
+  final ValueChanged<String>? onChanged;
   const AppTextField({
     super.key,
     required this.controller,
@@ -24,6 +25,7 @@ class AppTextField extends StatefulWidget {
     this.textInputAction,
     this.errorText,
     this.onSubmitted,
+    this.onChanged,
   });
 
   @override
@@ -72,6 +74,7 @@ class _AppTextFieldState extends State<AppTextField> {
                   keyboardType: widget.keyboardType,
                   textInputAction: widget.textInputAction,
                   onSubmitted: widget.onSubmitted,
+                  onChanged: widget.onChanged,
                   style: AppTypography.fieldText,
                   cursorColor: AppColors.accent,
                   decoration: InputDecoration(

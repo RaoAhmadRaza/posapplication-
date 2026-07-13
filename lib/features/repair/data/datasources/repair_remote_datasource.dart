@@ -21,7 +21,8 @@ class RepairRemoteDataSource {
       ' reported_issue, diagnosis, technician_id, status, priority,'
       ' estimated_cost, final_cost, customer_approved, invoice_id,'
       ' warranty_expires_at, received_at, delivered_at,'
-      ' customer_signature_url, notes, created_at, customers(name)';
+      ' customer_signature_url, notes, created_at, original_repair_id,'
+      ' customers(name)';
 
   static const _partCols = 'id, repair_id, product_id, qty, unit_cost,'
       ' total_cost, notes, created_at, products(name)';
@@ -131,6 +132,46 @@ class RepairRemoteDataSource {
       'p_notes': notes,
     });
     return result as Map<String, dynamic>;
+  }
+
+  Future<Map<String, dynamic>> openWarrantyClaim({
+    required String originalRepairId,
+    required String reportedIssue,
+  }) async {
+    final result = await _client.rpc('open_warranty_claim', params: {
+      'p_original_repair_id': originalRepairId,
+      'p_reported_issue': reportedIssue,
+    });
+    return result as Map<String, dynamic>;
+  }
+
+  Future<Map<String, dynamic>> closeWarrantyClaim({
+    required String repairId,
+    int? warrantyDays,
+    String? signatureUrl,
+  }) async {
+    final result = await _client.rpc('close_warranty_claim', params: {
+      'p_repair_id': repairId,
+      'p_warranty_days': warrantyDays,
+      'p_signature_url': signatureUrl,
+    });
+    return result as Map<String, dynamic>;
+  }
+
+  /// Warranty linkage rows for one job: its child claims (original_repair_id =
+  /// this job) plus its own original (id = originalRepairId), if any.
+  Future<List<Map<String, dynamic>>> loadRepairLinks(
+    String repairId,
+    String? originalRepairId,
+  ) async {
+    // children: original_repair_id == this job; parent: id == originalRepairId.
+    var filter = 'original_repair_id.eq.$repairId';
+    if (originalRepairId != null) filter += ',id.eq.$originalRepairId';
+    return _client
+        .from('repair_jobs')
+        .select('id, job_number, original_repair_id')
+        .isFilter('deleted_at', null)
+        .or(filter);
   }
 
   Future<Map<String, dynamic>> bulkChangeStatus({

@@ -36,6 +36,25 @@ abstract class RepairRepository {
     String? notes,
   });
 
+  /// Opens a warranty claim (linked re-repair) from a DELIVERED, in-warranty job.
+  Future<(RepairWarrantyOpenResult?, RepairFailure?)> openWarrantyClaim({
+    required String originalRepairId,
+    required String reportedIssue,
+  });
+
+  /// Closes a warranty-claim job with zero customer charge (cost booked as expense).
+  Future<(RepairWarrantyCloseResult?, RepairFailure?)> closeWarrantyClaim({
+    required String repairId,
+    int? warrantyDays,
+    String? signatureUrl,
+  });
+
+  /// Warranty linkage refs for a job: its child claims + its original (if any).
+  Future<(List<RepairLink>, RepairFailure?)> loadRepairLinks(
+    String repairId,
+    String? originalRepairId,
+  );
+
   /// Bulk status change; each job validated independently, failures collected.
   Future<(RepairBulkStatusResult?, RepairFailure?)> bulkChangeStatus({
     required List<String> repairIds,

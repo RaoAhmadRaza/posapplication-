@@ -11,6 +11,8 @@ import '../../domain/usecases/bulk_change_status.dart';
 import '../../domain/usecases/add_part.dart';
 import '../../domain/usecases/remove_part.dart';
 import '../../domain/usecases/close_job.dart';
+import '../../domain/usecases/open_warranty_claim.dart';
+import '../../domain/usecases/close_warranty_claim.dart';
 import 'repair_detail_provider.dart';
 
 final repairJobsProvider =
@@ -121,6 +123,39 @@ class RepairJobsController extends AsyncNotifier<List<RepairJob>> {
     for (final id in repairIds) {
       _invalidateDetail(id);
     }
+    return (result, null);
+  }
+
+  /// Opens a warranty claim from an original job; refreshes the board + the
+  /// original's detail (it flips to WARRANTY_CLAIM). Returns the new claim ref.
+  Future<(RepairWarrantyOpenResult?, RepairFailure?)> openWarrantyClaim({
+    required String originalRepairId,
+    required String reportedIssue,
+  }) async {
+    final (result, failure) = await ref
+        .read(openWarrantyClaimUseCaseProvider)
+        .call(originalRepairId: originalRepairId, reportedIssue: reportedIssue);
+    if (failure != null) return (null, failure);
+    ref.invalidateSelf();
+    _invalidateDetail(originalRepairId);
+    return (result, null);
+  }
+
+  /// Closes a warranty-claim job with zero customer charge.
+  Future<(RepairWarrantyCloseResult?, RepairFailure?)> closeWarrantyClaim({
+    required String repairId,
+    int? warrantyDays,
+    String? signatureUrl,
+  }) async {
+    final (result, failure) = await ref
+        .read(closeWarrantyClaimUseCaseProvider)
+        .call(
+            repairId: repairId,
+            warrantyDays: warrantyDays,
+            signatureUrl: signatureUrl);
+    if (failure != null) return (null, failure);
+    ref.invalidateSelf();
+    _invalidateDetail(repairId);
     return (result, null);
   }
 

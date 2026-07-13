@@ -38,6 +38,7 @@ class RepairJobModel {
       createdAt: DateTime.parse(json['created_at'] as String),
       customerName: (json['customers'] as Map<String, dynamic>?)?['name']
           as String?,
+      originalRepairId: json['original_repair_id'] as String?,
     );
   }
 
