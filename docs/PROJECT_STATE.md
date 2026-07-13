@@ -69,8 +69,9 @@ Ordered, applied set lives in `supabase/migrations/` (filenames = the index); ea
 is logged in DECISIONS.md by date. Module coverage: auth/RBAC (init → auth_full_schema) · catalog + stock
 engine/ops · sales foundation + returns + guards · dashboard · purchasing (PO/GRN/invoice/payment/returns +
 supplier ledger) · customers/suppliers CRM + ledgers · M07 accounting (CoA/journal engine/vouchers/bank/
-expenses/reports + all 6 auto-post money paths) · 2026-07-13 device per-tenant fingerprint fix + M08 repair
-(repair_stock_movement_enum REPAIR_USE, repair_lifecycle_rpcs, repair_parts_consumption, repair_close_invoice).
+expenses/reports + all 6 auto-post money paths) · 2026-07-13 device per-tenant fingerprint fix + M09 repair
+(repair_stock_movement_enum REPAIR_USE, repair_lifecycle_rpcs, repair_parts_consumption, repair_close_invoice,
+inventory_service_type_guard) + inventory SERVICE non-stock guard.
 
 ## Bugfixes Applied
 Full detail in DECISIONS.md. Headlines: product edit/create reactive-seed + invalidate; RPC single-row
@@ -214,7 +215,7 @@ debit 1000 Cash not 1010 Bank (payment-method→account split pending — Bank B
 **Next:** **M10 Reporting** (P&L/BS drilldowns, scheduled reports); dashboard payables/cash KPIs
 (need dashboard_summary fields); on-device click-through.
 
-## M08 Repair & Service — COMPLETE (backend + Flutter)
+## M09 Repair & Service — COMPLETE (backend + Flutter)
 
 Backend (prior session, applied + gate-verified): repair_jobs/repair_parts/repair_status_history +
 repair_status_enum(9), RJ- series, REPAIR-SERVICE sentinel product (type=SERVICE) + 4200 Service Revenue,
@@ -240,5 +241,7 @@ job#/customer/imei, tap → read-only detail), RepairLabelPdfService QR device-t
 printed via Printing.layoutPdf from a detail-page action), and repair notifications (action_type=REPAIR, already
 inserted by change_repair_status for the assigned technician) deep-link to /repair/:id from the existing inbox.
 Kanban appbar → workload/history. Inventory-hub "Repair & Service" section gated repair:read. analyze clean.
+SERVICE non-stock invariant enforced at post_stock_movement (migration inventory_service_type_guard, 2026-07-13) —
+REPAIR-SERVICE / any SERVICE product rejected (ERR_SERVICE_NOT_STOCKED) on every stock path.
 DEFERRED: /repair/:id/edit (no update_repair_job RPC); signature capture pad (URL only); board branch filter;
-customer-facing SMS/email; on-device click-through.
+customer-facing SMS/email; on-device click-through; picker/query filter to exclude SERVICE from GRN/count/PO (UX defense).
