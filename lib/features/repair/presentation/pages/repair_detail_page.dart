@@ -1,3 +1,5 @@
+import 'dart:typed_data';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
@@ -12,6 +14,8 @@ import '../../../../core/design/widgets/app_card.dart';
 import '../../../../core/design/widgets/app_inline_banner.dart';
 import '../../../../core/design/widgets/app_text_field.dart';
 import '../../../../core/widgets/permission_gate.dart';
+import '../../../../core/widgets/signature_pad.dart';
+import '../../domain/usecases/signature_usecases.dart';
 import '../../domain/entities/repair_job.dart';
 import '../../domain/entities/repair_part.dart';
 import '../../domain/entities/repair_status_history.dart';
@@ -108,9 +112,48 @@ class _Body extends ConsumerWidget {
                 style: AppTypography.footnote
                     .copyWith(color: AppColors.success)),
           ),
+        if (job.customerSignatureUrl != null)
+          Padding(
+            padding: const EdgeInsets.only(top: AppSpacing.sm),
+            child: AppButton(
+              label: 'View Signature',
+              variant: AppButtonVariant.tinted,
+              icon: Icons.draw_outlined,
+              onPressed: () =>
+                  _viewSignature(context, ref, job.customerSignatureUrl!),
+              fullWidth: true,
+            ),
+          ),
       ],
     );
   }
+}
+
+/// Fetches a fresh short-lived signed URL for the stored signature path and
+/// renders it (never a public link). Read is gated by the storage RLS policy.
+Future<void> _viewSignature(
+    BuildContext context, WidgetRef ref, String path) async {
+  final (url, failure) =
+      await ref.read(repairSignatureUrlUseCaseProvider).call(path);
+  if (!context.mounted) return;
+  if (failure != null || url == null) {
+    ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+        content: Text(failure?.message ?? 'Could not load signature.')));
+    return;
+  }
+  await showDialog<void>(
+    context: context,
+    builder: (ctx) => AlertDialog(
+      backgroundColor: AppColors.background,
+      title: const Text('Customer Signature'),
+      content: Image.network(url, fit: BoxFit.contain),
+      actions: [
+        TextButton(
+            onPressed: () => Navigator.of(ctx).pop(),
+            child: const Text('Close')),
+      ],
+    ),
+  );
 }
 
 // ---- Header ----
@@ -654,8 +697,7 @@ Future<void> _openCloseDialog(
   final markupCtrl = TextEditingController(text: '0');
   final paidCtrl = TextEditingController();
   final warrantyCtrl = TextEditingController();
-  final signatureCtrl =
-      TextEditingController(text: detail.job.customerSignatureUrl ?? '');
+  Uint8List? sigBytes;
   String? error;
   var saving = false;
 
@@ -704,10 +746,30 @@ Future<void> _openCloseDialog(
                   prefixIcon: Icons.verified_outlined,
                   keyboardType: TextInputType.number),
               const SizedBox(height: AppSpacing.sm),
-              AppTextField(
-                  controller: signatureCtrl,
-                  label: 'Signature URL (optional)',
-                  prefixIcon: Icons.draw_outlined),
+              Align(
+                alignment: Alignment.centerLeft,
+                child: TextButton.icon(
+                  onPressed: saving
+                      ? null
+                      : () async {
+                          final bytes = await captureSignature(ctx);
+                          if (bytes != null) {
+                            setState(() => sigBytes = bytes);
+                          }
+                        },
+                  icon: Icon(
+                    sigBytes != null
+                        ? Icons.check_circle
+                        : Icons.draw_outlined,
+                    color: sigBytes != null
+                        ? AppColors.success
+                        : AppColors.accent,
+                  ),
+                  label: Text(sigBytes != null
+                      ? 'Signature captured — tap to re-sign'
+                      : 'Capture customer signature (optional)'),
+                ),
+              ),
               if (error != null) ...[
                 const SizedBox(height: AppSpacing.sm),
                 AppInlineBanner(message: error!, type: BannerType.error),
@@ -741,6 +803,22 @@ Future<void> _openCloseDialog(
                       saving = true;
                       error = null;
                     });
+                    // Upload the signature first (if captured); store its path.
+                    String? sigPath;
+                    if (sigBytes != null) {
+                      final (path, upErr) = await ref
+                          .read(uploadRepairSignatureUseCaseProvider)
+                          .call(detail.job.id, sigBytes!);
+                      if (upErr != null) {
+                        if (!ctx.mounted) return;
+                        setState(() {
+                          saving = false;
+                          error = upErr.message;
+                        });
+                        return;
+                      }
+                      sigPath = path;
+                    }
                     final (result, failure) = await ref
                         .read(repairJobsProvider.notifier)
                         .closeJob(
@@ -752,9 +830,7 @@ Future<void> _openCloseDialog(
                           paidAmount: paid,
                           warrantyDays:
                               int.tryParse(warrantyCtrl.text.trim()),
-                          signatureUrl: signatureCtrl.text.trim().isEmpty
-                              ? null
-                              : signatureCtrl.text.trim(),
+                          signatureUrl: sigPath,
                         );
                     if (!ctx.mounted) return;
                     if (failure != null) {

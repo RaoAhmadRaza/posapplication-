@@ -1,3 +1,5 @@
+import 'dart:typed_data';
+
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import '../../../../core/supabase.dart';
@@ -173,5 +175,26 @@ class RepairRemoteDataSource {
       'p_signature_url': signatureUrl,
     });
     return result as Map<String, dynamic>;
+  }
+
+  /// Uploads the signature PNG to the private 'signatures' bucket at
+  /// `tenant_id/repair_id.png` (RLS-scoped by the tenant path prefix).
+  /// Returns the storage path — stored on the job, signed fresh at view time.
+  Future<String> uploadSignature(String repairId, Uint8List bytes) async {
+    final tenantId = await _client.rpc('auth_tenant_id') as String;
+    final path = '$tenantId/$repairId.png';
+    await _client.storage.from('signatures').uploadBinary(
+          path,
+          bytes,
+          fileOptions:
+              const FileOptions(contentType: 'image/png', upsert: true),
+        );
+    return path;
+  }
+
+  /// Fresh short-lived (60s) signed URL for a stored signature path. The object
+  /// is private — never a public link.
+  Future<String> signatureSignedUrl(String path) {
+    return _client.storage.from('signatures').createSignedUrl(path, 60);
   }
 }

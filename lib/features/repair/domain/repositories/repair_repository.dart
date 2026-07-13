@@ -1,3 +1,5 @@
+import 'dart:typed_data';
+
 import '../entities/repair_job.dart';
 import '../entities/repair_part.dart';
 import '../entities/repair_status_history.dart';
@@ -55,4 +57,11 @@ abstract class RepairRepository {
   });
 
   Future<(List<Technician>, RepairFailure?)> loadTechnicians();
+
+  /// Uploads a signature PNG for a repair; returns the storage path.
+  Future<(String?, RepairFailure?)> uploadSignature(
+      String repairId, Uint8List bytes);
+
+  /// Fresh short-lived signed URL for a stored signature path.
+  Future<(String?, RepairFailure?)> signatureSignedUrl(String path);
 }

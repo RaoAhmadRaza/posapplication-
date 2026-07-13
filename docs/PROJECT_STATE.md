@@ -244,5 +244,10 @@ Kanban appbar → workload/history. Inventory-hub "Repair & Service" section gat
 SERVICE non-stock invariant enforced at post_stock_movement (migration inventory_service_type_guard, 2026-07-13) —
 REPAIR-SERVICE / any SERVICE product rejected (ERR_SERVICE_NOT_STOCKED) on every stock path; stock-op pickers
 (movement/adjustment/transfer/count/PO line) exclude type=SERVICE client-side (POS+catalog share the query, left as-is).
-DEFERRED: /repair/:id/edit (no update_repair_job RPC); signature capture pad (URL only); board branch filter;
-customer-facing SMS/email; on-device click-through.
+Signature capture (C2): SignaturePad shared widget (core/widgets, CustomPaint→PNG, no dep) in the Close & Invoice
+dialog → uploadSignature to private 'signatures' bucket ('<tenant>/<repair>.png') → stored path passed to
+close_repair_job; Detail "View Signature" via fresh 60s signed URL. Private bucket + RLS (migration
+signatures_storage_policies, repair:update write / repair:read read), NO client AES (see DECISIONS). Storage calls
+live in the repair datasource.
+DEFERRED: /repair/:id/edit (no update_repair_job RPC); intake signature; file_uploads/attachments audit rows;
+board branch filter; customer-facing SMS/email; on-device click-through.

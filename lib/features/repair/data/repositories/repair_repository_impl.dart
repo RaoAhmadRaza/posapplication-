@@ -1,5 +1,6 @@
 import 'dart:async';
 import 'dart:io';
+import 'dart:typed_data';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import '../../domain/entities/repair_job.dart';
@@ -231,6 +232,25 @@ class RepairRepositoryImpl implements RepairRepository {
       return (techs, null);
     } catch (e) {
       return (<Technician>[], _mapError(e));
+    }
+  }
+
+  @override
+  Future<(String?, RepairFailure?)> uploadSignature(
+      String repairId, Uint8List bytes) async {
+    try {
+      return (await _ds.uploadSignature(repairId, bytes), null);
+    } catch (e) {
+      return (null, _mapError(e));
+    }
+  }
+
+  @override
+  Future<(String?, RepairFailure?)> signatureSignedUrl(String path) async {
+    try {
+      return (await _ds.signatureSignedUrl(path), null);
+    } catch (e) {
+      return (null, _mapError(e));
     }
   }
 }
