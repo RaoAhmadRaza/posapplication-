@@ -65,49 +65,12 @@ number_series (+4 enums, 10 RPCs, all posting through the Slice B ledger). Flutt
 
 ## Database Migrations
 
-| Migration | Contents |
-|-----------|----------|
-| `20260609000000_init.sql` | tenants, roles, users, trigger v1, seeds |
-| `20260609000001_signup_provisioning.sql` | business_name → new tenant trigger |
-| `20260609000002_auth_full_schema.sql` | branches, assignments, permissions, devices, sessions, mfa, audit_logs |
-| `20260611000000_failed_login_rpc.sql` | increment/reset_failed_login RPCs |
-| `20260611000001_product_catalog.sql` | catalog schema + RLS |
-| `20260611163739_product_sku_and_search.sql` | pg_trgm, SKU auto-gen |
-| `20260613061924_stock_engine.sql` | warehouses, stock_balance, stock_ledger, enums, triggers, RPCs |
-| `20260613075616_stock_ops.sql` | adjustments, transfers, counts, imei, number_series, settings, RPCs |
-| `20260611173542_fix_softdelete_rls.sql` | collapse duplicate catalog UPDATE policies |
-| `20260612160453_inventory_softdelete_rpcs.sql` | soft_delete_brand/category/product SECURITY DEFINER RPCs |
-| `20260615082538_notifications_low_stock.sql` | notifications + notification_preferences + low-stock trigger |
-| `20260616100723_bulk_import_products.sql` | bulk_import_products RPC |
-| `20260617103129 / 120537 / 121221 / 122153 / 122619` | migration-import RPCs + set-based + counts/idempotent/numfix fixes |
-| `20260618114258_sales_foundation.sql` | customers, cashier_sessions, invoices, invoice_items, payments + RLS, INVOICE number_series seed, create_sale/open_cashier_session/close_cashier_session RPCs, invoice-immutability trigger |
-| `20260618174821_sales_returns.sql` | create_sales_return RPC |
-| `20260619115907_post_stock_movement_operation_aware.sql` | SALE/RETURN_IN accept sales perms |
-| `20260619124544_create_sale_price_credit_guards.sql` | min_selling_price + credit_limit guards (overridable sales:approve) |
-| `20260619124958_held_sales.sql` | held_sales table (hold/resume) |
-| `20260619125510_void_invoice.sql` | void_invoice RPC |
-| `20260619180707_dashboard_summary.sql` | dashboard_summary RPC |
-| `20260624185804_close_cashier_session_permission_gate.sql` | sales:create gate + owner-only |
-| `20260710132545_tenant_scope_roles_tenants_rls.sql` | tenant-scoped RLS on roles + tenants (fixes cross-tenant read) |
-| `20260710134809_customers_mutation_permissions.sql` | customers perm module; insert/update/delete gated customers:* |
-| `20260710143731_revoke_next_number_from_authenticated.sql` | revoke next_number from authenticated (SECURITY DEFINER callers unaffected) |
-| `20260711094601_purchase_foundation_suppliers_perms.sql` | suppliers table + purchase perm module + PO/GRN/PV number series |
-| `20260711094922_purchase_orders_and_rpcs.sql` | purchase_orders(+items) + create/update/submit/approve/cancel RPCs |
-| `20260711100014_purchase_grn_receive.sql` | grns(+items) + receive_goods RPC |
-| `20260711101802_fix_receive_goods_enum_cast.sql` | receive_goods PO-status enum-cast fix |
-| `20260711102138_purchase_invoices_and_payments.sql` | purchase_invoices + supplier_payments + create_invoice/record_payment RPCs |
-| `20260711102631_purchase_supplier_ledger_aging.sql` | supplier_ledger + payables_aging RPCs |
-| `20260711111535_fix_receive_goods_imei_status.sql` | serialized receipt imei status IN_STOCK→AVAILABLE fix |
-| `20260711124610_purchase_return_number_series_enum.sql` | add PURCHASE_RETURN to number_series_type_enum |
-| `20260711124716_purchase_returns.sql` | purchase_returns(+items) + create_purchase_return RPC |
-| `20260711141631_customer_ledger_receivables_aging.sql` | customer_ledger + receivables_aging RPCs (customers:read) |
-| `20260711145841_fix_receivables_aging_and_ledger_basis.sql` | aging due-date from credit_terms; ledger outstanding = invoice balance |
-| `20260711174723 / 175654 / 181843 / 183026` | M07 accounting: CoA+fiscal+tax+ledger_accounts (+acct_id/current_fiscal_period, accounting perm), journal engine (journal_entries/lines, post_journal/reverse_journal, immutability+period+balance triggers), vouchers/bank/expenses (create_voucher/create_expense), reports (trial_balance/profit_loss/balance_sheet/account_ledger) |
-| `20260711182456_fix_bank_accounts_client_grant.sql` | grant insert/update on bank_accounts to authenticated (client-CRUD policies were dead — no table grant) |
-| `20260711184605 / 185637 / 192129` | create_sale auto-posts SALE journal (Dr cash/AR, Cr revenue/tax, Dr COGS/Cr inventory, ungated) + journal reference-uniqueness index; record_customer_payment (credit settlement, Dr cash/bank Cr AR, PARTIALLY_PAID/PAID) — 185637 briefly regressed the GL hook, 192129 restored it as canonical (see DECISIONS) |
-| `20260711200843 / 201211 / 201702` | purchase-side auto-post hooks: SUPPLIER_PAYMENT (Dr AP, Cr cash/bank), PURCHASE_INVOICE (Dr inventory/input-tax, Cr AP), PURCHASE_RETURN (Dr AP, Cr inventory at stock cost basis, Cr input-tax) — completes A5, all 5 money paths live |
-| `20260713094705_devices_tenant_scoped_fingerprint.sql` | device fingerprint uniqueness per-tenant (uq_devices_tenant_fingerprint), replaces global index — fixes cross-tenant upsert 42501 at login |
-| `20260713094744_repair_stock_movement_enum.sql` | adds REPAIR_USE to stock_movement_type_enum (M08 repair groundwork) |
+Ordered, applied set lives in `supabase/migrations/` (filenames = the index); each migration's rationale
+is logged in DECISIONS.md by date. Module coverage: auth/RBAC (init → auth_full_schema) · catalog + stock
+engine/ops · sales foundation + returns + guards · dashboard · purchasing (PO/GRN/invoice/payment/returns +
+supplier ledger) · customers/suppliers CRM + ledgers · M07 accounting (CoA/journal engine/vouchers/bank/
+expenses/reports + all 6 auto-post money paths) · 2026-07-13 device per-tenant fingerprint fix + M08 repair
+(repair_stock_movement_enum REPAIR_USE, repair_lifecycle_rpcs, repair_parts_consumption, repair_close_invoice).
 
 ## Bugfixes Applied
 Full detail in DECISIONS.md. Headlines: product edit/create reactive-seed + invalidate; RPC single-row
@@ -248,5 +211,29 @@ PURCHASE_INVOICE, SUPPLIER_PAYMENT, PURCHASE_RETURN, SALES_RETURN — post a bal
 six-path rolled-back gate (all balanced, trial_balance + balance_sheet true). Journal immutable/balanced/
 period-guarded. Deferrals: sales returns refund tax-free (no Output-Tax reversal); non-cash payments still
 debit 1000 Cash not 1010 Bank (payment-method→account split pending — Bank Book/Recon run near-empty).
-**Next:** **M10 Reporting** (P&L/BS drilldowns, scheduled reports) or M08/M09; dashboard payables/cash KPIs
+**Next:** **M10 Reporting** (P&L/BS drilldowns, scheduled reports); dashboard payables/cash KPIs
 (need dashboard_summary fields); on-device click-through.
+
+## M08 Repair & Service — COMPLETE (backend + Flutter)
+
+Backend (prior session, applied + gate-verified): repair_jobs/repair_parts/repair_status_history +
+repair_status_enum(9), RJ- series, REPAIR-SERVICE sentinel product (type=SERVICE) + 4200 Service Revenue,
+REPAIR_USE movement type + its post_stock_movement gate branch. 7 RPCs (create_repair_job/assign_technician/
+set_repair_diagnosis/change_repair_status/add_repair_part/remove_repair_part/close_repair_job). **7th balanced
+money path**: close_repair_job builds the invoice DIRECTLY (own INSERT, session_id NULL — NOT create_sale) +
+posts REPAIR_INVOICE journal explicitly (Cr 4200 labour / 4000 parts / 2100 tax, Dr 5000/Cr 1200 parts COGS at
+captured cost). Parts deducted at add (REPAIR_USE); close recognizes cost only (no double-deduct). Full detail
+in DECISIONS 2026-07-13.
+
+Flutter (`lib/features/repair/`, full clean-arch mirroring purchasing): 3 entities + RepairStatus(9)/
+RepairPriority(4) enums + result types; sealed RepairFailure (maps ERR_INVALID_TRANSITION/JOB_NOT_READY/
+JOB_CLOSED/USE_CLOSE_TO_DELIVER); 10 usecases; ONE datasource (7 RPCs + reads embedding customers(name)/
+products(name) + users technician load); repo impl → typed failures. RepairJobsController (list + status/
+technician filters + all mutations) + repairJobDetailProvider family + techniciansProvider. Pages:
+RepairKanbanPage /repair (LayoutBuilder — wide: drag-to-update status columns, narrow: grouped tappable list;
+illegal drop → mapped failure), RepairIntakePage /repair/intake (lean customer picker reusing customersProvider,
+device fields, priority, estimate, signature-URL), RepairDetailPage /repair/:id (diagnosis editor, parts add
+[product picker]/remove, status history, cost summary, assign, Close & Invoice gated repair:update at READY →
+invoice number). Inventory-hub "Repair & Service" section gated repair:read. analyze clean. DEFERRED:
+/repair/:id/edit (no update_repair_job RPC); signature capture pad (URL only); board branch filter; on-device
+click-through.

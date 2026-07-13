@@ -181,6 +181,25 @@ class InventoryHubPage extends ConsumerWidget {
                   ],
                 ),
               ),
+              // NOTE: Repair lives here until a dedicated hub tab ships.
+              PermissionGate(
+                module: 'repair',
+                action: 'read',
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    _SectionLabel('Repair & Service'),
+                    const SizedBox(height: AppSpacing.sm),
+                    _HubRow(
+                      icon: Icons.build_outlined,
+                      title: 'Repairs',
+                      subtitle: 'Intake, kanban board, close & invoice',
+                      onTap: () => context.push('/repair'),
+                    ),
+                    const SizedBox(height: AppSpacing.xxl),
+                  ],
+                ),
+              ),
               _SectionLabel('Data'),
               const SizedBox(height: AppSpacing.sm),
               PermissionGate(

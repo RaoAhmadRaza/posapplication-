@@ -68,6 +68,9 @@ import 'features/purchasing/presentation/pages/reorder_suggestions_page.dart';
 import 'features/purchasing/presentation/pages/purchase_returns_page.dart';
 import 'features/purchasing/presentation/pages/purchase_return_detail_page.dart';
 import 'features/purchasing/presentation/pages/purchase_return_form_page.dart';
+import 'features/repair/presentation/pages/repair_kanban_page.dart';
+import 'features/repair/presentation/pages/repair_intake_page.dart';
+import 'features/repair/presentation/pages/repair_detail_page.dart';
 import 'features/inventory/presentation/pages/products_page.dart';
 import 'features/inventory/presentation/pages/product_form_page.dart';
 import 'features/inventory/presentation/pages/barcode_templates_page.dart';
@@ -458,6 +461,19 @@ final appRouter = GoRouter(
           customerName: extra?['customerName'] as String?,
         );
       },
+    ),
+    GoRoute(
+      path: '/repair',
+      builder: (context, state) => const RepairKanbanPage(),
+    ),
+    GoRoute(
+      path: '/repair/intake',
+      builder: (context, state) => const RepairIntakePage(),
+    ),
+    GoRoute(
+      path: '/repair/:repairId',
+      builder: (context, state) =>
+          RepairDetailPage(repairId: state.pathParameters['repairId']!),
     ),
     GoRoute(
       path: '/accounting',
