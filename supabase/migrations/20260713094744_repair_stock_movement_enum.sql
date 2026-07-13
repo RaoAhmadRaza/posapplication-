@@ -1,0 +1,1 @@
+alter type public.stock_movement_type_enum add value if not exists 'REPAIR_USE';

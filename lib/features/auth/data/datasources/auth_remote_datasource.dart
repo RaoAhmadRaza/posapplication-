@@ -189,7 +189,7 @@ class AuthRemoteDataSource {
       'os_info': osInfo,
       'fingerprint_hash': fingerprintHash,
       'last_seen_at': DateTime.now().toUtc().toIso8601String(),
-    }, onConflict: 'fingerprint_hash');
+    }, onConflict: 'tenant_id,fingerprint_hash');
   }
 
   Future<void> updatePinHash(String userId, String? hash) async {

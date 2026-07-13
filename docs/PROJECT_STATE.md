@@ -106,10 +106,13 @@ number_series (+4 enums, 10 RPCs, all posting through the Slice B ledger). Flutt
 | `20260711182456_fix_bank_accounts_client_grant.sql` | grant insert/update on bank_accounts to authenticated (client-CRUD policies were dead — no table grant) |
 | `20260711184605 / 185637 / 192129` | create_sale auto-posts SALE journal (Dr cash/AR, Cr revenue/tax, Dr COGS/Cr inventory, ungated) + journal reference-uniqueness index; record_customer_payment (credit settlement, Dr cash/bank Cr AR, PARTIALLY_PAID/PAID) — 185637 briefly regressed the GL hook, 192129 restored it as canonical (see DECISIONS) |
 | `20260711200843 / 201211 / 201702` | purchase-side auto-post hooks: SUPPLIER_PAYMENT (Dr AP, Cr cash/bank), PURCHASE_INVOICE (Dr inventory/input-tax, Cr AP), PURCHASE_RETURN (Dr AP, Cr inventory at stock cost basis, Cr input-tax) — completes A5, all 5 money paths live |
+| `20260713094705_devices_tenant_scoped_fingerprint.sql` | device fingerprint uniqueness per-tenant (uq_devices_tenant_fingerprint), replaces global index — fixes cross-tenant upsert 42501 at login |
+| `20260713094744_repair_stock_movement_enum.sql` | adds REPAIR_USE to stock_movement_type_enum (M08 repair groundwork) |
 
 ## Bugfixes Applied
 Full detail in DECISIONS.md. Headlines: product edit/create reactive-seed + invalidate; RPC single-row
-Map parsing; unified products query path; canonical warehouse_id NULL stock read/write (2026-07-11 audit H).
+Map parsing; unified products query path; canonical warehouse_id NULL stock read/write (2026-07-11 audit H);
+per-tenant device fingerprint uniqueness — fixes login-time device-register 42501 (2026-07-13).
 
 ## Peripheral features — COMPLETE (detail in DECISIONS.md)
 
