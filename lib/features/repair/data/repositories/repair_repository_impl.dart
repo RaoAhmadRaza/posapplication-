@@ -71,6 +71,16 @@ class RepairRepositoryImpl implements RepairRepository {
   }
 
   @override
+  Future<(List<RepairJob>, RepairFailure?)> loadClosedRepairJobs() async {
+    try {
+      final rows = await _ds.loadClosedRepairJobs();
+      return (rows.map(RepairJobModel.fromJson).toList(), null);
+    } catch (e) {
+      return (<RepairJob>[], _mapError(e));
+    }
+  }
+
+  @override
   Future<(RepairJob?, List<RepairPart>, List<RepairStatusHistory>,
       RepairFailure?)> loadRepairJob(String id) async {
     try {

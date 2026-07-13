@@ -234,6 +234,11 @@ RepairKanbanPage /repair (LayoutBuilder — wide: drag-to-update status columns,
 illegal drop → mapped failure), RepairIntakePage /repair/intake (lean customer picker reusing customersProvider,
 device fields, priority, estimate, signature-URL), RepairDetailPage /repair/:id (diagnosis editor, parts add
 [product picker]/remove, status history, cost summary, assign, Close & Invoice gated repair:update at READY →
-invoice number). Inventory-hub "Repair & Service" section gated repair:read. analyze clean. DEFERRED:
-/repair/:id/edit (no update_repair_job RPC); signature capture pad (URL only); board branch filter; on-device
-click-through.
+invoice number). Also: TechnicianWorkloadPage /repair/workload (open-job counts per technician by status, tap →
+technician-filtered kanban), RepairHistoryPage /repair/history (delivered/cancelled, client-side search by
+job#/customer/imei, tap → read-only detail), RepairLabelPdfService QR device-tag label (job#+device+customer,
+printed via Printing.layoutPdf from a detail-page action), and repair notifications (action_type=REPAIR, already
+inserted by change_repair_status for the assigned technician) deep-link to /repair/:id from the existing inbox.
+Kanban appbar → workload/history. Inventory-hub "Repair & Service" section gated repair:read. analyze clean.
+DEFERRED: /repair/:id/edit (no update_repair_job RPC); signature capture pad (URL only); board branch filter;
+customer-facing SMS/email; on-device click-through.

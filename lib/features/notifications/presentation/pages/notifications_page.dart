@@ -99,6 +99,8 @@ class NotificationsPage extends ConsumerWidget {
                   }
                   if (n.actionType == 'low_stock' && n.actionId != null) {
                     context.push('/inventory/stock/${n.actionId}');
+                  } else if (n.actionType == 'REPAIR' && n.actionId != null) {
+                    context.push('/repair/${n.actionId}');
                   }
                 },
               ),
@@ -174,7 +176,8 @@ class _NotificationCard extends StatelessWidget {
                   ],
                 ),
               ),
-              if (notification.actionType == 'low_stock')
+              if (notification.actionType == 'low_stock' ||
+                  notification.actionType == 'REPAIR')
                 Padding(
                   padding: const EdgeInsets.only(left: AppSpacing.sm),
                   child: Icon(Icons.chevron_right, size: 18, color: AppColors.separator),

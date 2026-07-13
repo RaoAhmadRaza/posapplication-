@@ -10,6 +10,9 @@ abstract class RepairRepository {
     String? technicianId,
   });
 
+  /// Delivered + cancelled jobs, for the history view.
+  Future<(List<RepairJob>, RepairFailure?)> loadClosedRepairJobs();
+
   Future<(RepairJob?, List<RepairPart>, List<RepairStatusHistory>,
       RepairFailure?)> loadRepairJob(String id);
 

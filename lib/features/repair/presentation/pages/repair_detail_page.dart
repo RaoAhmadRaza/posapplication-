@@ -1,8 +1,10 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
+import 'package:printing/printing.dart';
 import '../../../../core/design/app_colors.dart';
 import '../../../../core/design/app_spacing.dart';
+import '../../data/services/repair_label_pdf_service.dart';
 import '../../../../core/design/app_typography.dart';
 import '../../../../core/design/format.dart';
 import '../../../../core/design/widgets/app_button.dart';
@@ -131,6 +133,13 @@ class _HeaderCard extends StatelessWidget {
             children: [
               Expanded(
                 child: Text(job.jobNumber, style: AppTypography.title2),
+              ),
+              IconButton(
+                icon: const Icon(Icons.qr_code_2, color: AppColors.accent),
+                tooltip: 'Print device label',
+                onPressed: () => Printing.layoutPdf(
+                  onLayout: (_) => RepairLabelPdfService().generate(job),
+                ),
               ),
               RepairStatusBadge(status: job.status),
             ],

@@ -33,6 +33,16 @@ class RepairKanbanPage extends ConsumerWidget {
         surfaceTintColor: AppColors.background,
         title: Text('Repairs', style: AppTypography.headline),
         actions: [
+          IconButton(
+            icon: const Icon(Icons.people_outline, color: AppColors.accent),
+            tooltip: 'Technician workload',
+            onPressed: () => context.push('/repair/workload'),
+          ),
+          IconButton(
+            icon: const Icon(Icons.history, color: AppColors.accent),
+            tooltip: 'History',
+            onPressed: () => context.push('/repair/history'),
+          ),
           if (techs.isNotEmpty)
             PopupMenuButton<String?>(
               icon: const Icon(Icons.person_search, color: AppColors.accent),

@@ -40,6 +40,16 @@ class RepairRemoteDataSource {
     return q.order('created_at', ascending: false);
   }
 
+  /// Delivered + cancelled jobs for the history view (most recent first).
+  Future<List<Map<String, dynamic>>> loadClosedRepairJobs() async {
+    return _client
+        .from('repair_jobs')
+        .select(_jobCols)
+        .isFilter('deleted_at', null)
+        .inFilter('status', ['DELIVERED', 'CANCELLED'])
+        .order('created_at', ascending: false);
+  }
+
   Future<Map<String, dynamic>> loadRepairJob(String id) async {
     return _client.from('repair_jobs').select(_jobCols).eq('id', id).single();
   }
