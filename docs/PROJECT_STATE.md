@@ -108,8 +108,9 @@ migration reporting_materialized_views: 6 matviews refreshed CONCURRENTLY by fn_
 idx each): mv_daily_sales_summary (fan-out FIXED, gate-proven revenue == raw per-invoice sum), mv_inventory_valuation
 (canonical warehouse_id IS NULL, 1 row/product), mv_account_balances (ledger, keeps branch_id), mv_customer_aging +
 mv_supplier_aging (mirror live *_aging buckets), mv_product_performance. Not RLS-capable → raw select revoked, reads
-via definer RPCs. NEXT: read RPCs/wrapper views, pg_cron refresh, report_schedules/analytics_events/ai_recommendations
-tables, Flutter reporting surface.
+via definer RPCs. Drilldowns (reporting_drilldowns): drilldown_sales LIVE + leak-proven; low_stock/receivables/
+account/product stubbed (comment) — deferred. NEXT: remaining drilldowns, read RPCs/wrapper views, pg_cron refresh,
+report_schedules/analytics_events/ai_recommendations tables, Flutter reporting surface.
 
 ## Purchasing — COMPLETE (back end + Flutter)
 
