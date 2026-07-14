@@ -44,6 +44,10 @@ class PayrollItem {
   final double netSalary;
   final PayrollItemStatus status;
 
+  /// Raw component breakdowns (component → amount), for the detail + payslip.
+  final Map<String, double> allowances;
+  final Map<String, double> deductions;
+
   /// Display-only, from the embedded `employees(name)` join on load.
   final String? employeeName;
 
@@ -58,6 +62,8 @@ class PayrollItem {
     required this.totalDeductions,
     required this.netSalary,
     required this.status,
+    this.allowances = const {},
+    this.deductions = const {},
     this.employeeName,
   });
 }
