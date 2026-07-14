@@ -1,15 +1,72 @@
 // Unified outbound sender. Drains PENDING rows from notifications (non-IN_APP),
-// communication_logs, and report_deliveries to Twilio (SMS/WhatsApp) + SendGrid (email),
-// marking each SENT or FAILED. Service-role, all tenants — guarded by the secret key
+// communication_logs, and report_deliveries to Twilio (SMS/WhatsApp) + SendGrid (email)
+// + FCM (PUSH, fanned out to device_tokens), marking each SENT or FAILED.
+// Service-role, all tenants — guarded by the secret key
 // (auth:["secret"]), so only the cron/scheduler (bearer = service key) can trigger it.
 //
 // Deploy:  supabase functions deploy notification-sender
 // Secrets: supabase secrets set TWILIO_SID=... TWILIO_AUTH=... TWILIO_FROM=... \
-//                               TWILIO_WHATSAPP_FROM=... SENDGRID_KEY=... FROM_EMAIL=...
+//            TWILIO_WHATSAPP_FROM=... SENDGRID_KEY=... FROM_EMAIL=... \
+//            FCM_SERVICE_ACCOUNT='<firebase service-account JSON>'
 import "@supabase/functions-js/edge-runtime.d.ts";
 import { withSupabase } from "@supabase/server";
 
 const BATCH = 100;
+
+// --- FCM v1 push (OAuth token minted from the service-account JSON) --------------
+function b64url(bytes: Uint8Array): string {
+  return btoa(String.fromCharCode(...bytes)).replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/, "");
+}
+
+let fcmCache: { token: string; exp: number; projectId: string } | null = null;
+
+async function fcmAuth(): Promise<{ token: string; projectId: string }> {
+  const now = Math.floor(Date.now() / 1000);
+  if (fcmCache && fcmCache.exp - 60 > now) return fcmCache;
+  const raw = Deno.env.get("FCM_SERVICE_ACCOUNT");
+  if (!raw) throw new Error("fcm key unset");
+  const sa = JSON.parse(raw); // { client_email, private_key, project_id }
+  const header = b64url(new TextEncoder().encode(JSON.stringify({ alg: "RS256", typ: "JWT" })));
+  const claims = b64url(new TextEncoder().encode(JSON.stringify({
+    iss: sa.client_email,
+    scope: "https://www.googleapis.com/auth/firebase.messaging",
+    aud: "https://oauth2.googleapis.com/token",
+    iat: now, exp: now + 3600,
+  })));
+  const pem = sa.private_key.replace(/-----[^-]+-----/g, "").replace(/\s/g, "");
+  const der = Uint8Array.from(atob(pem), (c) => c.charCodeAt(0));
+  const key = await crypto.subtle.importKey(
+    "pkcs8", der, { name: "RSASSA-PKCS1-v1_5", hash: "SHA-256" }, false, ["sign"],
+  );
+  const sig = new Uint8Array(await crypto.subtle.sign(
+    "RSASSA-PKCS1-v1_5", key, new TextEncoder().encode(`${header}.${claims}`),
+  ));
+  const jwt = `${header}.${claims}.${b64url(sig)}`;
+  const r = await fetch("https://oauth2.googleapis.com/token", {
+    method: "POST",
+    headers: { "Content-Type": "application/x-www-form-urlencoded" },
+    body: new URLSearchParams({
+      grant_type: "urn:ietf:params:oauth:grant-type:jwt-bearer",
+      assertion: jwt,
+    }),
+  });
+  if (!r.ok) throw new Error(`fcm oauth ${r.status}: ${await r.text()}`);
+  const { access_token } = await r.json();
+  fcmCache = { token: access_token, exp: now + 3600, projectId: sa.project_id };
+  return fcmCache;
+}
+
+async function sendPush(token: string, title: string, body: string, actionUrl?: string | null) {
+  const { token: bearer, projectId } = await fcmAuth();
+  const r = await fetch(`https://fcm.googleapis.com/v1/projects/${projectId}/messages:send`, {
+    method: "POST",
+    headers: { Authorization: `Bearer ${bearer}`, "Content-Type": "application/json" },
+    body: JSON.stringify({
+      message: { token, notification: { title, body }, data: actionUrl ? { action_url: actionUrl } : {} },
+    }),
+  });
+  if (!r.ok) throw new Error(`fcm ${r.status}: ${await r.text()}`);
+}
 
 async function sendSms(to: string, body: string, whatsapp = false) {
   const sid = Deno.env.get("TWILIO_SID");
@@ -72,6 +129,24 @@ async function drain(sb: any) {
       const { data: u } = await sb.from("users").select("phone, email").eq("id", n.user_id).single();
       const to = n.channel === "EMAIL" ? u?.email : u?.phone;
       await dispatch(n.channel, to, n.title, n.body);
+      await sb.from("notifications").update({ status: "SENT", sent_at: now() }).eq("id", n.id);
+      sent++;
+    } catch (e) {
+      await sb.from("notifications").update({ status: "FAILED", failed_reason: String(e) }).eq("id", n.id);
+      failed++;
+    }
+  }
+
+  // 1b) PUSH notifications — fan out to the user's active device tokens
+  const { data: pushes } = await sb.from("notifications")
+    .select("id, title, body, user_id, action_url")
+    .eq("channel", "PUSH").eq("status", "PENDING").limit(BATCH);
+  for (const n of pushes ?? []) {
+    try {
+      const { data: toks } = await sb.from("device_tokens")
+        .select("token").eq("user_id", n.user_id).eq("is_active", true);
+      if (!toks?.length) throw new Error("no active device token");
+      for (const t of toks) await sendPush(t.token, n.title, n.body, n.action_url);
       await sb.from("notifications").update({ status: "SENT", sent_at: now() }).eq("id", n.id);
       sent++;
     } catch (e) {
