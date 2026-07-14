@@ -110,8 +110,10 @@ not RLS-capable → raw select revoked, reads via definer RPCs. Drilldowns (repo
 LIVE + leak-proven; 4 siblings stubbed. Scheduling (reporting_schedules + deliveries_fix): upsert/run_due (pg_cron
 */15) queue PENDING report_deliveries rows (old communication_logs target NOT-NULL-broke → fixed); email SEND = M11
 dep. Analytics (analytics_events): immutable partitioned table + gin, RLS read-own/definer-write, capture gate-proven;
-FLAG no partition helper → all rows in default partition. NEXT: remaining drilldowns, read RPCs/wrapper views,
-ai_recommendations, partition helper, M11 sender, Flutter reporting surface.
+FLAG no partition helper → all rows in default partition. AI recs (ai_recommendations): RLS read-own/definer-write;
+generate_reorder_recommendations rules-based off below_reorder (idempotent, gate-proven) + act_on_recommendation
+accept/dismiss; ML/other types deferred. NEXT: remaining drilldowns, read RPCs/wrapper views, partition helper,
+M11 sender, Flutter reporting surface.
 
 ## Purchasing — COMPLETE (back end + Flutter)
 
