@@ -104,15 +104,14 @@ pl_snapshot from mv_account_balances. Deferred → M08: drilldowns, scheduled/em
 Flutter surfacing of the 4 new KPIs.
 
 ## M08 Reporting MVs — LIVE (matview layer)
-migration reporting_materialized_views: 6 matviews refreshed CONCURRENTLY by fn_refresh_materialized_views (unique
-idx each): mv_daily_sales_summary (fan-out FIXED, gate-proven revenue == raw per-invoice sum), mv_inventory_valuation
-(canonical warehouse_id IS NULL, 1 row/product), mv_account_balances (ledger, keeps branch_id), mv_customer_aging +
-mv_supplier_aging (mirror live *_aging buckets), mv_product_performance. Not RLS-capable → raw select revoked, reads
-via definer RPCs. Drilldowns (reporting_drilldowns): drilldown_sales LIVE + leak-proven; low_stock/receivables/
-account/product stubbed (comment) — deferred. Scheduling (reporting_schedules + deliveries_fix): report_schedules
-+ upsert/run_due (pg_cron */15) queue PENDING rows into report_deliveries (dedicated table; runner's old
-communication_logs target failed on NOT NULL customer_id — fixed); email SEND = M11 dep. NEXT: remaining drilldowns,
-read RPCs/wrapper views, analytics_events/ai_recommendations tables, M11 email sender, Flutter reporting surface.
+reporting_materialized_views: 6 matviews (mv_daily_sales_summary [fan-out FIXED, gate-proven], mv_inventory_valuation
+[canonical, 1 row/product], mv_account_balances, mv_customer_aging/mv_supplier_aging [mirror *_aging], mv_product_
+performance) refreshed CONCURRENTLY by fn_refresh_materialized_views. Not RLS-capable → raw select revoked, reads via
+definer RPCs. Drilldowns (reporting_drilldowns): drilldown_sales LIVE + leak-proven; 4 siblings stubbed — deferred.
+Scheduling (reporting_schedules + deliveries_fix): report_schedules + upsert/run_due (pg_cron */15) queue PENDING
+rows into report_deliveries (runner's old communication_logs target failed on NOT NULL customer_id — fixed); email
+SEND = M11 dep. NEXT: remaining drilldowns, read RPCs/wrapper views, analytics_events/ai_recommendations, M11 sender,
+Flutter reporting surface.
 
 ## Purchasing — COMPLETE (back end + Flutter)
 
