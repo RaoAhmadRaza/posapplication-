@@ -109,8 +109,10 @@ idx each): mv_daily_sales_summary (fan-out FIXED, gate-proven revenue == raw per
 (canonical warehouse_id IS NULL, 1 row/product), mv_account_balances (ledger, keeps branch_id), mv_customer_aging +
 mv_supplier_aging (mirror live *_aging buckets), mv_product_performance. Not RLS-capable → raw select revoked, reads
 via definer RPCs. Drilldowns (reporting_drilldowns): drilldown_sales LIVE + leak-proven; low_stock/receivables/
-account/product stubbed (comment) — deferred. NEXT: remaining drilldowns, read RPCs/wrapper views, pg_cron refresh,
-report_schedules/analytics_events/ai_recommendations tables, Flutter reporting surface.
+account/product stubbed (comment) — deferred. Scheduling (reporting_schedules + deliveries_fix): report_schedules
++ upsert/run_due (pg_cron */15) queue PENDING rows into report_deliveries (dedicated table; runner's old
+communication_logs target failed on NOT NULL customer_id — fixed); email SEND = M11 dep. NEXT: remaining drilldowns,
+read RPCs/wrapper views, analytics_events/ai_recommendations tables, M11 email sender, Flutter reporting surface.
 
 ## Purchasing — COMPLETE (back end + Flutter)
 
