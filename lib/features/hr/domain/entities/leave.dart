@@ -14,6 +14,9 @@ class Leave {
   final String? reason;
   final String? rejectionReason;
 
+  /// Display-only, from the embedded `employees(name)` join on load.
+  final String? employeeName;
+
   const Leave({
     required this.id,
     required this.tenantId,
@@ -25,5 +28,8 @@ class Leave {
     required this.status,
     this.reason,
     this.rejectionReason,
+    this.employeeName,
   });
+
+  bool get isPending => status == LeaveStatus.pending;
 }
