@@ -22,7 +22,9 @@ import 'features/auth/presentation/pages/security_logs_screen.dart';
 import 'features/auth/presentation/pages/sessions_screen.dart';
 import 'features/auth/presentation/pages/mfa_challenge_screen.dart';
 import 'features/auth/presentation/pages/mfa_enroll_screen.dart';
-import 'features/auth/presentation/pages/dashboard_page.dart';
+import 'features/dashboard/presentation/pages/dashboard_page.dart';
+import 'features/dashboard/presentation/pages/drilldown_page.dart';
+import 'features/dashboard/domain/entities/drilldown.dart';
 import 'features/inventory/presentation/pages/inventory_hub_page.dart';
 import 'features/inventory/presentation/pages/categories_page.dart';
 import 'features/inventory/presentation/pages/category_form_page.dart';
@@ -580,6 +582,13 @@ final appRouter = GoRouter(
       path: '/accounting/journal/:id',
       builder: (context, state) =>
           JournalEntryDetailPage(entryId: state.pathParameters['id']!),
+    ),
+    GoRoute(
+      path: '/dashboard/drilldown',
+      builder: (context, state) {
+        final nav = state.extra as ({DrilldownArgs args, String title});
+        return DrilldownPage(args: nav.args, title: nav.title);
+      },
     ),
     GoRoute(
       path: '/accounting/vouchers',

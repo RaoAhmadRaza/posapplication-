@@ -31,6 +31,10 @@ class DashboardSummary {
   final List<RecentSale> recentSales;
   final List<TrendPoint> salesTrend;
   final Map<String, double> paymentBreakdown;
+  final double payablesTotal;
+  final double cashBalance;
+  final double bankBalance;
+  final double plSnapshot;
 
   const DashboardSummary({
     required this.todaySales,
@@ -42,5 +46,9 @@ class DashboardSummary {
     required this.recentSales,
     required this.salesTrend,
     required this.paymentBreakdown,
+    required this.payablesTotal,
+    required this.cashBalance,
+    required this.bankBalance,
+    required this.plSnapshot,
   });
 }

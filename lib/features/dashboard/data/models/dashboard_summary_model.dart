@@ -45,6 +45,10 @@ class DashboardSummaryModel {
       recentSales: recentSales,
       salesTrend: salesTrend,
       paymentBreakdown: breakdown,
+      payablesTotal: double.tryParse(json['payables_total'].toString()) ?? 0,
+      cashBalance: double.tryParse(json['cash_balance'].toString()) ?? 0,
+      bankBalance: double.tryParse(json['bank_balance'].toString()) ?? 0,
+      plSnapshot: double.tryParse(json['pl_snapshot'].toString()) ?? 0,
     );
   }
 }

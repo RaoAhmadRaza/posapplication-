@@ -12,10 +12,23 @@ import '../../../../core/design/widgets/app_button.dart';
 import '../../../../core/design/widgets/app_inline_banner.dart';
 import '../../../../core/supabase.dart';
 import '../../../../core/widgets/permission_gate.dart';
-import '../controllers/permission_controller.dart';
-import '../../../dashboard/presentation/controllers/dashboard_controller.dart';
-import '../../../dashboard/domain/entities/dashboard_summary.dart';
-import '../controllers/profile_controller.dart';
+import '../../../auth/presentation/controllers/branch_controller.dart';
+import '../../../auth/presentation/controllers/permission_controller.dart';
+import '../controllers/dashboard_controller.dart';
+import '../controllers/kpi_layout_controller.dart';
+import '../../domain/entities/dashboard_summary.dart';
+import '../../domain/entities/drilldown.dart';
+import '../../../auth/presentation/controllers/profile_controller.dart';
+
+/// Whether the KPI grid is in "edit layout" mode (per-session UI toggle).
+final dashboardEditingProvider =
+    NotifierProvider<DashboardEditing, bool>(DashboardEditing.new);
+
+class DashboardEditing extends Notifier<bool> {
+  @override
+  bool build() => false;
+  void toggle() => state = !state;
+}
 
 class DashboardPage extends ConsumerWidget {
   const DashboardPage({super.key});
@@ -85,6 +98,21 @@ class DashboardPage extends ConsumerWidget {
         surfaceTintColor: AppColors.background,
         title: Text('Dashboard', style: AppTypography.largeTitle),
         actions: [
+          Consumer(
+            builder: (context, ref, _) {
+              final editing = ref.watch(dashboardEditingProvider);
+              return IconButton(
+                icon: Icon(
+                  editing ? Icons.check : Icons.tune,
+                  color: AppColors.accent,
+                  size: 22,
+                ),
+                onPressed: () =>
+                    ref.read(dashboardEditingProvider.notifier).toggle(),
+                tooltip: editing ? 'Done' : 'Edit layout',
+              );
+            },
+          ),
           IconButton(
             icon: const Icon(Icons.refresh, color: AppColors.accent, size: 22),
             onPressed: () => ref.read(dashboardProvider.notifier).refresh(),
@@ -251,7 +279,7 @@ class _PaymentPieChart extends StatelessWidget {
                   child: PieChart(
                     PieChartData(
                       pieTouchData: PieTouchData(
-                        touchCallback: (_, __) {},
+                        touchCallback: (_, _) {},
                       ),
                       sections: List.generate(entries.length, (i) {
                         final pct = total > 0 ? entries[i].value / total * 100 : 0.0;
@@ -358,37 +386,176 @@ class _WelcomeCard extends StatelessWidget {
   }
 }
 
-class _KpiGrid extends StatelessWidget {
+/// Drilldown navigation payload passed to the /dashboard/drilldown route as `extra`.
+typedef DrilldownNav = ({DrilldownArgs args, String title});
+
+/// One KPI descriptor: label/icon/color + value extractor + optional drilldown builder.
+class _KpiDesc {
+  final String label;
+  final IconData icon;
+  final Color color;
+  final bool isCount;
+  final double Function(DashboardSummary) value;
+  final DrilldownNav? Function(String? branchId, String date)? drill;
+  _KpiDesc(this.label, this.icon, this.color, this.value,
+      {this.isCount = false, this.drill});
+}
+
+final _kpiDescriptors = <String, _KpiDesc>{
+  'today_sales': _KpiDesc("Today's Sales", Icons.shopping_cart, AppColors.accent,
+      (s) => s.todaySales,
+      drill: (b, d) => (
+            args: DrilldownArgs(DrilldownType.sales, branchId: b, date: d),
+            title: "Today's Sales"
+          )),
+  'today_txns': _KpiDesc('Transactions', Icons.receipt_long, AppColors.success,
+      (s) => s.todayTxns.toDouble(),
+      isCount: true),
+  'today_profit': _KpiDesc(
+      "Today's Profit", Icons.trending_up, AppColors.success, (s) => s.todayProfit),
+  'receivables': _KpiDesc('Receivables', Icons.account_balance_wallet,
+      AppColors.warning, (s) => s.receivables,
+      drill: (b, d) => (
+            args: DrilldownArgs(DrilldownType.receivables, branchId: b),
+            title: 'Receivables'
+          )),
+  'stock_value': _KpiDesc(
+      'Stock Value', Icons.inventory_2, AppColors.accent, (s) => s.stockValue),
+  'low_stock': _KpiDesc('Low Stock', Icons.warning_amber, AppColors.destructive,
+      (s) => s.lowStockCount.toDouble(),
+      isCount: true,
+      drill: (b, d) => (
+            args: DrilldownArgs(DrilldownType.lowStock, branchId: b),
+            title: 'Low Stock'
+          )),
+  'payables': _KpiDesc('Payables', Icons.payments, AppColors.destructive,
+      (s) => s.payablesTotal),
+  'cash': _KpiDesc('Cash', Icons.savings, AppColors.success, (s) => s.cashBalance,
+      drill: (b, d) => (
+            args: DrilldownArgs(DrilldownType.account, entityId: '1000'),
+            title: 'Cash Ledger'
+          )),
+  'bank': _KpiDesc(
+      'Bank', Icons.account_balance, AppColors.accent, (s) => s.bankBalance,
+      drill: (b, d) => (
+            args: DrilldownArgs(DrilldownType.account, entityId: '1010'),
+            title: 'Bank Ledger'
+          )),
+  'pl': _KpiDesc('P&L', Icons.show_chart, AppColors.success, (s) => s.plSnapshot),
+};
+
+class _KpiGrid extends ConsumerWidget {
   const _KpiGrid({required this.summary});
   final DashboardSummary summary;
 
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context, WidgetRef ref) {
+    final prefs = ref.watch(kpiLayoutProvider).value ??
+        kpiKeysDefault.map((k) => KpiPref(k, true)).toList();
+    final editing = ref.watch(dashboardEditingProvider);
+    return editing ? _buildEditList(ref, prefs) : _buildGrid(context, ref, prefs);
+  }
+
+  Widget _buildGrid(BuildContext context, WidgetRef ref, List<KpiPref> prefs) {
+    final branchId = ref.read(currentBranchProvider)?.id;
+    final date = DateTime.now().toIso8601String().substring(0, 10);
     return Wrap(
       spacing: AppSpacing.md,
       runSpacing: AppSpacing.md,
       children: [
-        _KpiCard(label: 'Today\'s Sales', value: summary.todaySales, icon: Icons.shopping_cart, color: AppColors.accent),
-        _KpiCard(label: 'Transactions', value: summary.todayTxns.toDouble(), icon: Icons.receipt_long, color: AppColors.success),
-        _KpiCard(label: 'Today\'s Profit', value: summary.todayProfit, icon: Icons.trending_up, color: AppColors.success),
-        InkWell(
-          onTap: () => context.push('/receivables'),
-          borderRadius: BorderRadius.circular(AppRadius.card),
-          child: _KpiCard(label: 'Receivables', value: summary.receivables, icon: Icons.account_balance_wallet, color: AppColors.warning),
-        ),
-        _KpiCard(label: 'Stock Value', value: summary.stockValue, icon: Icons.inventory_2, color: AppColors.accent),
-        InkWell(
-          onTap: () => context.push('/inventory/notifications'),
-          borderRadius: BorderRadius.circular(AppRadius.card),
-          child: _KpiCard(
-            label: 'Low Stock',
-            value: summary.lowStockCount.toDouble(),
-            icon: Icons.warning_amber,
-            color: AppColors.destructive,
-            isCount: true,
-          ),
-        ),
+        for (final p in prefs)
+          if (p.visible && _kpiDescriptors[p.key] != null)
+            _tappableCard(context, _kpiDescriptors[p.key]!, branchId, date),
       ],
+    );
+  }
+
+  Widget _tappableCard(
+      BuildContext context, _KpiDesc d, String? branchId, String date) {
+    final card = _KpiCard(
+      label: d.label,
+      value: d.value(summary),
+      icon: d.icon,
+      color: d.color,
+      isCount: d.isCount,
+    );
+    final nav = d.drill?.call(branchId, date);
+    if (nav == null) return card;
+    return InkWell(
+      onTap: () => context.push('/dashboard/drilldown', extra: nav),
+      borderRadius: BorderRadius.circular(AppRadius.card),
+      child: card,
+    );
+  }
+
+  Widget _buildEditList(WidgetRef ref, List<KpiPref> prefs) {
+    final ctrl = ref.read(kpiLayoutProvider.notifier);
+    return Column(
+      children: [
+        for (int i = 0; i < prefs.length; i++)
+          _EditRow(
+            label: _kpiDescriptors[prefs[i].key]?.label ?? prefs[i].key,
+            visible: prefs[i].visible,
+            onToggle: () => ctrl.toggle(prefs[i].key),
+            onUp: i > 0 ? () => ctrl.move(i, i - 1) : null,
+            onDown: i < prefs.length - 1 ? () => ctrl.move(i, i + 1) : null,
+          ),
+      ],
+    );
+  }
+}
+
+class _EditRow extends StatelessWidget {
+  const _EditRow({
+    required this.label,
+    required this.visible,
+    required this.onToggle,
+    required this.onUp,
+    required this.onDown,
+  });
+
+  final String label;
+  final bool visible;
+  final VoidCallback onToggle;
+  final VoidCallback? onUp;
+  final VoidCallback? onDown;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      margin: const EdgeInsets.only(bottom: AppSpacing.sm),
+      padding: const EdgeInsets.symmetric(
+          horizontal: AppSpacing.base, vertical: AppSpacing.xs),
+      decoration: BoxDecoration(
+        color: AppColors.background,
+        borderRadius: BorderRadius.circular(AppRadius.card),
+        border: Border.all(color: AppColors.separator, width: 0.5),
+      ),
+      child: Row(
+        children: [
+          Expanded(
+            child: Text(
+              label,
+              style: AppTypography.headline.copyWith(
+                color: visible ? AppColors.textPrimary : AppColors.textHint,
+              ),
+            ),
+          ),
+          IconButton(
+            icon: const Icon(Icons.arrow_upward, size: 18),
+            color: AppColors.accent,
+            onPressed: onUp,
+            tooltip: 'Move up',
+          ),
+          IconButton(
+            icon: const Icon(Icons.arrow_downward, size: 18),
+            color: AppColors.accent,
+            onPressed: onDown,
+            tooltip: 'Move down',
+          ),
+          Switch.adaptive(value: visible, onChanged: (_) => onToggle()),
+        ],
+      ),
     );
   }
 }

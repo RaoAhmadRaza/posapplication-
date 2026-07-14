@@ -3,10 +3,12 @@ import 'dart:io';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import '../../domain/entities/dashboard_summary.dart';
+import '../../domain/entities/drilldown.dart';
 import '../../domain/failures/dashboard_failure.dart';
 import '../../domain/repositories/dashboard_repository.dart';
 import '../datasources/dashboard_remote_datasource.dart';
 import '../models/dashboard_summary_model.dart';
+import '../models/drilldown_model.dart';
 
 final dashboardRepositoryProvider = Provider<DashboardRepository>((ref) {
   return DashboardRepositoryImpl(ref.read(dashboardRemoteDataSourceProvider));
@@ -51,7 +53,28 @@ class DashboardRepositoryImpl implements DashboardRepository {
         recentSales: [],
         salesTrend: [],
         paymentBreakdown: {},
+        payablesTotal: 0,
+        cashBalance: 0,
+        bankBalance: 0,
+        plSnapshot: 0,
       ), _mapError(e));
+    }
+  }
+
+  @override
+  Future<(List<DrilldownRow>, DashboardFailure?)> loadDrilldown(
+    DrilldownArgs args,
+  ) async {
+    try {
+      final rows = await _ds.drilldown(
+        DrilldownModel.rpcName(args.type),
+        DrilldownModel.params(args),
+      );
+      final mapped =
+          rows.map((r) => DrilldownModel.row(args.type, r)).toList();
+      return (mapped, null);
+    } catch (e) {
+      return (<DrilldownRow>[], _mapError(e));
     }
   }
 }

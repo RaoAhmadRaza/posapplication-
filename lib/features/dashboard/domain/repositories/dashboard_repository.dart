@@ -1,4 +1,5 @@
 import '../../domain/entities/dashboard_summary.dart';
+import '../../domain/entities/drilldown.dart';
 import '../failures/dashboard_failure.dart';
 
 abstract class DashboardRepository {
@@ -7,4 +8,8 @@ abstract class DashboardRepository {
     String? from,
     String? to,
   });
+
+  Future<(List<DrilldownRow>, DashboardFailure?)> loadDrilldown(
+    DrilldownArgs args,
+  );
 }

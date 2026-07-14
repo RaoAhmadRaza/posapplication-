@@ -23,4 +23,12 @@ class DashboardRemoteDataSource {
     });
     return result as Map<String, dynamic>;
   }
+
+  Future<List<Map<String, dynamic>>> drilldown(
+    String rpc,
+    Map<String, dynamic> params,
+  ) async {
+    final result = await _client.rpc(rpc, params: params);
+    return (result as List<dynamic>).cast<Map<String, dynamic>>();
+  }
 }
