@@ -110,8 +110,10 @@ performance) refreshed CONCURRENTLY by fn_refresh_materialized_views. Not RLS-ca
 definer RPCs. Drilldowns (reporting_drilldowns): drilldown_sales LIVE + leak-proven; 4 siblings stubbed — deferred.
 Scheduling (reporting_schedules + deliveries_fix): report_schedules + upsert/run_due (pg_cron */15) queue PENDING
 rows into report_deliveries (runner's old communication_logs target failed on NOT NULL customer_id — fixed); email
-SEND = M11 dep. NEXT: remaining drilldowns, read RPCs/wrapper views, analytics_events/ai_recommendations, M11 sender,
-Flutter reporting surface.
+SEND = M11 dep. Analytics (analytics_events): immutable partitioned table (range/event_date) + gin, RLS read-own /
+definer-write; capture_analytics_event gate-proven; broad capture Phase-2. FLAG: no partition-creation helper yet →
+all rows in default partition. NEXT: remaining drilldowns, read RPCs/wrapper views, ai_recommendations, partition
+helper, M11 sender, Flutter reporting surface.
 
 ## Purchasing — COMPLETE (back end + Flutter)
 
