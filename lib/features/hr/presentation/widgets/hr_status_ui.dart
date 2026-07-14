@@ -4,6 +4,7 @@ import '../../../../core/design/app_typography.dart';
 import '../../domain/entities/attendance.dart';
 import '../../domain/entities/employee.dart';
 import '../../domain/entities/leave.dart';
+import '../../domain/entities/payroll.dart';
 
 const employeeStatusLabels = {
   EmployeeStatus.active: 'Active',
@@ -77,6 +78,42 @@ Color leaveStatusColor(LeaveStatus s) => switch (s) {
       LeaveStatus.rejected => AppColors.destructive,
       LeaveStatus.cancelled => AppColors.textMuted,
     };
+
+const payrollStatusLabels = {
+  PayrollStatus.draft: 'Draft',
+  PayrollStatus.calculated: 'Calculated',
+  PayrollStatus.approved: 'Approved',
+  PayrollStatus.disbursed: 'Disbursed',
+  PayrollStatus.cancelled: 'Cancelled',
+};
+
+Color payrollStatusColor(PayrollStatus s) => switch (s) {
+      PayrollStatus.draft => AppColors.textMuted,
+      PayrollStatus.calculated => AppColors.accent,
+      PayrollStatus.approved => AppColors.warning,
+      PayrollStatus.disbursed => AppColors.success,
+      PayrollStatus.cancelled => AppColors.destructive,
+    };
+
+class HrStatusBadge extends StatelessWidget {
+  const HrStatusBadge({super.key, required this.label, required this.color});
+  final String label;
+  final Color color;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+      decoration: BoxDecoration(
+        color: color.withValues(alpha: 0.12),
+        borderRadius: BorderRadius.circular(999),
+      ),
+      child: Text(label,
+          style: AppTypography.caption
+              .copyWith(color: color, fontWeight: FontWeight.w600)),
+    );
+  }
+}
 
 class EmployeeStatusBadge extends StatelessWidget {
   const EmployeeStatusBadge({super.key, required this.status});
