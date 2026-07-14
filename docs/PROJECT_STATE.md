@@ -97,12 +97,11 @@ delivery_orders, loyalty, tax_rules/payment_methods tables, customer_groups, pri
 
 ## Dashboard V1 — COMPLETE
 
-Full clean-arch (data+domain+controller in features/dashboard/, page in features/auth/pages/dashboard_page.dart).
-UI: PermissionGate(reports:read), pull-to-refresh, KPI grid (6 cards: Sales/Txns/Profit/Receivables/Stock
-Value/Low Stock), recent sales list (→ invoice detail), quick-launch (matrix-gated), fl_chart 7-day bar + payment
-pie. Controller propagates failure as AsyncError (no zero-fill). dashboard_summary extended (dashboard_kpis_extend)
-with payables_total + cash/bank balances + pl_snapshot from mv_account_balances. Deferred → M08: drilldowns,
-scheduled/email reports, configurable KPI grid, Flutter surfacing of the 4 new KPIs.
+Clean-arch (data+domain+controller in features/dashboard/, page in features/auth/pages/dashboard_page.dart). UI:
+PermissionGate(reports:read), pull-to-refresh, 6-card KPI grid, recent sales, matrix-gated quick-launch, fl_chart
+7-day bar + payment pie. dashboard_summary extended (dashboard_kpis_extend): + payables_total, cash/bank balances,
+pl_snapshot from mv_account_balances. Deferred → M08: drilldowns, scheduled/email reports, KPI-grid config,
+Flutter surfacing of the 4 new KPIs.
 
 ## M08 Reporting MVs — LIVE (matview layer)
 migration reporting_materialized_views: 6 matviews refreshed CONCURRENTLY by fn_refresh_materialized_views
