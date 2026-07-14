@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:go_router/go_router.dart';
 
 import '../../../../core/design/app_colors.dart';
 import '../../../../core/design/app_radius.dart';
@@ -7,6 +8,7 @@ import '../../../../core/design/app_spacing.dart';
 import '../../../../core/design/app_typography.dart';
 import '../../../../core/design/widgets/app_card.dart';
 import '../../../../core/design/widgets/app_inline_banner.dart';
+import '../../../../core/widgets/permission_gate.dart';
 import '../../domain/entities/notification.dart';
 import '../controllers/notifications_controller.dart';
 
@@ -67,6 +69,38 @@ class NotificationSettingsPage extends ConsumerWidget {
               vertical: AppSpacing.md,
             ),
             children: [
+              const PermissionGate(
+                module: 'notifications',
+                action: 'read',
+                child: _AdminLink(
+                  icon: Icons.history,
+                  label: 'Communication logs',
+                  route: '/notifications/logs',
+                ),
+              ),
+              const PermissionGate(
+                module: 'notifications',
+                action: 'update',
+                child: _AdminLink(
+                  icon: Icons.description_outlined,
+                  label: 'Message templates',
+                  route: '/notifications/templates',
+                ),
+              ),
+              const PermissionGate(
+                module: 'notifications',
+                action: 'create',
+                child: _AdminLink(
+                  icon: Icons.campaign_outlined,
+                  label: 'Bulk message',
+                  route: '/notifications/bulk',
+                ),
+              ),
+              const SizedBox(height: AppSpacing.lg),
+              Text('Per-event channels',
+                  style: AppTypography.footnote
+                      .copyWith(color: AppColors.textMuted)),
+              const SizedBox(height: AppSpacing.sm),
               for (final entry in _eventTypes.entries)
                 Padding(
                   padding: const EdgeInsets.only(bottom: AppSpacing.md),
@@ -81,6 +115,38 @@ class NotificationSettingsPage extends ConsumerWidget {
             ],
           );
         },
+      ),
+    );
+  }
+}
+
+class _AdminLink extends StatelessWidget {
+  const _AdminLink({required this.icon, required this.label, required this.route});
+
+  final IconData icon;
+  final String label;
+  final String route;
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.only(bottom: AppSpacing.md),
+      child: AppCard(
+        child: InkWell(
+          borderRadius: BorderRadius.circular(AppRadius.card),
+          onTap: () => context.push(route),
+          child: Padding(
+            padding: const EdgeInsets.all(AppSpacing.lg),
+            child: Row(
+              children: [
+                Icon(icon, color: AppColors.accent, size: 22),
+                const SizedBox(width: AppSpacing.md),
+                Expanded(child: Text(label, style: AppTypography.callout)),
+                Icon(Icons.chevron_right, size: 18, color: AppColors.separator),
+              ],
+            ),
+          ),
+        ),
       ),
     );
   }

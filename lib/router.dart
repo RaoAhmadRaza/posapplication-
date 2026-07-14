@@ -120,6 +120,10 @@ import 'features/inventory/presentation/pages/import_products_page.dart';
 import 'features/migration_import/presentation/pages/migration_import_page.dart';
 import 'features/notifications/presentation/pages/notifications_page.dart';
 import 'features/notifications/presentation/pages/notification_settings_page.dart';
+import 'features/notifications/presentation/pages/templates_admin_page.dart';
+import 'features/notifications/presentation/pages/bulk_communication_page.dart';
+import 'features/notifications/presentation/pages/communication_logs_page.dart';
+import 'core/widgets/permission_gate.dart';
 import 'features/sales/presentation/pages/pos_terminal_page.dart';
 import 'features/sales/presentation/pages/open_session_page.dart';
 import 'features/sales/presentation/pages/close_session_page.dart';
@@ -439,6 +443,33 @@ final appRouter = GoRouter(
     GoRoute(
       path: '/notifications/settings',
       builder: (context, state) => const NotificationSettingsPage(),
+    ),
+    GoRoute(
+      path: '/notifications/templates',
+      builder: (context, state) => const PermissionGate(
+        module: 'notifications',
+        action: 'update',
+        fallback: _NoAccessScaffold(),
+        child: TemplatesAdminPage(),
+      ),
+    ),
+    GoRoute(
+      path: '/notifications/bulk',
+      builder: (context, state) => const PermissionGate(
+        module: 'notifications',
+        action: 'create',
+        fallback: _NoAccessScaffold(),
+        child: BulkCommunicationPage(),
+      ),
+    ),
+    GoRoute(
+      path: '/notifications/logs',
+      builder: (context, state) => const PermissionGate(
+        module: 'notifications',
+        action: 'read',
+        fallback: _NoAccessScaffold(),
+        child: CommunicationLogsPage(),
+      ),
     ),
     // Legacy entry — kept working, redirects to the canonical route.
     GoRoute(
@@ -889,3 +920,14 @@ final appRouter = GoRouter(
     ),
   ],
 );
+
+class _NoAccessScaffold extends StatelessWidget {
+  const _NoAccessScaffold();
+
+  @override
+  Widget build(BuildContext context) {
+    return const Scaffold(
+      body: Center(child: Text('No access')),
+    );
+  }
+}
