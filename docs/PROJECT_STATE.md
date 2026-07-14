@@ -67,8 +67,7 @@ expenses/reports + all 6 auto-post money paths) · 2026-07-13 device per-tenant 
 inventory_service_type_guard) + inventory SERVICE non-stock guard.
 
 ## Bugfixes Applied
-Full detail in DECISIONS.md. Headlines: RPC single-row Map parsing; canonical warehouse_id NULL stock;
-per-tenant device fingerprint uniqueness (login-time 42501 fix, 2026-07-13).
+Full detail in DECISIONS.md. Headlines: RPC single-row Map parsing; canonical warehouse_id NULL stock; per-tenant device fingerprint uniqueness (login-time 42501 fix).
 
 ## Peripheral features — COMPLETE (detail in DECISIONS.md)
 Barcode scanning (mobile_scanner, shared scanBarcode/BarcodeScanPage); label printing (pdf/printing/barcode,
@@ -76,9 +75,7 @@ LabelPdfService + LabelPrintPage); notifications (+prefs, trg_low_stock_notify, 
 (bulk_import_products RPC + ImportProductsPage); voice search (speech_to_text mic in products search).
 
 ## Known Issues
-
-- Profile loaded once (no pull-to-refresh)
-- IMEI section not yet integrated into product edit form (SERIALIZED products)
+- Profile loaded once (no pull-to-refresh); IMEI section not yet in product edit form (SERIALIZED)
 
 ## Migration Import — COMPLETE
 `lib/features/migration_import/` clean-arch (reuses InventoryFailure). 4 set-based RPCs
@@ -213,37 +210,40 @@ user-driven. DEFERRED: /repair/:id/edit (no RPC), intake signature, board branch
 
 ## M10 HR & Payroll — COMPLETE (backend H1–H6 + UI H7.1–H7.3)
 Backend (all migrations applied + rolled-back-gate-verified; full per-phase detail in DECISIONS 2026-07-14):
-- H1 foundation: 7 enums, employees + shifts tables, RLS (tenant read / hr-gated writes), NEW `hr` permission
-  module (backfilled ADMINs + trg_seed_hr_perms), CoA seeds 6200 Salary / 2120 Deductions Payable / 1150
-  Employee Advances (5200 stays Warranty Cost). Fix at push: `::account_type_enum` cast (text→enum in VALUES).
+- H1 foundation: 7 enums, employees+shifts tables, RLS (tenant read / hr-gated writes), NEW `hr` perm module
+  (+trg_seed_hr_perms), CoA seeds 6200 Salary / 2120 Deductions Payable / 1150 Employee Advances.
 - H2 lifecycle: create/update(COALESCE)/terminate_employee, upsert_shift (dup code → ERR_CODE_TAKEN).
-- H3 attendance+leaves: mark_attendance (upsert, late/OT vs shift, edit needs reason), apply/decide_leave
-  (approve stamps ON_LEAVE across range).
-- H4 payroll calc: create_payroll_run (unique/period) → calculate_payroll (basic + OT − advance − deductions,
-  net≥0) → approve_payroll_run.
-- H5 disbursement (**8th money path**): disburse_payroll_run posts balanced PAYROLL journal (Dr 6200 / Cr 1150 /
-  Cr 2120 / Cr 1000 net), recovers advances, items PAID.
+- H3 attendance+leaves: mark_attendance (late/OT vs shift, edit needs reason), apply/decide_leave (approve stamps ON_LEAVE).
+- H4 payroll calc: create_payroll_run → calculate_payroll (basic + OT − advance − deductions, net≥0) → approve_payroll_run.
+- H5 disburse (**8th money path**): disburse_payroll_run posts balanced PAYROLL journal (Dr 6200 / Cr 1150/2120/1000), items PAID.
 - H6 salary advances (**9th money path**): disburse_salary_advance (Dr 1150 / Cr 1000), recovered via payroll.
-- Two RPCs shipped a `select post_journal() into uuid` 22P02 bug (jsonb→uuid); both forward-fixed with
-  `->>'journal_entry_id'` (fix_disburse_payroll_je, fix_disburse_advance_je).
+  Both disburse RPCs forward-fixed a `post_journal() into uuid` 22P02 (jsonb→uuid) via `->>'journal_entry_id'`.
 
-H7.1 Employees UI (`lib/features/hr/`, full clean-arch mirror): 7 entities + 7 enums, sealed HrFailure(11),
-ONE HrRemoteDataSource (employee list w/ branch/status/dept + ILIKE, single, shifts) + 4 RPCs, repo→typed
-failures, usecases, EmployeesController + employeeDetailProvider.family + ShiftsController. Pages: EmployeesPage
-(search, status/dept chips, FAB gated hr:create), EmployeeFormPage (create vs edit — code/branch/joining/cnic
-create-only since update_employee omits them), EmployeeProfilePage (4 tabs — Profile live w/ Edit+Terminate
-gated hr:update; Attendance/Leaves/Payroll = coming-soon H7.2/H7.3), ShiftsPage (upsert sheet, time pickers).
-Routes /hr/*; Inventory-hub "HR & Payroll" section gated hr:read.
-H7.2 attendance + leaves UI (additive): +loadAttendance/loadLeaves/loadMyEmployee reads + mark_attendance/
-apply_leave/decide_leave; families attendanceMonthProvider/leavesProvider/branchEmployees/myEmployee. Pages:
-AttendanceGridPage (employees×days grid, colour+letter, month nav, cell→mark sheet, NOTES-required-on-edit →
-ERR_EDIT_REASON_REQUIRED inline), LeavesPage (status chips, Apply hr:create, Approve/Reject hr:approve+reason),
-ClockInOutPage (self clock, MANUAL). Profile Attendance+Leaves tabs wired. Routes /hr/attendance|leaves|clock.
-H7.3 payroll UI (additive): +payroll runs/items/advances reads + create/calculate/approve/disburse_payroll_run
-+ disburse_salary_advance RPCs; PayrollItem +allowances/deductions maps. Providers payrollRuns/payrollRunDetail/
-employeeAdvances + PayrollActions/AdvanceActions. Pages: PayrollRunsPage (New Run = month picker), PayrollRunDetail
-(status-driven single action: DRAFT Calculate hr:create → CALCULATED Approve → APPROVED Disburse hr:approve w/
-confirm[net+1000 Cash] → DISBURSED "View journal" /accounting/journal/:id; non-APPROVED can't disburse). Per-item
-+ print-all PayslipPdfService (Printing.layoutPdf). Give-Advance (disburse_salary_advance) + advances list w/
-recovery bar on Profile Payroll tab. Routes /hr/payroll[/:id]. analyze clean; device tap-through user-driven.
+HR UI (`lib/features/hr/`, full clean-arch; per-slice detail in DECISIONS H7.1–H7.3): 7 entities + 7 enums,
+sealed HrFailure(11), ONE HrRemoteDataSource (all selects + RPCs), repo→typed failures, usecases + controllers.
+H7.1 employees/shifts: EmployeesPage, EmployeeFormPage (create-only code/branch/joining/cnic), EmployeeProfilePage
+(4 tabs), ShiftsPage. H7.2 attendance/leaves: AttendanceGridPage (NOTES-required-on-edit → ERR_EDIT_REASON_REQUIRED),
+LeavesPage (apply/approve/reject), ClockInOutPage; Profile tabs. H7.3 payroll: PayrollRunsPage + PayrollRunDetail
+(status-driven single action DRAFT→CALCULATED→APPROVED→DISBURSED, "View journal"), PayslipPdfService, Give-Advance.
+Routes /hr/*; Inventory-hub "HR & Payroll" gated hr:read. analyze clean.
 Pre-existing gap: handle_new_user seeds no CoA → future tenants lack HR accounts until provisioning is fixed.
+
+## M11 Approvals — Backend (foundation+engine+escalation) + Approval Center + Workflow-config UI
+Foundation `20260714093114_approvals_foundation.sql`: approval_status_enum(6) + approval_workflow_type_enum(8); tables
+approval_workflows/requests/actions §3.17 + indexes (incl uq open-request-per-entity — one PENDING/ESCALATED per entity);
+RLS tenant-read / RPC-only writes; NEW `approvals` perm module (6 actions backfilled to ADMIN + trg_seed_approvals_perms).
+Engine `20260714093553_approvals_engine.sql` (gate-verified rolled-back — detail in DECISIONS): upsert_approval_workflow
+(levels_json validated), request_approval (resolves active workflow by threshold; NULL=always; no match → required:false
+so callers proceed unchanged; idempotent per open entity), act_on_approval (approvals:approve + level required_role
+[ADMIN super-approver]; min_approvers; advances current_level; last→APPROVED, REJECT→REJECTED; one action per actor/level;
+append-only audit), cancel_approval_request (requestor/admin), approval_status helper.
+Escalation `20260714094049_approvals_escalation.sql`: escalate_expired_approvals (PENDING past expires_at → ESCALATED
++ audit; stays open/actionable). Scheduled pg_cron hourly (job approvals_escalation_hourly `0 * * * *`; ext enabled here).
+UI `lib/features/approvals/` (clean-arch mirror of hr/; detail in DECISIONS): ONE ApprovalsRemoteDataSource (open+history
+reads w/ requestor/workflow/actor embeds; act/cancel/request_approval RPCs), typed ApprovalFailure(8), controllers +
+pendingApprovalsCountProvider (hub badge) + approvalDetailProvider.family. Pages: PendingApprovalsPage /approvals,
+ApprovalDetailPage /approvals/:id (level ladder + timeline + entity deep link; Approve/Reject gated approvals:approve, Cancel),
+ApprovalHistoryPage /approvals/history. Inventory-hub "Approvals" gated approvals:read w/ live count. Workflow-config UI
+(gated approvals:update): ApprovalWorkflowsPage /approvals/workflows (by type, active switch) + WorkflowFormPage (type/
+threshold/TTL + levels editor {role dropdown, min_approvers, add/reorder} → upsert_approval_workflow; soft-delete=is_active
+false). analyze clean. NEXT: A5 PO-lifecycle integration (wedge request_approval submit→approve); manual-raise entry point.
