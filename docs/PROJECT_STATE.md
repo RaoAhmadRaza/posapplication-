@@ -58,13 +58,10 @@ number_series (+4 enums, 10 RPCs, all posting through the Slice B ledger). Flutt
 
 ## Database Migrations
 
-Ordered, applied set lives in `supabase/migrations/` (filenames = the index); each migration's rationale
-is logged in DECISIONS.md by date. Module coverage: auth/RBAC (init → auth_full_schema) · catalog + stock
-engine/ops · sales foundation + returns + guards · dashboard · purchasing (PO/GRN/invoice/payment/returns +
-supplier ledger) · customers/suppliers CRM + ledgers · M07 accounting (CoA/journal engine/vouchers/bank/
-expenses/reports + all 6 auto-post money paths) · 2026-07-13 device per-tenant fingerprint fix + M09 repair
-(repair_stock_movement_enum REPAIR_USE, repair_lifecycle_rpcs, repair_parts_consumption, repair_close_invoice,
-inventory_service_type_guard) + inventory SERVICE non-stock guard.
+Ordered, applied set lives in `supabase/migrations/` (filenames = the index); each migration's rationale is
+logged in DECISIONS.md by date. Coverage: auth/RBAC · catalog + stock engine/ops · sales + returns · dashboard ·
+purchasing + supplier ledger · cust/supp CRM + ledgers · M07 accounting (6 auto-post money paths) · M08 reporting
+(MVs/drilldowns/scheduling/analytics/AI recs) · M09 repair · M11 notification templates.
 
 ## Peripheral features — COMPLETE (detail in DECISIONS.md)
 Barcode scanning (mobile_scanner, shared scanBarcode/BarcodeScanPage); label printing (pdf/printing/barcode,
@@ -99,17 +96,18 @@ in shared_preferences (edit-layout toggle; server prefs deferred, DECISION#2 cli
 over drilldown_* RPCs; rows deep-link (invoice→/sales/invoice, product→/inventory/stock, journal→/accounting/journal).
 
 ## M08 Reporting — backend LIVE (DB layer), all gate-proven rolled-back
-- MVs (reporting_materialized_views): 6 matviews (daily_sales [fan-out FIXED], inventory_valuation [canonical],
-  account_balances, customer/supplier_aging, product_performance) refreshed CONCURRENTLY; raw select revoked (definer RPCs).
-- Drilldowns (reporting_drilldowns/_complete/_payables): 6 RPCs leak-proven; ALL 10 dashboard KPIs tappable (stock_value + pl route to existing pages).
+- MVs (reporting_materialized_views): 6 matviews (daily_sales [fan-out FIXED], inventory_valuation [canonical], account_balances, cust/supp_aging, product_performance) refreshed CONCURRENTLY; raw select revoked (definer RPCs).
+- Drilldowns (reporting_drilldowns/_complete/_payables): 6 RPCs leak-proven; ALL 10 dashboard KPIs tappable (stock_value+pl→existing pages).
 - Scheduling (reporting_schedules + deliveries_fix): run_due (pg_cron */15) queues PENDING report_deliveries; SEND = M11 dep.
-- Analytics (analytics_events): immutable partitioned + gin, RLS read-own/definer-write (FLAG: no partition helper). AI recs
-  (ai_recommendations): generate_reorder_recommendations (idempotent) + act_on_recommendation; ML deferred.
-- Reporting UI COMPLETE (features/reporting/ + reporting_read_rpcs): ReportsHubPage /reports (Financial→existing
-  accounting reports) + Inventory/Product-Perf/Cust-Supp-Aging/Trends/Forecasting (fl_chart, definer read RPCs over MVs),
-  ScheduledReports (upsert, reports:export), SmartInsights (ai_recs accept/dismiss + REORDER→Create-PO), PDF/CSV export.
+- Analytics (analytics_events): immutable partitioned+gin, RLS read-own/definer-write (FLAG: no partition helper). AI recs (ai_recommendations): generate_reorder_recommendations (idempotent) + act_on_recommendation; ML deferred.
+- Reporting UI COMPLETE (features/reporting/ + reporting_read_rpcs): ReportsHubPage /reports (Financial→existing accounting reports) + Inventory/Product-Perf/Cust-Supp-Aging/Trends/Forecasting (fl_chart, definer RPCs over MVs), ScheduledReports (upsert, reports:export), SmartInsights (ai_recs accept/dismiss + REORDER→Create-PO), PDF/CSV export.
 - Ops (pg_cron, MANUAL — not in migrations): mv_refresh_15min + report_schedules_runner (*/15) + reorder_daily (06:00) + approvals_escalation_hourly, all active.
-NEXT: analytics_events partition helper, M11 email sender (report_deliveries sit PENDING), analytics/ML depth.
+
+## M11 Notifications — templates + dispatch LIVE, sender NOT built
+- Templates (notifications_templates): sms_templates + email_templates (§3.13) seeded 3+3/tenant, {{placeholder}} convention. NEW 'notifications' perm module (6 grants/ADMIN × 5 tenants). RLS tenant read + notifications:update write. Gate-proven.
+- Dispatch (notifications_dispatch + notify_status_enum_cast_fix): notify() single producer entry — default IN_APP DELIVERED + one PENDING row/extra enabled channel for the sender; render_template({{var}}) / mark_all_notifications_read / unread_notification_count / upsert_notification_preference. Gate-proven rolled-back. (Fix: notify() status CASE was untyped text → 42804 on every call; cast to enum.) Producers migrate to notify() incrementally.
+- Queue tables empty (notifications/communication_logs/report_deliveries = 0 rows); enums live (channel/priority/status). NO sender yet: pg_net/http absent (only pg_cron); no cron drainer; pubspec has no push pkg. In-app UI = NotificationsPage (features/notifications/) reads notifications via /inventory/notifications bell; global inbox + outbound = NOT built.
+NEXT: M11 sender (drain report_deliveries + communication_logs PENDING), notification_preferences seed, global inbox.
 
 ## Purchasing — COMPLETE (back end + Flutter)
 
