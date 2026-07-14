@@ -101,7 +101,7 @@ over drilldown_* RPCs; rows deep-link (invoice→/sales/invoice, product→/inve
 ## M08 Reporting — backend LIVE (DB layer), all gate-proven rolled-back
 - MVs (reporting_materialized_views): 6 matviews (daily_sales [fan-out FIXED], inventory_valuation [canonical],
   account_balances, customer/supplier_aging, product_performance) refreshed CONCURRENTLY; raw select revoked (definer RPCs).
-- Drilldowns (reporting_drilldowns + _complete): all 5 LIVE + leak-proven (sales/low_stock/receivables/account/product).
+- Drilldowns (reporting_drilldowns/_complete/_payables): 6 RPCs leak-proven; ALL 10 dashboard KPIs tappable (stock_value + pl route to existing pages).
 - Scheduling (reporting_schedules + deliveries_fix): run_due (pg_cron */15) queues PENDING report_deliveries; SEND = M11 dep.
 - Analytics (analytics_events): immutable partitioned + gin, RLS read-own/definer-write (FLAG: no partition helper). AI recs
   (ai_recommendations): generate_reorder_recommendations (idempotent) + act_on_recommendation; ML deferred.
