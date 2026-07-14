@@ -97,17 +97,20 @@ delivery_orders, loyalty, tax_rules/payment_methods tables, customer_groups, pri
 
 ## Dashboard V1 — COMPLETE
 
-D1 data layer: DashboardSummary entity (9 fields + nested RecentSale/TrendPoint/paymentBreakdown),
-DashboardSummaryModel fromJson, DashboardRemoteDataSource .rpc('dashboard_summary'), repo +
-DashboardFailure, LoadDashboardSummary use case, AsyncNotifier controller.
-D2 UI: replaces placeholder — PermissionGate(reports:read), pull-to-refresh, KPI grid (6 cards:
-Today's Sales/Transactions/Profit/Receivables/Stock Value/Low Stock), recent sales list (status chip →
-invoice detail), quick-launch (POS/Inventory/History gated by matrix). D3 charts: fl_chart bar chart
-(7-day trend, PKR tooltips) + pie chart (payment breakdown + legend).
-Controller propagates failure as AsyncError (no zero-fill); page shows AppInlineBanner + retry on error.
+Full clean-arch (data+domain+controller in features/dashboard/, page in features/auth/pages/dashboard_page.dart).
+UI: PermissionGate(reports:read), pull-to-refresh, KPI grid (6 cards: Sales/Txns/Profit/Receivables/Stock
+Value/Low Stock), recent sales list (→ invoice detail), quick-launch (matrix-gated), fl_chart 7-day bar + payment
+pie. Controller propagates failure as AsyncError (no zero-fill). Deferred → M08: payables/cash-bank balances,
+P&L/BS, drilldowns, scheduled/email reports, configurable KPI grid.
 
-### Dashboard V1 Deferred (M10 Reporting phase)
-payables + cash/bank balances, P&L/BS, drilldowns, scheduled/email reports, configurable KPI grid.
+## M08 Reporting MVs — LIVE (matview layer)
+migration reporting_materialized_views: 6 matviews refreshed CONCURRENTLY by fn_refresh_materialized_views
+(unique idx each). mv_daily_sales_summary (fan-out FIXED: invoice-total + item-profit CTEs split → gate-proven
+revenue == raw per-invoice sum), mv_inventory_valuation (canonical warehouse_id IS NULL, 1 row/product),
+mv_account_balances (ledger, keeps accounts.branch_id), mv_customer_aging + mv_supplier_aging (mirror live
+receivables/payables_aging buckets), mv_product_performance. Not RLS-capable → raw select revoked from
+authenticated; reads must go via definer RPCs/wrapper views. NEXT: read RPCs + wrapper views, pg_cron refresh
+schedule, report_schedules/analytics_events/ai_recommendations tables, Flutter reporting surface.
 
 ## Purchasing — COMPLETE (back end + Flutter)
 
