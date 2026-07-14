@@ -104,16 +104,14 @@ pl_snapshot from mv_account_balances. Deferred → M08: drilldowns, scheduled/em
 Flutter surfacing of the 4 new KPIs.
 
 ## M08 Reporting MVs — LIVE (matview layer)
-reporting_materialized_views: 6 matviews (mv_daily_sales_summary [fan-out FIXED, gate-proven], mv_inventory_valuation
-[canonical, 1 row/product], mv_account_balances, mv_customer_aging/mv_supplier_aging [mirror *_aging], mv_product_
-performance) refreshed CONCURRENTLY by fn_refresh_materialized_views. Not RLS-capable → raw select revoked, reads via
-definer RPCs. Drilldowns (reporting_drilldowns): drilldown_sales LIVE + leak-proven; 4 siblings stubbed — deferred.
-Scheduling (reporting_schedules + deliveries_fix): report_schedules + upsert/run_due (pg_cron */15) queue PENDING
-rows into report_deliveries (runner's old communication_logs target failed on NOT NULL customer_id — fixed); email
-SEND = M11 dep. Analytics (analytics_events): immutable partitioned table (range/event_date) + gin, RLS read-own /
-definer-write; capture_analytics_event gate-proven; broad capture Phase-2. FLAG: no partition-creation helper yet →
-all rows in default partition. NEXT: remaining drilldowns, read RPCs/wrapper views, ai_recommendations, partition
-helper, M11 sender, Flutter reporting surface.
+reporting_materialized_views: 6 matviews (daily_sales [fan-out FIXED], inventory_valuation [canonical], account_
+balances, customer/supplier_aging, product_performance) refreshed CONCURRENTLY by fn_refresh_materialized_views;
+not RLS-capable → raw select revoked, reads via definer RPCs. Drilldowns (reporting_drilldowns): drilldown_sales
+LIVE + leak-proven; 4 siblings stubbed. Scheduling (reporting_schedules + deliveries_fix): upsert/run_due (pg_cron
+*/15) queue PENDING report_deliveries rows (old communication_logs target NOT-NULL-broke → fixed); email SEND = M11
+dep. Analytics (analytics_events): immutable partitioned table + gin, RLS read-own/definer-write, capture gate-proven;
+FLAG no partition helper → all rows in default partition. NEXT: remaining drilldowns, read RPCs/wrapper views,
+ai_recommendations, partition helper, M11 sender, Flutter reporting surface.
 
 ## Purchasing — COMPLETE (back end + Flutter)
 
