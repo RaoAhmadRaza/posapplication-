@@ -19,6 +19,7 @@ import '../controllers/kpi_layout_controller.dart';
 import '../../domain/entities/dashboard_summary.dart';
 import '../../domain/entities/drilldown.dart';
 import '../../../auth/presentation/controllers/profile_controller.dart';
+import '../../../notifications/presentation/widgets/notification_bell.dart';
 
 /// Whether the KPI grid is in "edit layout" mode (per-session UI toggle).
 final dashboardEditingProvider =
@@ -98,6 +99,7 @@ class DashboardPage extends ConsumerWidget {
         surfaceTintColor: AppColors.background,
         title: Text('Dashboard', style: AppTypography.largeTitle),
         actions: [
+          const NotificationBell(),
           Consumer(
             builder: (context, ref, _) {
               final editing = ref.watch(dashboardEditingProvider);

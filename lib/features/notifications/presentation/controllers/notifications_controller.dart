@@ -12,6 +12,34 @@ final unreadCountProvider = FutureProvider<int>((ref) async {
   return ref.read(notificationRepositoryProvider).unreadCount();
 });
 
+// Polls the unread count so the global bell badge stays fresh from anywhere.
+final unreadCountStreamProvider = StreamProvider<int>((ref) async* {
+  final repo = ref.read(notificationRepositoryProvider);
+  yield await repo.unreadCount();
+  yield* Stream.periodic(const Duration(seconds: 30))
+      .asyncMap((_) => repo.unreadCount());
+});
+
+final notificationPreferencesProvider = AsyncNotifierProvider<
+    NotificationPreferencesController, List<NotificationPreference>>(
+  NotificationPreferencesController.new,
+);
+
+class NotificationPreferencesController
+    extends AsyncNotifier<List<NotificationPreference>> {
+  @override
+  Future<List<NotificationPreference>> build() {
+    return ref.read(notificationRepositoryProvider).loadPreferences();
+  }
+
+  Future<void> upsert(NotificationPreference pref) async {
+    await ref.read(notificationRepositoryProvider).upsertPreference(pref);
+    final current = state.value ?? <NotificationPreference>[];
+    final others = current.where((p) => p.eventType != pref.eventType);
+    state = AsyncValue.data([...others, pref]);
+  }
+}
+
 class NotificationsController
     extends AsyncNotifier<List<AppNotification>> {
   @override
@@ -29,6 +57,7 @@ class NotificationsController
   Future<void> markRead(String id) async {
     await ref.read(notificationRepositoryProvider).markRead(id);
     ref.invalidate(unreadCountProvider);
+    ref.invalidate(unreadCountStreamProvider);
     final current = state.value ?? <AppNotification>[];
     state = AsyncValue.data(current.map((n) {
       if (n.id == id && n.isUnread) {
@@ -51,6 +80,7 @@ class NotificationsController
   Future<void> markAllRead() async {
     await ref.read(notificationRepositoryProvider).markAllRead();
     ref.invalidate(unreadCountProvider);
+    ref.invalidate(unreadCountStreamProvider);
     ref.invalidateSelf();
   }
 }

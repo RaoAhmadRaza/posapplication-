@@ -45,3 +45,43 @@ class AppNotification {
 
   bool get isUnread => readAt == null;
 }
+
+extension NotificationChannelCode on NotificationChannel {
+  String get code => switch (this) {
+        NotificationChannel.inApp => 'IN_APP',
+        NotificationChannel.push => 'PUSH',
+        NotificationChannel.sms => 'SMS',
+        NotificationChannel.email => 'EMAIL',
+        NotificationChannel.whatsapp => 'WHATSAPP',
+      };
+
+  String get label => switch (this) {
+        NotificationChannel.inApp => 'In-app',
+        NotificationChannel.push => 'Push',
+        NotificationChannel.sms => 'SMS',
+        NotificationChannel.email => 'Email',
+        NotificationChannel.whatsapp => 'WhatsApp',
+      };
+}
+
+class NotificationPreference {
+  final String eventType;
+  final Set<NotificationChannel> channels;
+  final bool enabled;
+
+  const NotificationPreference({
+    required this.eventType,
+    required this.channels,
+    required this.enabled,
+  });
+
+  NotificationPreference copyWith({
+    Set<NotificationChannel>? channels,
+    bool? enabled,
+  }) =>
+      NotificationPreference(
+        eventType: eventType,
+        channels: channels ?? this.channels,
+        enabled: enabled ?? this.enabled,
+      );
+}

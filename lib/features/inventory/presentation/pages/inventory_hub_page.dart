@@ -5,7 +5,7 @@ import '../../../../core/design/app_colors.dart';
 import '../../../../core/design/app_spacing.dart';
 import '../../../../core/design/app_typography.dart';
 import '../../../../core/widgets/permission_gate.dart';
-import '../../../notifications/presentation/controllers/notifications_controller.dart';
+import '../../../notifications/presentation/widgets/notification_bell.dart';
 import '../../../approvals/presentation/controllers/approvals_controller.dart';
 
 class InventoryHubPage extends ConsumerWidget {
@@ -13,47 +13,13 @@ class InventoryHubPage extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    final unread = ref.watch(unreadCountProvider).value ?? 0;
-
     return Scaffold(
       backgroundColor: AppColors.background,
       appBar: AppBar(
         backgroundColor: AppColors.background,
         surfaceTintColor: AppColors.background,
         title: Text('Inventory', style: AppTypography.largeTitle),
-        actions: [
-          Stack(
-            children: [
-              IconButton(
-                icon: const Icon(Icons.notifications_outlined, color: AppColors.accent),
-                onPressed: () => context.push('/inventory/notifications'),
-              ),
-              if (unread > 0)
-                Positioned(
-                  right: 8,
-                  top: 8,
-                  child: Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 1),
-                    decoration: const BoxDecoration(
-                      color: AppColors.destructive,
-                      shape: BoxShape.rectangle,
-                      borderRadius: BorderRadius.all(Radius.circular(10)),
-                    ),
-                    constraints: const BoxConstraints(minWidth: 18, minHeight: 14),
-                    child: Text(
-                      unread > 99 ? '99+' : '$unread',
-                      style: const TextStyle(
-                        color: Colors.white,
-                        fontSize: 10,
-                        fontWeight: FontWeight.w700,
-                      ),
-                      textAlign: TextAlign.center,
-                    ),
-                  ),
-                ),
-            ],
-          ),
-        ],
+        actions: const [NotificationBell()],
       ),
       body: SafeArea(
         child: SingleChildScrollView(

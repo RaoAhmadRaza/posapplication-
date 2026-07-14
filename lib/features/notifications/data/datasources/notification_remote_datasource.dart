@@ -19,12 +19,8 @@ class NotificationRemoteDataSource {
   }
 
   Future<int> unreadCount() async {
-    final list = await _client
-        .from('notifications')
-        .select('id')
-        .filter('read_at', 'is', null)
-        .limit(100);
-    return list.length;
+    final n = await _client.rpc('unread_notification_count');
+    return (n as num?)?.toInt() ?? 0;
   }
 
   Future<void> markRead(String id) async {
@@ -32,9 +28,24 @@ class NotificationRemoteDataSource {
   }
 
   Future<void> markAllRead() async {
-    await _client
-        .from('notifications')
-        .update({'read_at': DateTime.now().toIso8601String(), 'status': 'READ'})
-        .filter('read_at', 'is', null);
+    await _client.rpc('mark_all_notifications_read');
+  }
+
+  Future<List<Map<String, dynamic>>> loadPreferences() async {
+    return _client
+        .from('notification_preferences')
+        .select('event_type, channels, enabled');
+  }
+
+  Future<void> upsertPreference(
+    String eventType,
+    List<String> channels,
+    bool enabled,
+  ) async {
+    await _client.rpc('upsert_notification_preference', params: {
+      'p_event_type': eventType,
+      'p_channels': channels,
+      'p_enabled': enabled,
+    });
   }
 }

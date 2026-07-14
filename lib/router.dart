@@ -119,6 +119,7 @@ import 'features/inventory/presentation/pages/label_print_page.dart';
 import 'features/inventory/presentation/pages/import_products_page.dart';
 import 'features/migration_import/presentation/pages/migration_import_page.dart';
 import 'features/notifications/presentation/pages/notifications_page.dart';
+import 'features/notifications/presentation/pages/notification_settings_page.dart';
 import 'features/sales/presentation/pages/pos_terminal_page.dart';
 import 'features/sales/presentation/pages/open_session_page.dart';
 import 'features/sales/presentation/pages/close_session_page.dart';
@@ -432,8 +433,17 @@ final appRouter = GoRouter(
       builder: (context, state) => const MigrationImportPage(),
     ),
     GoRoute(
-      path: '/inventory/notifications',
+      path: '/notifications',
       builder: (context, state) => const NotificationsPage(),
+    ),
+    GoRoute(
+      path: '/notifications/settings',
+      builder: (context, state) => const NotificationSettingsPage(),
+    ),
+    // Legacy entry — kept working, redirects to the canonical route.
+    GoRoute(
+      path: '/inventory/notifications',
+      redirect: (context, state) => '/notifications',
     ),
     GoRoute(
       path: '/suppliers',
