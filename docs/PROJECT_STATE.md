@@ -103,11 +103,11 @@ over drilldown_* RPCs; rows deep-link (invoice→/sales/invoice, product→/inve
 - Reporting UI COMPLETE (features/reporting/ + reporting_read_rpcs): ReportsHubPage /reports (Financial→existing accounting reports) + Inventory/Product-Perf/Cust-Supp-Aging/Trends/Forecasting (fl_chart, definer RPCs over MVs), ScheduledReports (upsert, reports:export), SmartInsights (ai_recs accept/dismiss + REORDER→Create-PO), PDF/CSV export.
 - Ops (pg_cron, MANUAL — not in migrations): mv_refresh_15min + report_schedules_runner (*/15) + reorder_daily (06:00) + approvals_escalation_hourly, all active.
 
-## M11 Notifications — templates + dispatch LIVE, sender NOT built
+## M11 Notifications — templates + dispatch + detectors LIVE, sender NOT built
 - Templates (notifications_templates): sms_templates + email_templates (§3.13) seeded 3+3/tenant, {{placeholder}} convention. NEW 'notifications' perm module (6 grants/ADMIN × 5 tenants). RLS tenant read + notifications:update write. Gate-proven.
 - Dispatch (notifications_dispatch + notify_status_enum_cast_fix): notify() single producer entry — default IN_APP DELIVERED + one PENDING row/extra enabled channel for the sender; render_template({{var}}) / mark_all_notifications_read / unread_notification_count / upsert_notification_preference. Gate-proven rolled-back. (Fix: notify() status CASE was untyped text → 42804 on every call; cast to enum.) Producers migrate to notify() incrementally.
-- Queue tables empty (notifications/communication_logs/report_deliveries = 0 rows); enums live (channel/priority/status). NO sender yet: pg_net/http absent (only pg_cron); no cron drainer; pubspec has no push pkg. In-app UI = NotificationsPage (features/notifications/) reads notifications via /inventory/notifications bell; global inbox + outbound = NOT built.
-NEXT: M11 sender (drain report_deliveries + communication_logs PENDING), notification_preferences seed, global inbox.
+- Detectors (notifications_detectors + fn_overdue_receivables_date_fix): fn_overdue_receivables / fn_unpaid_salaries / fn_stock_mismatch → daily-idempotent IN_APP HIGH/URGENT admin alerts; pg_cron 07:00 (notif_detectors_daily, MANUAL). Joins fn_low_stock_notify. Gate-proven rolled-back. (Fix: overdue predicate was interval>int → 42883 every call; compare day-counts.)
+- NO sender yet: pg_net/http absent (only pg_cron); no drainer; no push pkg. In-app UI = NotificationsPage (features/notifications/) reads notifications via /inventory/notifications bell; global inbox + outbound = NOT built. NEXT: M11 sender (drain report_deliveries + communication_logs PENDING) — the last piece; notification_preferences seed; global inbox.
 
 ## Purchasing — COMPLETE (back end + Flutter)
 
