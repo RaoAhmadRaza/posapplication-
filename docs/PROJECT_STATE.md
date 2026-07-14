@@ -27,15 +27,8 @@ lib/
     domain/entities/  7  domain/failures/  sealed SalesFailure  domain/usecases/  7
     data/models/  6  data/datasources/  1  data/repositories/  1  data/services/  1 (receipt PDF)
     presentation/controllers/  4  presentation/pages/  7 (open/close session, POS terminal, payment, success, receipt)
-  features/dashboard/ (data + domain + controller — entity, model, datasource, repo, use case, controller)
-    domain/entities/  17 (7 catalog + 10 stock-ops)
-    domain/failures/  sealed InventoryFailure — 11 variants
-    domain/usecases/  52 (23 catalog + 29 stock-ops)
-    data/models/      17 (7 catalog + 10 stock-ops)
-    data/datasources/ 1 (InventoryRemoteDataSource — all Supabase + RPCs)
-    data/repositories/ 1 (InventoryRepositoryImpl)
-    presentation/controllers/ 11 (5 catalog + 6 stock-ops)
-    presentation/pages/ 20 (9 catalog + 10 stock-ops + hub)
+  features/dashboard/ (data + domain + controller)
+  features/{purchasing,suppliers,customers,accounting,repair,hr}/ (full clean-arch per feature)
 ```
 
 ## Auth — Complete
@@ -222,7 +215,7 @@ parts/assign; close BRANCHES Close&Invoice vs Warranty-no-charge; warranty link 
 (perf metrics), history (search), QR device label. analyze clean; data-path gate-verified, device tap-through
 user-driven. DEFERRED: /repair/:id/edit (no RPC), intake signature, board branch filter, customer SMS/email.
 
-## M10 HR & Payroll — Backend COMPLETE (H1–H6) + Employees UI (H7.1)
+## M10 HR & Payroll — Backend COMPLETE (H1–H6) + HR UI (H7.1–H7.2)
 Backend (all migrations applied + rolled-back-gate-verified; full per-phase detail in DECISIONS 2026-07-14):
 - H1 foundation: 7 enums, employees + shifts tables, RLS (tenant read / hr-gated writes), NEW `hr` permission
   module (backfilled ADMINs + trg_seed_hr_perms), CoA seeds 6200 Salary / 2120 Deductions Payable / 1150
@@ -244,6 +237,12 @@ failures, usecases, EmployeesController + employeeDetailProvider.family + Shifts
 (search, status/dept chips, FAB gated hr:create), EmployeeFormPage (create vs edit — code/branch/joining/cnic
 create-only since update_employee omits them), EmployeeProfilePage (4 tabs — Profile live w/ Edit+Terminate
 gated hr:update; Attendance/Leaves/Payroll = coming-soon H7.2/H7.3), ShiftsPage (upsert sheet, time pickers).
-Routes /hr/*; Inventory-hub "HR & Payroll" section gated hr:read. analyze clean; device tap-through user-driven.
-NEXT: H7.2/H7.3 attendance/leave/payroll UI (models+datasource+pages). Pre-existing gap: handle_new_user seeds
-no CoA → future tenants lack the HR accounts until provisioning is fixed.
+Routes /hr/*; Inventory-hub "HR & Payroll" section gated hr:read.
+H7.2 attendance + leaves UI (additive): +loadAttendance/loadLeaves/loadMyEmployee reads + mark_attendance/
+apply_leave/decide_leave; families attendanceMonthProvider/leavesProvider/branchEmployees/myEmployee. Pages:
+AttendanceGridPage (employees×days grid, colour+letter, month nav, cell→mark sheet, NOTES-required-on-edit →
+ERR_EDIT_REASON_REQUIRED inline), LeavesPage (status chips, Apply hr:create, Approve/Reject hr:approve+reason),
+ClockInOutPage (self clock, MANUAL). Profile Attendance+Leaves tabs wired. Routes /hr/attendance|leaves|clock.
+analyze clean; device tap-through user-driven.
+NEXT: H7.3 payroll UI (run→calculate→approve→disburse, advances). Pre-existing gap: handle_new_user seeds no
+CoA → future tenants lack HR accounts until provisioning is fixed.
