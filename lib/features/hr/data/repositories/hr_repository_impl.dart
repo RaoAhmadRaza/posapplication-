@@ -2,12 +2,16 @@ import 'dart:async';
 import 'dart:io';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
+import '../../domain/entities/attendance.dart';
 import '../../domain/entities/employee.dart';
+import '../../domain/entities/leave.dart';
 import '../../domain/entities/shift.dart';
 import '../../domain/failures/hr_failure.dart';
 import '../../domain/repositories/hr_repository.dart';
 import '../datasources/hr_remote_datasource.dart';
+import '../models/attendance_model.dart';
 import '../models/employee_model.dart';
+import '../models/leave_model.dart';
 import '../models/shift_model.dart';
 
 final hrRepositoryProvider = Provider<HrRepository>((ref) {
@@ -139,6 +143,85 @@ class HrRepositoryImpl implements HrRepository {
   Future<HrFailure?> upsertShift(Map<String, dynamic> data) async {
     try {
       await _ds.upsertShift(data);
+      return null;
+    } catch (e) {
+      return _mapError(e);
+    }
+  }
+
+  @override
+  Future<(List<Attendance>, HrFailure?)> loadAttendance({
+    required String from,
+    required String to,
+    String? employeeId,
+  }) async {
+    try {
+      final rows =
+          await _ds.loadAttendance(from: from, to: to, employeeId: employeeId);
+      return (rows.map(AttendanceModel.fromJson).toList(), null);
+    } catch (e) {
+      return (<Attendance>[], _mapError(e));
+    }
+  }
+
+  @override
+  Future<(List<Leave>, HrFailure?)> loadLeaves({
+    String? employeeId,
+    LeaveStatus? status,
+  }) async {
+    try {
+      final rows = await _ds.loadLeaves(
+        employeeId: employeeId,
+        status: status == null ? null : LeaveModel.statusToDb(status),
+      );
+      return (rows.map(LeaveModel.fromJson).toList(), null);
+    } catch (e) {
+      return (<Leave>[], _mapError(e));
+    }
+  }
+
+  @override
+  Future<(Employee?, HrFailure?)> loadMyEmployee() async {
+    try {
+      final row = await _ds.loadMyEmployee();
+      return (row == null ? null : EmployeeModel.fromJson(row), null);
+    } catch (e) {
+      return (null, _mapError(e));
+    }
+  }
+
+  @override
+  Future<HrFailure?> markAttendance(Map<String, dynamic> data) async {
+    try {
+      await _ds.markAttendance(data);
+      return null;
+    } catch (e) {
+      return _mapError(e);
+    }
+  }
+
+  @override
+  Future<HrFailure?> applyLeave(Map<String, dynamic> data) async {
+    try {
+      await _ds.applyLeave(data);
+      return null;
+    } catch (e) {
+      return _mapError(e);
+    }
+  }
+
+  @override
+  Future<HrFailure?> decideLeave({
+    required String leaveId,
+    required bool approve,
+    String? rejectionReason,
+  }) async {
+    try {
+      await _ds.decideLeave(
+        leaveId: leaveId,
+        approve: approve,
+        rejectionReason: rejectionReason,
+      );
       return null;
     } catch (e) {
       return _mapError(e);

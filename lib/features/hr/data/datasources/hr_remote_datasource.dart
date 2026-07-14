@@ -22,6 +22,12 @@ class HrRemoteDataSource {
   static const _shiftCols = 'id, tenant_id, name, start_time, end_time,'
       ' grace_minutes, break_minutes, is_active';
 
+  static const _attendanceCols = 'id, tenant_id, employee_id, shift_id, date,'
+      ' check_in, check_out, status, overtime_hours, late_minutes, notes';
+
+  static const _leaveCols = 'id, tenant_id, employee_id, type, from_date,'
+      ' to_date, days, reason, status, rejection_reason, employees(name)';
+
   Future<List<Map<String, dynamic>>> loadEmployees({
     String? branchId,
     String? status,
@@ -120,6 +126,84 @@ class HrRemoteDataSource {
       'p_grace': data['p_grace'],
       'p_break': data['p_break'],
       'p_active': data['p_active'],
+    });
+    return result as Map<String, dynamic>;
+  }
+
+  /// Attendance in [from, to] (inclusive, 'YYYY-MM-DD'). Tenant-scoped by RLS;
+  /// optional single-employee filter for the profile view.
+  Future<List<Map<String, dynamic>>> loadAttendance({
+    required String from,
+    required String to,
+    String? employeeId,
+  }) async {
+    var q = _client
+        .from('attendance')
+        .select(_attendanceCols)
+        .gte('date', from)
+        .lte('date', to);
+    if (employeeId != null) q = q.eq('employee_id', employeeId);
+    return q.order('date');
+  }
+
+  Future<List<Map<String, dynamic>>> loadLeaves({
+    String? employeeId,
+    String? status,
+  }) async {
+    var q = _client.from('leaves').select(_leaveCols);
+    if (employeeId != null) q = q.eq('employee_id', employeeId);
+    if (status != null) q = q.eq('status', status);
+    return q.order('from_date', ascending: false);
+  }
+
+  /// The employee row linked to the signed-in user (for self clock-in/out).
+  Future<Map<String, dynamic>?> loadMyEmployee() async {
+    final uid = _client.auth.currentUser?.id;
+    if (uid == null) return null;
+    return _client
+        .from('employees')
+        .select(_empCols)
+        .eq('user_id', uid)
+        .isFilter('deleted_at', null)
+        .maybeSingle();
+  }
+
+  Future<Map<String, dynamic>> markAttendance(Map<String, dynamic> data) async {
+    final result = await _client.rpc('mark_attendance', params: {
+      'p_employee_id': data['p_employee_id'],
+      'p_date': data['p_date'],
+      'p_shift_id': data['p_shift_id'],
+      'p_check_in': data['p_check_in'],
+      'p_check_out': data['p_check_out'],
+      'p_status': data['p_status'],
+      'p_overtime_hours': data['p_overtime_hours'],
+      'p_source': data['p_source'],
+      'p_notes': data['p_notes'],
+    });
+    return result as Map<String, dynamic>;
+  }
+
+  Future<Map<String, dynamic>> applyLeave(Map<String, dynamic> data) async {
+    final result = await _client.rpc('apply_leave', params: {
+      'p_employee_id': data['p_employee_id'],
+      'p_type': data['p_type'],
+      'p_from': data['p_from'],
+      'p_to': data['p_to'],
+      'p_days': data['p_days'],
+      'p_reason': data['p_reason'],
+    });
+    return result as Map<String, dynamic>;
+  }
+
+  Future<Map<String, dynamic>> decideLeave({
+    required String leaveId,
+    required bool approve,
+    String? rejectionReason,
+  }) async {
+    final result = await _client.rpc('decide_leave', params: {
+      'p_leave_id': leaveId,
+      'p_approve': approve,
+      'p_rejection_reason': rejectionReason,
     });
     return result as Map<String, dynamic>;
   }
