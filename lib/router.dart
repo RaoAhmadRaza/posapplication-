@@ -83,6 +83,10 @@ import 'features/hr/presentation/pages/leaves_page.dart';
 import 'features/hr/presentation/pages/clock_in_out_page.dart';
 import 'features/hr/presentation/pages/payroll_runs_page.dart';
 import 'features/hr/presentation/pages/payroll_run_detail_page.dart';
+import 'features/approvals/presentation/pages/pending_approvals_page.dart';
+import 'features/approvals/presentation/pages/approval_detail_page.dart';
+import 'features/approvals/presentation/pages/approval_history_page.dart';
+import 'features/approvals/presentation/pages/approval_workflows_page.dart';
 import 'features/inventory/presentation/pages/products_page.dart';
 import 'features/inventory/presentation/pages/product_form_page.dart';
 import 'features/inventory/presentation/pages/barcode_templates_page.dart';
@@ -537,6 +541,23 @@ final appRouter = GoRouter(
       path: '/hr/employees/:id',
       builder: (context, state) =>
           EmployeeProfilePage(employeeId: state.pathParameters['id']!),
+    ),
+    GoRoute(
+      path: '/approvals',
+      builder: (context, state) => const PendingApprovalsPage(),
+    ),
+    GoRoute(
+      path: '/approvals/history',
+      builder: (context, state) => const ApprovalHistoryPage(),
+    ),
+    GoRoute(
+      path: '/approvals/workflows',
+      builder: (context, state) => const ApprovalWorkflowsPage(),
+    ),
+    GoRoute(
+      path: '/approvals/:id',
+      builder: (context, state) =>
+          ApprovalDetailPage(requestId: state.pathParameters['id']!),
     ),
     GoRoute(
       path: '/accounting',

@@ -6,6 +6,7 @@ import '../../../../core/design/app_spacing.dart';
 import '../../../../core/design/app_typography.dart';
 import '../../../../core/widgets/permission_gate.dart';
 import '../../../notifications/presentation/controllers/notifications_controller.dart';
+import '../../../approvals/presentation/controllers/approvals_controller.dart';
 
 class InventoryHubPage extends ConsumerWidget {
   const InventoryHubPage({super.key});
@@ -215,6 +216,30 @@ class InventoryHubPage extends ConsumerWidget {
                       subtitle: 'Employees, shifts, payroll',
                       onTap: () => context.push('/hr'),
                     ),
+                    const SizedBox(height: AppSpacing.xxl),
+                  ],
+                ),
+              ),
+              PermissionGate(
+                module: 'approvals',
+                action: 'read',
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    _SectionLabel('Approvals'),
+                    const SizedBox(height: AppSpacing.sm),
+                    Builder(builder: (context) {
+                      final count =
+                          ref.watch(pendingApprovalsCountProvider);
+                      return _HubRow(
+                        icon: Icons.fact_check_outlined,
+                        title: 'Approval Center',
+                        subtitle: count > 0
+                            ? '$count awaiting approval'
+                            : 'Pending & escalated requests',
+                        onTap: () => context.push('/approvals'),
+                      );
+                    }),
                     const SizedBox(height: AppSpacing.xxl),
                   ],
                 ),
