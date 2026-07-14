@@ -105,10 +105,10 @@ over drilldown_* RPCs; rows deep-link (invoice→/sales/invoice, product→/inve
 - Scheduling (reporting_schedules + deliveries_fix): run_due (pg_cron */15) queues PENDING report_deliveries; SEND = M11 dep.
 - Analytics (analytics_events): immutable partitioned + gin, RLS read-own/definer-write. FLAG: no partition helper yet.
 - AI recs (ai_recommendations): generate_reorder_recommendations (idempotent) + act_on_recommendation; ML/other deferred.
-- Reporting UI (features/reporting/ + reporting_read_rpcs): thin definer read RPCs over the MVs → ReportsHubPage /reports
-  (reports:read; Financial cards link to existing accounting reports) + Inventory/Product-Perf/Cust-Supp-Aging/Trends
-  (fl_chart); dashboard quick-launch Reports entry.
-NEXT: partition helper, M11 email sender, scheduled-reports + analytics/insights UI.
+- Reporting UI COMPLETE (features/reporting/ + reporting_read_rpcs): ReportsHubPage /reports (Financial→existing
+  accounting reports) + Inventory/Product-Perf/Cust-Supp-Aging/Trends/Forecasting (fl_chart, definer read RPCs over MVs),
+  ScheduledReports (upsert, reports:export), SmartInsights (ai_recs accept/dismiss + REORDER→Create-PO), PDF/CSV export.
+NEXT: partition helper, M11 email sender (report_deliveries sit PENDING), analytics depth.
 
 ## Purchasing — COMPLETE (back end + Flutter)
 
