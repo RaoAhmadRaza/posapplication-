@@ -78,9 +78,8 @@ LabelPdfService + LabelPrintPage); notifications (+prefs, trg_low_stock_notify, 
 - Profile loaded once (no pull-to-refresh); IMEI section not yet in product edit form (SERIALIZED)
 
 ## Migration Import — COMPLETE
-`lib/features/migration_import/` clean-arch (reuses InventoryFailure). 4 set-based RPCs
-(migrate_import_categories/brands/products/stock); MigrationImportPage — 4 FK-ordered step cards.
-Route /inventory/import-migration.
+`lib/features/migration_import/` clean-arch (reuses InventoryFailure). 4 set-based RPCs (migrate_import_categories/
+brands/products/stock); MigrationImportPage — 4 FK-ordered step cards. Route /inventory/import-migration.
 
 ## Sales V1 — Core COMPLETE
 
@@ -246,4 +245,6 @@ ApprovalDetailPage /approvals/:id (level ladder + timeline + entity deep link; A
 ApprovalHistoryPage /approvals/history. Inventory-hub "Approvals" gated approvals:read w/ live count. Workflow-config UI
 (gated approvals:update): ApprovalWorkflowsPage /approvals/workflows (by type, active switch) + WorkflowFormPage (type/
 threshold/TTL + levels editor {role dropdown, min_approvers, add/reorder} → upsert_approval_workflow; soft-delete=is_active
-false). analyze clean. NEXT: A5 PO-lifecycle integration (wedge request_approval submit→approve); manual-raise entry point.
+false). analyze clean. A5 PO integration LIVE (migration po_approval_integration): submit_purchase_order raises
+request_approval('PURCHASE_ORDER',po,grand_total); approve_purchase_order blocked (ERR_APPROVAL_REQUIRED) while chain
+PENDING/ESCALATED/REJECTED. Inert w/o a workflow — regression-proven byte-for-byte. NEXT: wire other 7 types (deferred).
