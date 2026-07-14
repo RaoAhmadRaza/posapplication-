@@ -324,5 +324,12 @@ journal_entry_id. 8th balanced money path. Cash 1000 (bank split deferred, M07-c
 `select post_journal() into v_je uuid` failed 22P02 (post_journal returns jsonb) → `v_je := (post_journal())->>'journal_entry_id'`.
 Gate (rolled back, JWT, gross≠net): dr=cr=80416.67; 6200=gross; 1000=net 75416.67; 1150=5000 advance; DISBURSED; trial_balance true.
 
-NEXT (not built): H6 salary_advances disburse/recover RPCs (Dr 1150 / Cr bank; recovery already handled at
-disburse); HR Flutter feature (employees/attendance/leaves/payroll pages).
+H6 salary advances — migration `hr_salary_advance` + fix `fix_disburse_advance_je`. disburse_salary_advance
+(hr:approve): posts Dr 1150 / Cr 1000 via post_journal (SALARY_ADVANCE), creates salary_advances row
+(balance=amount, recovery_amount). Recovery via calculate_payroll → disburse_payroll_run (Cr 1150). 9th balanced
+money path. BUG fixed at gate (same 22P02 jsonb→uuid as H5): `v_je := (post_journal())->>'journal_entry_id'`.
+Gate (rolled back, JWT): amount=balance=10000, recovery=5000, je set; Dr 1150=Cr 1000=10000 balanced; trial true.
+Tie-to-H5: following payroll recovers 5000 → balance 5000; trial true.
+
+M10 HR BACKEND COMPLETE (H1–H6). NEXT (not built): HR Flutter feature — clean-arch mirror (employees CRUD,
+attendance/leaves, payroll run→calculate→approve→disburse, advances), hr-gated pages, nav entry.
