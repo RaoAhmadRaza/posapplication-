@@ -12,12 +12,14 @@ import '../../../../core/design/widgets/app_text_field.dart';
 import '../../../../core/widgets/permission_gate.dart';
 import '../../domain/entities/attendance.dart';
 import '../../domain/entities/employee.dart';
+import '../controllers/advances_controller.dart';
 import '../controllers/attendance_controller.dart';
 import '../controllers/employees_controller.dart';
 import '../controllers/leaves_controller.dart';
 import '../widgets/hr_status_ui.dart';
 import 'attendance_grid_page.dart' show showMarkAttendanceSheet;
 import 'leaves_page.dart' show LeaveRow, showApplyLeaveSheet;
+import 'salary_advance_sheet.dart' show showGiveAdvanceSheet;
 
 class EmployeeProfilePage extends ConsumerWidget {
   const EmployeeProfilePage({super.key, required this.employeeId});
@@ -69,7 +71,7 @@ class EmployeeProfilePage extends ConsumerWidget {
                 _ProfileTab(employee: employee),
                 _AttendanceTab(employee: employee),
                 _LeavesTab(employee: employee),
-                const _ComingSoon(label: 'Payroll history'),
+                _PayrollTab(employee: employee),
               ],
             ),
           ),
@@ -500,16 +502,101 @@ class _LeavesTab extends ConsumerWidget {
   }
 }
 
-class _ComingSoon extends StatelessWidget {
-  const _ComingSoon({required this.label});
-  final String label;
+class _PayrollTab extends ConsumerWidget {
+  const _PayrollTab({required this.employee});
+  final Employee employee;
 
   @override
-  Widget build(BuildContext context) {
-    return Center(
-      child: Text('$label — coming soon',
-          style:
-              AppTypography.footnote.copyWith(color: AppColors.textMuted)),
+  Widget build(BuildContext context, WidgetRef ref) {
+    final async = ref.watch(employeeAdvancesProvider(employee.id));
+    return async.when(
+      loading: () => const Center(child: CircularProgressIndicator()),
+      error: (e, _) => Center(
+        child: Padding(
+          padding: const EdgeInsets.all(AppSpacing.screenPadding),
+          child: AppInlineBanner(
+              message: 'Could not load advances.', type: BannerType.error),
+        ),
+      ),
+      data: (advances) => ListView(
+        padding: const EdgeInsets.all(AppSpacing.screenPadding),
+        children: [
+          PermissionGate(
+            module: 'hr',
+            action: 'approve',
+            child: Padding(
+              padding: const EdgeInsets.only(bottom: AppSpacing.md),
+              child: AppButton(
+                label: 'Give Advance',
+                icon: Icons.add,
+                variant: AppButtonVariant.tinted,
+                fullWidth: true,
+                onPressed: () => showGiveAdvanceSheet(
+                    context: context, employeeId: employee.id),
+              ),
+            ),
+          ),
+          Text('Salary advances',
+              style: AppTypography.caption.copyWith(
+                  color: AppColors.textMuted, fontWeight: FontWeight.w700)),
+          const SizedBox(height: AppSpacing.sm),
+          if (advances.isEmpty)
+            Center(
+              child: Text('No advances.',
+                  style: AppTypography.footnote
+                      .copyWith(color: AppColors.textMuted)),
+            ),
+          for (final a in advances)
+            Container(
+              margin: const EdgeInsets.only(bottom: AppSpacing.sm),
+              padding: const EdgeInsets.all(AppSpacing.md),
+              decoration: BoxDecoration(
+                color: AppColors.background,
+                borderRadius: BorderRadius.circular(AppRadius.card),
+                border: Border.all(color: AppColors.separator, width: 0.5),
+              ),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                    children: [
+                      Text(
+                          a.disbursedAt.toIso8601String().substring(0, 10),
+                          style: AppTypography.caption
+                              .copyWith(color: AppColors.textMuted)),
+                      Text(a.isFullyRecovered ? 'Recovered' : 'Active',
+                          style: AppTypography.caption.copyWith(
+                              color: a.isFullyRecovered
+                                  ? AppColors.success
+                                  : AppColors.warning,
+                              fontWeight: FontWeight.w600)),
+                    ],
+                  ),
+                  const SizedBox(height: 4),
+                  Text(
+                      '${formatPkr(a.amount)} · balance ${formatPkr(a.balance)} · '
+                      'recover ${formatPkr(a.recoveryAmount)}/run',
+                      style: AppTypography.footnote),
+                  const SizedBox(height: 6),
+                  ClipRRect(
+                    borderRadius: BorderRadius.circular(4),
+                    child: LinearProgressIndicator(
+                      value: a.amount <= 0
+                          ? 0
+                          : ((a.amount - a.balance) / a.amount)
+                              .clamp(0.0, 1.0),
+                      minHeight: 5,
+                      backgroundColor: AppColors.fieldFill,
+                      valueColor: const AlwaysStoppedAnimation(
+                          AppColors.success),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+        ],
+      ),
     );
   }
 }

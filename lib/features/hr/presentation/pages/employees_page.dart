@@ -64,6 +64,11 @@ class _EmployeesPageState extends ConsumerState<EmployeesPage> {
             onPressed: () => context.push('/hr/leaves'),
           ),
           IconButton(
+            icon: const Icon(Icons.payments_outlined, color: AppColors.accent),
+            tooltip: 'Payroll',
+            onPressed: () => context.push('/hr/payroll'),
+          ),
+          IconButton(
             icon: const Icon(Icons.schedule, color: AppColors.accent),
             tooltip: 'Shifts',
             onPressed: () => context.push('/hr/shifts'),
