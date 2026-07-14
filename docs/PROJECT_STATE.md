@@ -74,9 +74,8 @@ expenses/reports + all 6 auto-post money paths) · 2026-07-13 device per-tenant 
 inventory_service_type_guard) + inventory SERVICE non-stock guard.
 
 ## Bugfixes Applied
-Full detail in DECISIONS.md. Headlines: product edit/create reactive-seed + invalidate; RPC single-row
-Map parsing; unified products query path; canonical warehouse_id NULL stock read/write (2026-07-11 audit H);
-per-tenant device fingerprint uniqueness — fixes login-time device-register 42501 (2026-07-13).
+Full detail in DECISIONS.md. Headlines: RPC single-row Map parsing; canonical warehouse_id NULL stock;
+per-tenant device fingerprint uniqueness (login-time 42501 fix, 2026-07-13).
 
 ## Peripheral features — COMPLETE (detail in DECISIONS.md)
 
@@ -109,9 +108,7 @@ close_cashier_session gated sales:create + owner-only. Live-sales banner via ses
 zero). Full per-slice detail in DECISIONS.md.
 
 ### Sales V1 Deferred
-
-delivery_orders, loyalty_transactions, tax_rules table, payment_methods table, customer_groups,
-pricing-tier engine, offline sync logic.
+delivery_orders, loyalty, tax_rules/payment_methods tables, customer_groups, pricing-tier, offline sync.
 
 ## Dashboard V1 — COMPLETE
 
@@ -124,10 +121,8 @@ invoice detail), quick-launch (POS/Inventory/History gated by matrix). D3 charts
 (7-day trend, PKR tooltips) + pie chart (payment breakdown + legend).
 Controller propagates failure as AsyncError (no zero-fill); page shows AppInlineBanner + retry on error.
 
-### Dashboard V1 Deferred (Pipeline M10, Reporting phase)
-
-payables + cash/bank balances, P&L/balance-sheet, drilldown reports, scheduled/email reports,
-configurable KPI grid.
+### Dashboard V1 Deferred (M10 Reporting phase)
+payables + cash/bank balances, P&L/BS, drilldowns, scheduled/email reports, configurable KPI grid.
 
 ## Purchasing — COMPLETE (back end + Flutter)
 
@@ -212,124 +207,43 @@ PURCHASE_INVOICE, SUPPLIER_PAYMENT, PURCHASE_RETURN, SALES_RETURN — post a bal
 six-path rolled-back gate (all balanced, trial_balance + balance_sheet true). Journal immutable/balanced/
 period-guarded. Deferrals: sales returns refund tax-free (no Output-Tax reversal); non-cash payments still
 debit 1000 Cash not 1010 Bank (payment-method→account split pending — Bank Book/Recon run near-empty).
-**Next:** **M10 Reporting** (P&L/BS drilldowns, scheduled reports); dashboard payables/cash KPIs
-(need dashboard_summary fields); on-device click-through.
 
 ## M09 Repair & Service — COMPLETE (backend + Flutter)
+Backend (applied + gate-verified; full per-phase detail in DECISIONS 2026-07-13/14): repair_jobs/parts/
+status_history + repair_status_enum(9), RJ- series, REPAIR-SERVICE sentinel (type=SERVICE) + 4200 Service
+Revenue, REPAIR_USE movement. Lifecycle RPCs + close_repair_job (**7th money path**: builds invoice directly +
+REPAIR_INVOICE journal; parts COGS Dr 5000/Cr 1200 at captured cost). Pipeline C3–C6: bulk_change_repair_status
++ technician perf; C4 communication_logs notify intents (PENDING until M11 sender); C5 parts output tax;
+C6 WARRANTY_CLAIM re-repair (original_repair_id self-FK, 5200 Warranty Cost, cost-only revenue-free close).
+SERVICE non-stock guard at post_stock_movement. Signature capture (private bucket + RLS, SignaturePad, 60s
+signed URLs).
+Flutter (`lib/features/repair/`, full clean-arch): kanban (drag + multi-select bulk), intake, detail (diagnosis/
+parts/assign; close BRANCHES Close&Invoice vs Warranty-no-charge; warranty link card + live breakdown), workload
+(perf metrics), history (search), QR device label. analyze clean; data-path gate-verified, device tap-through
+user-driven. DEFERRED: /repair/:id/edit (no RPC), intake signature, board branch filter, customer SMS/email.
 
-Backend (prior session, applied + gate-verified): repair_jobs/repair_parts/repair_status_history +
-repair_status_enum(9), RJ- series, REPAIR-SERVICE sentinel product (type=SERVICE) + 4200 Service Revenue,
-REPAIR_USE movement type + its post_stock_movement gate branch. 7 RPCs (create_repair_job/assign_technician/
-set_repair_diagnosis/change_repair_status/add_repair_part/remove_repair_part/close_repair_job). **7th balanced
-money path**: close_repair_job builds the invoice DIRECTLY (own INSERT, session_id NULL — NOT create_sale) +
-posts REPAIR_INVOICE journal explicitly (Cr 4200 labour / 4000 parts / 2100 tax, Dr 5000/Cr 1200 parts COGS at
-captured cost). Parts deducted at add (REPAIR_USE); close recognizes cost only (no double-deduct). Full detail
-in DECISIONS 2026-07-13.
+## M10 HR & Payroll — Backend COMPLETE (H1–H6) + Employees UI (H7.1)
+Backend (all migrations applied + rolled-back-gate-verified; full per-phase detail in DECISIONS 2026-07-14):
+- H1 foundation: 7 enums, employees + shifts tables, RLS (tenant read / hr-gated writes), NEW `hr` permission
+  module (backfilled ADMINs + trg_seed_hr_perms), CoA seeds 6200 Salary / 2120 Deductions Payable / 1150
+  Employee Advances (5200 stays Warranty Cost). Fix at push: `::account_type_enum` cast (text→enum in VALUES).
+- H2 lifecycle: create/update(COALESCE)/terminate_employee, upsert_shift (dup code → ERR_CODE_TAKEN).
+- H3 attendance+leaves: mark_attendance (upsert, late/OT vs shift, edit needs reason), apply/decide_leave
+  (approve stamps ON_LEAVE across range).
+- H4 payroll calc: create_payroll_run (unique/period) → calculate_payroll (basic + OT − advance − deductions,
+  net≥0) → approve_payroll_run.
+- H5 disbursement (**8th money path**): disburse_payroll_run posts balanced PAYROLL journal (Dr 6200 / Cr 1150 /
+  Cr 2120 / Cr 1000 net), recovers advances, items PAID.
+- H6 salary advances (**9th money path**): disburse_salary_advance (Dr 1150 / Cr 1000), recovered via payroll.
+- Two RPCs shipped a `select post_journal() into uuid` 22P02 bug (jsonb→uuid); both forward-fixed with
+  `->>'journal_entry_id'` (fix_disburse_payroll_je, fix_disburse_advance_je).
 
-Flutter (`lib/features/repair/`, full clean-arch mirroring purchasing): 3 entities + RepairStatus(9)/
-RepairPriority(4) enums + result types; sealed RepairFailure (maps ERR_INVALID_TRANSITION/JOB_NOT_READY/
-JOB_CLOSED/USE_CLOSE_TO_DELIVER); 10 usecases; ONE datasource (7 RPCs + reads embedding customers(name)/
-products(name) + users technician load); repo impl → typed failures. RepairJobsController (list + status/
-technician filters + all mutations) + repairJobDetailProvider family + techniciansProvider. Pages:
-RepairKanbanPage /repair (LayoutBuilder — wide: drag-to-update status columns, narrow: grouped tappable list;
-illegal drop → mapped failure), RepairIntakePage /repair/intake (lean customer picker reusing customersProvider,
-device fields, priority, estimate, signature-URL), RepairDetailPage /repair/:id (diagnosis editor, parts add
-[product picker]/remove, status history, cost summary, assign, Close & Invoice gated repair:update at READY →
-invoice number). Also: TechnicianWorkloadPage /repair/workload (open-job counts per technician by status, tap →
-technician-filtered kanban), RepairHistoryPage /repair/history (delivered/cancelled, client-side search by
-job#/customer/imei, tap → read-only detail), RepairLabelPdfService QR device-tag label (job#+device+customer,
-printed via Printing.layoutPdf from a detail-page action), and repair notifications (action_type=REPAIR, already
-inserted by change_repair_status for the assigned technician) deep-link to /repair/:id from the existing inbox.
-Kanban appbar → workload/history. Inventory-hub "Repair & Service" section gated repair:read. analyze clean.
-SERVICE non-stock invariant enforced at post_stock_movement (migration inventory_service_type_guard, 2026-07-13) —
-REPAIR-SERVICE / any SERVICE product rejected (ERR_SERVICE_NOT_STOCKED) on every stock path; stock-op pickers
-(movement/adjustment/transfer/count/PO line) exclude type=SERVICE client-side (POS+catalog share the query, left as-is).
-Signature capture (C2): SignaturePad shared widget (core/widgets, CustomPaint→PNG, no dep) in the Close & Invoice
-dialog → uploadSignature to private 'signatures' bucket ('<tenant>/<repair>.png') → stored path passed to
-close_repair_job; Detail "View Signature" via fresh 60s signed URL. Private bucket + RLS (migration
-signatures_storage_policies, repair:update write / repair:read read), NO client AES (see DECISIONS). Storage calls
-live in the repair datasource.
-Pipeline C3: bulk_change_repair_status(uuid[], status, notes) loops change_repair_status (sole writer — full
-validation + history + notify per job), collects failures → {succeeded, failed[{repair_id,error}]}; full clean-arch
-chain (datasource/repo/usecase/controller bulkChangeStatus). Kanban multi-select: long-press card → select mode,
-tap toggles, bottom _BulkBar (gated repair:update) → status picker (board statuses minus DELIVERED + CANCELLED) →
-bulk RPC → snackbar succeeded + AlertDialog lists failed job#/error. Technician performance: technicianWorkloadProvider
-now also emits delivered count + avg turnaround days (received→delivered, cancelled excluded, delivered-only techs
-appear); surfaced on TechnicianWorkloadPage cards. (migration repair_bulk_status — pushed + gate-verified.)
-Pipeline C4: change_repair_status redefined (isolated migration repair_customer_notifications) — after history insert,
-logs a customer-facing outbound in NEW table communication_logs (tenant-RLS read; writes revoked from authenticated —
-definer RPC + future M11 worker only) at milestones AWAITING_APPROVAL/READY; best-effort, non-blocking (own exception
-block). Channel phone→SMS else email→EMAIL; no contact → no row (status still changes). template_code='REPAIR_STATUS' +
-payload{job_number,status}; NO separate template table (body owned by M11 sender). SEND DEPENDENT on M11 provider/worker
-— rows sit status='PENDING' until then. Backend-only (no client change). Pushed + gate-verified.
-Pipeline C5 (migration repair_parts_tax): close_repair_job now taxes parts lines (removes R4 "parts tax-free").
-Mirrors the LIVE create_sale EXACTLY — which applies EXCLUSIVE tax from a caller tax_pct and does NOT honor
-tax_inclusive (phase premise corrected). Server-side basis = products.tax_rate; parts sell=cost*markup is pre-tax.
-Parts tax_pct/tax_amount set (line_total stays exclusive per the labour-line convention) → v_parts_tax → 2100
-Output Tax. COGS 5000/1200 at captured cost UNCHANGED; cost-tie preserved. Backend-only. Pushed + gate-verified
-(dr=cr; 2100=labour+parts tax; 1200=Σ captured cost; trial balance true).
-Pipeline C6 (migration repair_warranty_claim): WARRANTY_CLAIM re-repair workflow. NEW col repair_jobs.original_repair_id
-(self-FK, parent link) + NEW account 5200 'Warranty Cost' (EXPENSE, seeded all tenants). open_warranty_claim (DELIVERED
-+ in-warranty → linked RECEIVED re-repair reusing create_repair_job; original → WARRANTY_CLAIM; rejects non-delivered/
-expired). close_warranty_claim: zero charge, NO invoice/revenue; parts consumed (REPAIR_USE); captured cost Dr 5200 /
-Cr 1200 (account_code shape), reference_type REPAIR_WARRANTY, final_cost=0, READY→DELIVERED. Cost-tie: Dr 5200 == Σ
-repair_parts.total_cost == Cr 1200. Backend-only. Pushed + gate-verified (0 invoices, 0 revenue lines, dr=cr, original
-flipped, link set, trial balance true). Pre-existing gap noted: handle_new_user seeds no COA → future tenants lack 5200
-until provisioning is fixed.
-Repair UI completion (UI-only, additive): RepairJob.originalRepairId (isWarrantyClaim); datasource _jobCols selects
-it + openWarrantyClaim/closeWarrantyClaim/loadRepairLinks (.or children+parent) → repo/usecases/controller. Detail
-page READY close BRANCHES on originalRepairId: null → Close & Invoice (close_repair_job), not-null → "Close (Warranty
-— no charge)" (close_warranty_claim). DELIVERED + in-warranty → "Warranty Claim" (repair:create) → issue dialog →
-open_warranty_claim → nav to claim. Warranty link card (original↔claims, tappable). Live close breakdown (labour +
-parts@markup + labour tax; balance→AR; parts output tax noted as added at close). Failures +NOT_DELIVERED/WARRANTY_
-EXPIRED/OVERPAYMENT. AppTextField +onChanged (additive). C3 kanban multi-select + workload perf already present.
-analyze clean; data path gate-verified. Device (button-tap) verify pending flutter run (user-driven).
-DEFERRED: /repair/:id/edit (no update_repair_job RPC); intake signature; file_uploads/attachments audit rows;
-board branch filter; customer-facing SMS/email; on-device click-through.
-
-## M10 HR & Payroll — H1 Foundation ONLY (backend, in progress)
-Migration `20260714073757_hr_foundation.sql` (applied prod + committed 624d898). Ships:
-7 enums (employee/salary/attendance/leave×2/payroll×2_status); `employees` (tenant+branch scoped,
-employee_code unique/tenant, salary_type+base_salary, bank+emergency+documents_json, soft-delete+version)
-and `shifts` (name/start/end/grace/break) tables + indexes; RLS = tenant read + hr-gated writes
-(auth_has_permission('hr','update')). NEW permission module `hr`: backfilled to all ADMIN roles (6 actions)
-+ `trg_seed_hr_perms` AFTER INSERT trigger on roles (future ADMINs auto-get hr). CoA seeds (all existing
-tenants, idempotent, is_system): 6200 Salary Expense (EXPENSE), 2120 Payroll Deductions Payable (LIABILITY),
-1150 Employee Advances (ASSET). Codes H0-signed-off free; 5200 stays Warranty Cost (NOT reused).
-GATE PASSED: 7 enums live; ADMIN hr_perms=30 (5 tenants×6); 3 accounts w/ correct enum types + is_system;
-employees+shifts exist. FIX during push: `v.type::account_type_enum` cast — text→enum fails inside VALUES lists.
-
-H2 employee lifecycle RPCs — migration `20260714074322_hr_employee_rpcs.sql`. create_employee (manual unique
-employee_code → ERR_CODE_TAKEN), update_employee (COALESCE partial), terminate_employee (TERMINATED/RESIGNED +
-date), upsert_shift. All hr-gated. Gate (rolled back, JWT): create → emp_count=1; shift upserts; dup code → ERR_CODE_TAKEN.
-Final-settlement calc deferred.
-
-H3 attendance + leaves — migration `hr_attendance_leaves`. attendance + leaves tables (§3.10), RLS tenant-read +
-RPC-only writes. mark_attendance (upsert by employee+date, computes late/early vs shift+grace, edit needs a reason →
-ERR_EDIT_REASON_REQUIRED), apply_leave (PENDING, days auto), decide_leave (hr:approve; approve stamps ON_LEAVE
-attendance across range). Leave-balance/year entitlement deferred. Gate (rolled back, JWT, seed-then-measure):
-attendance upserts w/ computed cols; same-day edit w/o reason rejected; ANNUAL +1..+2 approve → 2 ON_LEAVE rows.
-
-H4 payroll calc — migration `hr_payroll_calc`. payroll_runs/payroll_items + salary_advances tables (§3.10),
-RLS RPC-only writes. create_payroll_run (DRAFT, unique tenant/branch/period), calculate_payroll (per ACTIVE emp:
-basic + allowances + OT-from-attendance [hourly=base/(30*8) ×Σ overtime_hours] − advance auto-recovery − extra
-deductions; net≥0; sums to run totals), approve_payroll_run (hr:approve → APPROVED). NO GL yet (H5). Monthly
-pro-ration + OT-rate simple (refine flagged). Gate (rolled back, JWT; advance seeded via `reset role`, RPC-only
-table): 2 emps → gross 80416.67 (80000+416.67 OT), ded 5000 (advance), net 75416.67 ties; P1 net 45416.67, P2 30000; approve→APPROVED.
-
-H5 payroll disbursement — migration `hr_payroll_disburse` + fix `fix_disburse_payroll_je`. disburse_payroll_run
-(APPROVED→DISBURSED, hr:approve): posts balanced PAYROLL journal (Dr 6200=gross; Cr 1150 advances; Cr 2120 other
-deductions; Cr 1000 net) via post_journal, reduces advance balances (oldest-first, capped), items→PAID, links
-journal_entry_id. 8th balanced money path. Cash 1000 (bank split deferred, M07-consistent). BUG fixed at gate:
-`select post_journal() into v_je uuid` failed 22P02 (post_journal returns jsonb) → `v_je := (post_journal())->>'journal_entry_id'`.
-Gate (rolled back, JWT, gross≠net): dr=cr=80416.67; 6200=gross; 1000=net 75416.67; 1150=5000 advance; DISBURSED; trial_balance true.
-
-H6 salary advances — migration `hr_salary_advance` + fix `fix_disburse_advance_je`. disburse_salary_advance
-(hr:approve): posts Dr 1150 / Cr 1000 via post_journal (SALARY_ADVANCE), creates salary_advances row
-(balance=amount, recovery_amount). Recovery via calculate_payroll → disburse_payroll_run (Cr 1150). 9th balanced
-money path. BUG fixed at gate (same 22P02 jsonb→uuid as H5): `v_je := (post_journal())->>'journal_entry_id'`.
-Gate (rolled back, JWT): amount=balance=10000, recovery=5000, je set; Dr 1150=Cr 1000=10000 balanced; trial true.
-Tie-to-H5: following payroll recovers 5000 → balance 5000; trial true.
-
-M10 HR BACKEND COMPLETE (H1–H6). NEXT (not built): HR Flutter feature — clean-arch mirror (employees CRUD,
-attendance/leaves, payroll run→calculate→approve→disburse, advances), hr-gated pages, nav entry.
+H7.1 Employees UI (`lib/features/hr/`, full clean-arch mirror): 7 entities + 7 enums, sealed HrFailure(11),
+ONE HrRemoteDataSource (employee list w/ branch/status/dept + ILIKE, single, shifts) + 4 RPCs, repo→typed
+failures, usecases, EmployeesController + employeeDetailProvider.family + ShiftsController. Pages: EmployeesPage
+(search, status/dept chips, FAB gated hr:create), EmployeeFormPage (create vs edit — code/branch/joining/cnic
+create-only since update_employee omits them), EmployeeProfilePage (4 tabs — Profile live w/ Edit+Terminate
+gated hr:update; Attendance/Leaves/Payroll = coming-soon H7.2/H7.3), ShiftsPage (upsert sheet, time pickers).
+Routes /hr/*; Inventory-hub "HR & Payroll" section gated hr:read. analyze clean; device tap-through user-driven.
+NEXT: H7.2/H7.3 attendance/leave/payroll UI (models+datasource+pages). Pre-existing gap: handle_new_user seeds
+no CoA → future tenants lack the HR accounts until provisioning is fixed.

@@ -73,6 +73,11 @@ import 'features/repair/presentation/pages/repair_intake_page.dart';
 import 'features/repair/presentation/pages/repair_detail_page.dart';
 import 'features/repair/presentation/pages/repair_history_page.dart';
 import 'features/repair/presentation/pages/technician_workload_page.dart';
+import 'features/hr/domain/entities/employee.dart';
+import 'features/hr/presentation/pages/employees_page.dart';
+import 'features/hr/presentation/pages/employee_form_page.dart';
+import 'features/hr/presentation/pages/employee_profile_page.dart';
+import 'features/hr/presentation/pages/shifts_page.dart';
 import 'features/inventory/presentation/pages/products_page.dart';
 import 'features/inventory/presentation/pages/product_form_page.dart';
 import 'features/inventory/presentation/pages/barcode_templates_page.dart';
@@ -484,6 +489,28 @@ final appRouter = GoRouter(
       path: '/repair/:repairId',
       builder: (context, state) =>
           RepairDetailPage(repairId: state.pathParameters['repairId']!),
+    ),
+    GoRoute(
+      path: '/hr',
+      builder: (context, state) => const EmployeesPage(),
+    ),
+    GoRoute(
+      path: '/hr/shifts',
+      builder: (context, state) => const ShiftsPage(),
+    ),
+    GoRoute(
+      path: '/hr/employees/new',
+      builder: (context, state) => const EmployeeFormPage(),
+    ),
+    GoRoute(
+      path: '/hr/employees/:id/edit',
+      builder: (context, state) =>
+          EmployeeFormPage(employee: state.extra as Employee?),
+    ),
+    GoRoute(
+      path: '/hr/employees/:id',
+      builder: (context, state) =>
+          EmployeeProfilePage(employeeId: state.pathParameters['id']!),
     ),
     GoRoute(
       path: '/accounting',

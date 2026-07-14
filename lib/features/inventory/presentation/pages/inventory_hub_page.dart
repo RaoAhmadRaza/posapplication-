@@ -200,6 +200,25 @@ class InventoryHubPage extends ConsumerWidget {
                   ],
                 ),
               ),
+              // NOTE: HR lives here until a dedicated hub tab ships.
+              PermissionGate(
+                module: 'hr',
+                action: 'read',
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    _SectionLabel('HR & Payroll'),
+                    const SizedBox(height: AppSpacing.sm),
+                    _HubRow(
+                      icon: Icons.groups_outlined,
+                      title: 'Employees',
+                      subtitle: 'Employees, shifts, payroll',
+                      onTap: () => context.push('/hr'),
+                    ),
+                    const SizedBox(height: AppSpacing.xxl),
+                  ],
+                ),
+              ),
               _SectionLabel('Data'),
               const SizedBox(height: AppSpacing.sm),
               PermissionGate(
