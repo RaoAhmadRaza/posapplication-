@@ -104,12 +104,11 @@ pl_snapshot from mv_account_balances. Deferred → M08: drilldowns, scheduled/em
 Flutter surfacing of the 4 new KPIs.
 
 ## M08 Reporting MVs — LIVE (matview layer)
-migration reporting_materialized_views: 6 matviews refreshed CONCURRENTLY by fn_refresh_materialized_views
-(unique idx each): mv_daily_sales_summary (fan-out FIXED: invoice-total + item-profit CTEs split, gate-proven
-revenue == raw per-invoice sum), mv_inventory_valuation (canonical warehouse_id IS NULL, 1 row/product),
-mv_account_balances (ledger, keeps accounts.branch_id), mv_customer_aging + mv_supplier_aging (mirror live
-*_aging RPC buckets), mv_product_performance. Not RLS-capable → raw select revoked from authenticated, reads via
-definer RPCs. NEXT: read RPCs/wrapper views, pg_cron refresh, report_schedules/analytics_events/ai_recommendations
+migration reporting_materialized_views: 6 matviews refreshed CONCURRENTLY by fn_refresh_materialized_views (unique
+idx each): mv_daily_sales_summary (fan-out FIXED, gate-proven revenue == raw per-invoice sum), mv_inventory_valuation
+(canonical warehouse_id IS NULL, 1 row/product), mv_account_balances (ledger, keeps branch_id), mv_customer_aging +
+mv_supplier_aging (mirror live *_aging buckets), mv_product_performance. Not RLS-capable → raw select revoked, reads
+via definer RPCs. NEXT: read RPCs/wrapper views, pg_cron refresh, report_schedules/analytics_events/ai_recommendations
 tables, Flutter reporting surface.
 
 ## Purchasing — COMPLETE (back end + Flutter)
