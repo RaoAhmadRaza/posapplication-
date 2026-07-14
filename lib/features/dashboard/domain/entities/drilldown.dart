@@ -1,5 +1,5 @@
 /// Which KPI/summary a drilldown list is backing. Each maps to one drilldown_* RPC.
-enum DrilldownType { sales, lowStock, receivables, account, product }
+enum DrilldownType { sales, lowStock, receivables, payables, account, product }
 
 /// A single row in a drilldown detail list, already shaped for display + deep-link.
 class DrilldownRow {

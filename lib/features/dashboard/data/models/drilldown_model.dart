@@ -7,6 +7,7 @@ class DrilldownModel {
         DrilldownType.sales => 'drilldown_sales',
         DrilldownType.lowStock => 'drilldown_low_stock',
         DrilldownType.receivables => 'drilldown_receivables',
+        DrilldownType.payables => 'drilldown_payables',
         DrilldownType.account => 'drilldown_account',
         DrilldownType.product => 'drilldown_product',
       };
@@ -15,6 +16,7 @@ class DrilldownModel {
         DrilldownType.sales => {'p_branch': a.branchId, 'p_date': a.date},
         DrilldownType.lowStock => {'p_branch': a.branchId},
         DrilldownType.receivables => {'p_branch': a.branchId},
+        DrilldownType.payables => const {},
         DrilldownType.account => {
             'p_account_code': a.entityId,
             'p_from': null,
@@ -39,6 +41,13 @@ class DrilldownModel {
           subtitle: '${j['customer'] ?? 'Walk-in'} · ${j['status'] ?? ''}',
           trailing: formatPkr(num(j['balance'])),
           deepLink: '/sales/invoice/${j['invoice_number']}',
+        );
+      case DrilldownType.payables:
+        return DrilldownRow(
+          title: (j['supplier'] ?? '—').toString(),
+          subtitle: (j['status'] ?? '').toString(),
+          trailing: formatPkr(num(j['balance'])),
+          deepLink: '/purchasing/invoices/${j['invoice_id']}',
         );
       case DrilldownType.lowStock:
         return DrilldownRow(

@@ -397,8 +397,11 @@ class _KpiDesc {
   final bool isCount;
   final double Function(DashboardSummary) value;
   final DrilldownNav? Function(String? branchId, String date)? drill;
+
+  /// Direct deep-link route for KPIs backed by an existing page (not a drilldown list).
+  final String? route;
   _KpiDesc(this.label, this.icon, this.color, this.value,
-      {this.isCount = false, this.drill});
+      {this.isCount = false, this.drill, this.route});
 }
 
 final _kpiDescriptors = <String, _KpiDesc>{
@@ -410,9 +413,17 @@ final _kpiDescriptors = <String, _KpiDesc>{
           )),
   'today_txns': _KpiDesc('Transactions', Icons.receipt_long, AppColors.success,
       (s) => s.todayTxns.toDouble(),
-      isCount: true),
+      isCount: true,
+      drill: (b, d) => (
+            args: DrilldownArgs(DrilldownType.sales, branchId: b, date: d),
+            title: 'Transactions'
+          )),
   'today_profit': _KpiDesc(
-      "Today's Profit", Icons.trending_up, AppColors.success, (s) => s.todayProfit),
+      "Today's Profit", Icons.trending_up, AppColors.success, (s) => s.todayProfit,
+      drill: (b, d) => (
+            args: DrilldownArgs(DrilldownType.sales, branchId: b, date: d),
+            title: "Today's Profit"
+          )),
   'receivables': _KpiDesc('Receivables', Icons.account_balance_wallet,
       AppColors.warning, (s) => s.receivables,
       drill: (b, d) => (
@@ -420,7 +431,8 @@ final _kpiDescriptors = <String, _KpiDesc>{
             title: 'Receivables'
           )),
   'stock_value': _KpiDesc(
-      'Stock Value', Icons.inventory_2, AppColors.accent, (s) => s.stockValue),
+      'Stock Value', Icons.inventory_2, AppColors.accent, (s) => s.stockValue,
+      route: '/reports/inventory'),
   'low_stock': _KpiDesc('Low Stock', Icons.warning_amber, AppColors.destructive,
       (s) => s.lowStockCount.toDouble(),
       isCount: true,
@@ -429,7 +441,11 @@ final _kpiDescriptors = <String, _KpiDesc>{
             title: 'Low Stock'
           )),
   'payables': _KpiDesc('Payables', Icons.payments, AppColors.destructive,
-      (s) => s.payablesTotal),
+      (s) => s.payablesTotal,
+      drill: (b, d) => (
+            args: DrilldownArgs(DrilldownType.payables),
+            title: 'Payables'
+          )),
   'cash': _KpiDesc('Cash', Icons.savings, AppColors.success, (s) => s.cashBalance,
       drill: (b, d) => (
             args: DrilldownArgs(DrilldownType.account, entityId: '1000'),
@@ -441,7 +457,8 @@ final _kpiDescriptors = <String, _KpiDesc>{
             args: DrilldownArgs(DrilldownType.account, entityId: '1010'),
             title: 'Bank Ledger'
           )),
-  'pl': _KpiDesc('P&L', Icons.show_chart, AppColors.success, (s) => s.plSnapshot),
+  'pl': _KpiDesc('P&L', Icons.show_chart, AppColors.success, (s) => s.plSnapshot,
+      route: '/accounting/reports/profit-loss'),
 };
 
 class _KpiGrid extends ConsumerWidget {
@@ -480,9 +497,12 @@ class _KpiGrid extends ConsumerWidget {
       isCount: d.isCount,
     );
     final nav = d.drill?.call(branchId, date);
-    if (nav == null) return card;
+    final VoidCallback? onTap = nav != null
+        ? () => context.push('/dashboard/drilldown', extra: nav)
+        : (d.route != null ? () => context.push(d.route!) : null);
+    if (onTap == null) return card;
     return InkWell(
-      onTap: () => context.push('/dashboard/drilldown', extra: nav),
+      onTap: onTap,
       borderRadius: BorderRadius.circular(AppRadius.card),
       child: card,
     );
