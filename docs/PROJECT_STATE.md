@@ -298,5 +298,31 @@ tenants, idempotent, is_system): 6200 Salary Expense (EXPENSE), 2120 Payroll Ded
 1150 Employee Advances (ASSET). Codes H0-signed-off free; 5200 stays Warranty Cost (NOT reused).
 GATE PASSED: 7 enums live; ADMIN hr_perms=30 (5 tenants×6); 3 accounts w/ correct enum types + is_system;
 employees+shifts exist. FIX during push: `v.type::account_type_enum` cast — text→enum fails inside VALUES lists.
-NEXT (not built): attendance/leaves/payroll_runs/payroll_items/salary_advances tables; payroll RPCs +
-GL posting (Dr 6200 / Cr 2120+bank via post_journal); HR Flutter feature.
+
+H2 employee lifecycle RPCs — migration `20260714074322_hr_employee_rpcs.sql`. create_employee (manual unique
+employee_code → ERR_CODE_TAKEN), update_employee (COALESCE partial), terminate_employee (TERMINATED/RESIGNED +
+date), upsert_shift. All hr-gated. Gate (rolled back, JWT): create → emp_count=1; shift upserts; dup code → ERR_CODE_TAKEN.
+Final-settlement calc deferred.
+
+H3 attendance + leaves — migration `hr_attendance_leaves`. attendance + leaves tables (§3.10), RLS tenant-read +
+RPC-only writes. mark_attendance (upsert by employee+date, computes late/early vs shift+grace, edit needs a reason →
+ERR_EDIT_REASON_REQUIRED), apply_leave (PENDING, days auto), decide_leave (hr:approve; approve stamps ON_LEAVE
+attendance across range). Leave-balance/year entitlement deferred. Gate (rolled back, JWT, seed-then-measure):
+attendance upserts w/ computed cols; same-day edit w/o reason rejected; ANNUAL +1..+2 approve → 2 ON_LEAVE rows.
+
+H4 payroll calc — migration `hr_payroll_calc`. payroll_runs/payroll_items + salary_advances tables (§3.10),
+RLS RPC-only writes. create_payroll_run (DRAFT, unique tenant/branch/period), calculate_payroll (per ACTIVE emp:
+basic + allowances + OT-from-attendance [hourly=base/(30*8) ×Σ overtime_hours] − advance auto-recovery − extra
+deductions; net≥0; sums to run totals), approve_payroll_run (hr:approve → APPROVED). NO GL yet (H5). Monthly
+pro-ration + OT-rate simple (refine flagged). Gate (rolled back, JWT; advance seeded via `reset role`, RPC-only
+table): 2 emps → gross 80416.67 (80000+416.67 OT), ded 5000 (advance), net 75416.67 ties; P1 net 45416.67, P2 30000; approve→APPROVED.
+
+H5 payroll disbursement — migration `hr_payroll_disburse` + fix `fix_disburse_payroll_je`. disburse_payroll_run
+(APPROVED→DISBURSED, hr:approve): posts balanced PAYROLL journal (Dr 6200=gross; Cr 1150 advances; Cr 2120 other
+deductions; Cr 1000 net) via post_journal, reduces advance balances (oldest-first, capped), items→PAID, links
+journal_entry_id. 8th balanced money path. Cash 1000 (bank split deferred, M07-consistent). BUG fixed at gate:
+`select post_journal() into v_je uuid` failed 22P02 (post_journal returns jsonb) → `v_je := (post_journal())->>'journal_entry_id'`.
+Gate (rolled back, JWT, gross≠net): dr=cr=80416.67; 6200=gross; 1000=net 75416.67; 1150=5000 advance; DISBURSED; trial_balance true.
+
+NEXT (not built): H6 salary_advances disburse/recover RPCs (Dr 1150 / Cr bank; recovery already handled at
+disburse); HR Flutter feature (employees/attendance/leaves/payroll pages).
