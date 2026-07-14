@@ -103,17 +103,18 @@ PermissionGate(reports:read), pull-to-refresh, 6-card KPI grid, recent sales, ma
 pl_snapshot from mv_account_balances. Deferred → M08: drilldowns, scheduled/email reports, KPI-grid config,
 Flutter surfacing of the 4 new KPIs.
 
-## M08 Reporting MVs — LIVE (matview layer)
-reporting_materialized_views: 6 matviews (daily_sales [fan-out FIXED], inventory_valuation [canonical], account_
-balances, customer/supplier_aging, product_performance) refreshed CONCURRENTLY by fn_refresh_materialized_views;
-not RLS-capable → raw select revoked, reads via definer RPCs. Drilldowns (reporting_drilldowns): drilldown_sales
-LIVE + leak-proven; 4 siblings stubbed. Scheduling (reporting_schedules + deliveries_fix): upsert/run_due (pg_cron
-*/15) queue PENDING report_deliveries rows (old communication_logs target NOT-NULL-broke → fixed); email SEND = M11
-dep. Analytics (analytics_events): immutable partitioned table + gin, RLS read-own/definer-write, capture gate-proven;
-FLAG no partition helper → all rows in default partition. AI recs (ai_recommendations): RLS read-own/definer-write;
-generate_reorder_recommendations rules-based off below_reorder (idempotent, gate-proven) + act_on_recommendation
-accept/dismiss; ML/other types deferred. NEXT: remaining drilldowns, read RPCs/wrapper views, partition helper,
-M11 sender, Flutter reporting surface.
+## M08 Reporting — backend LIVE (DB layer), all gate-proven rolled-back
+- MVs (reporting_materialized_views): 6 matviews (daily_sales [fan-out FIXED], inventory_valuation [canonical],
+  account_balances, customer/supplier_aging, product_performance) refreshed CONCURRENTLY by fn_refresh_materialized_
+  views; not RLS-capable → raw select revoked, reads via definer RPCs.
+- Drilldowns (reporting_drilldowns): drilldown_sales LIVE + leak-proven; 4 siblings stubbed.
+- Scheduling (reporting_schedules + deliveries_fix): upsert/run_due (pg_cron */15) queue PENDING report_deliveries
+  rows (old communication_logs target NOT-NULL-broke → fixed); email SEND = M11 dep.
+- Analytics (analytics_events): immutable partitioned + gin, RLS read-own/definer-write. FLAG: no partition helper
+  → all rows in default partition.
+- AI recs (ai_recommendations): generate_reorder_recommendations rules-based off below_reorder (idempotent) +
+  act_on_recommendation accept/dismiss; ML/other types deferred.
+NEXT: remaining drilldowns, read RPCs/wrapper views, partition helper, M11 sender, Flutter reporting surface.
 
 ## Purchasing — COMPLETE (back end + Flutter)
 
