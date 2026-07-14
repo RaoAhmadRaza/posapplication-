@@ -1,6 +1,6 @@
 # PROJECT STATE — Lumina POS
 
-Last updated: 2026-07-11
+Last updated: 2026-07-14
 
 ## Stack & Architecture
 
@@ -286,3 +286,17 @@ EXPIRED/OVERPAYMENT. AppTextField +onChanged (additive). C3 kanban multi-select 
 analyze clean; data path gate-verified. Device (button-tap) verify pending flutter run (user-driven).
 DEFERRED: /repair/:id/edit (no update_repair_job RPC); intake signature; file_uploads/attachments audit rows;
 board branch filter; customer-facing SMS/email; on-device click-through.
+
+## M10 HR & Payroll — H1 Foundation ONLY (backend, in progress)
+Migration `20260714073757_hr_foundation.sql` (applied prod + committed 624d898). Ships:
+7 enums (employee/salary/attendance/leave×2/payroll×2_status); `employees` (tenant+branch scoped,
+employee_code unique/tenant, salary_type+base_salary, bank+emergency+documents_json, soft-delete+version)
+and `shifts` (name/start/end/grace/break) tables + indexes; RLS = tenant read + hr-gated writes
+(auth_has_permission('hr','update')). NEW permission module `hr`: backfilled to all ADMIN roles (6 actions)
++ `trg_seed_hr_perms` AFTER INSERT trigger on roles (future ADMINs auto-get hr). CoA seeds (all existing
+tenants, idempotent, is_system): 6200 Salary Expense (EXPENSE), 2120 Payroll Deductions Payable (LIABILITY),
+1150 Employee Advances (ASSET). Codes H0-signed-off free; 5200 stays Warranty Cost (NOT reused).
+GATE PASSED: 7 enums live; ADMIN hr_perms=30 (5 tenants×6); 3 accounts w/ correct enum types + is_system;
+employees+shifts exist. FIX during push: `v.type::account_type_enum` cast — text→enum fails inside VALUES lists.
+NEXT (not built): attendance/leaves/payroll_runs/payroll_items/salary_advances tables; payroll RPCs +
+GL posting (Dr 6200 / Cr 2120+bank via post_journal); HR Flutter feature.
