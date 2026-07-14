@@ -10,9 +10,14 @@ import '../../../../core/design/widgets/app_button.dart';
 import '../../../../core/design/widgets/app_inline_banner.dart';
 import '../../../../core/design/widgets/app_text_field.dart';
 import '../../../../core/widgets/permission_gate.dart';
+import '../../domain/entities/attendance.dart';
 import '../../domain/entities/employee.dart';
+import '../controllers/attendance_controller.dart';
 import '../controllers/employees_controller.dart';
+import '../controllers/leaves_controller.dart';
 import '../widgets/hr_status_ui.dart';
+import 'attendance_grid_page.dart' show showMarkAttendanceSheet;
+import 'leaves_page.dart' show LeaveRow, showApplyLeaveSheet;
 
 class EmployeeProfilePage extends ConsumerWidget {
   const EmployeeProfilePage({super.key, required this.employeeId});
@@ -62,8 +67,8 @@ class EmployeeProfilePage extends ConsumerWidget {
             data: (employee) => TabBarView(
               children: [
                 _ProfileTab(employee: employee),
-                const _ComingSoon(label: 'Attendance'),
-                const _ComingSoon(label: 'Leaves'),
+                _AttendanceTab(employee: employee),
+                _LeavesTab(employee: employee),
                 const _ComingSoon(label: 'Payroll history'),
               ],
             ),
@@ -328,6 +333,166 @@ class _Section extends StatelessWidget {
                   ),
                 ],
               ),
+            ),
+        ],
+      ),
+    );
+  }
+}
+
+class _AttendanceTab extends ConsumerWidget {
+  const _AttendanceTab({required this.employee});
+  final Employee employee;
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final now = DateTime.now();
+    final query =
+        (year: now.year, month: now.month, employeeId: employee.id);
+    final async = ref.watch(attendanceMonthProvider(query));
+
+    Future<void> mark(DateTime date, Attendance? existing) =>
+        showMarkAttendanceSheet(
+          context: context,
+          employee: employee,
+          date: date,
+          existing: existing,
+          invalidateQuery: query,
+        );
+
+    return async.when(
+      loading: () => const Center(child: CircularProgressIndicator()),
+      error: (e, _) => Center(
+        child: Padding(
+          padding: const EdgeInsets.all(AppSpacing.screenPadding),
+          child: AppInlineBanner(
+              message: 'Could not load attendance.', type: BannerType.error),
+        ),
+      ),
+      data: (rows) => ListView(
+        padding: const EdgeInsets.all(AppSpacing.screenPadding),
+        children: [
+          AppButton(
+            label: 'Mark a day',
+            icon: Icons.add,
+            variant: AppButtonVariant.tinted,
+            fullWidth: true,
+            onPressed: () async {
+              final picked = await showDatePicker(
+                context: context,
+                initialDate: now,
+                firstDate: DateTime(now.year, now.month, 1),
+                lastDate: DateTime(now.year, now.month + 1, 0),
+              );
+              if (picked == null) return;
+              Attendance? existing;
+              for (final a in rows) {
+                if (a.date.day == picked.day) {
+                  existing = a;
+                  break;
+                }
+              }
+              await mark(picked, existing);
+            },
+          ),
+          const SizedBox(height: AppSpacing.md),
+          if (rows.isEmpty)
+            Center(
+              child: Text('No attendance this month.',
+                  style: AppTypography.footnote
+                      .copyWith(color: AppColors.textMuted)),
+            ),
+          for (final a in rows)
+            InkWell(
+              onTap: () => mark(a.date, a),
+              child: Padding(
+                padding: const EdgeInsets.symmetric(vertical: AppSpacing.sm),
+                child: Row(
+                  children: [
+                    SizedBox(
+                        width: 90,
+                        child: Text(a.date.toIso8601String().substring(0, 10),
+                            style: AppTypography.footnote)),
+                    Container(
+                      width: 10,
+                      height: 10,
+                      decoration: BoxDecoration(
+                        color: attendanceStatusColor(a.status),
+                        shape: BoxShape.circle,
+                      ),
+                    ),
+                    const SizedBox(width: 8),
+                    Expanded(
+                        child: Text(attendanceStatusLabels[a.status]!,
+                            style: AppTypography.footnote)),
+                    if (a.lateMinutes > 0)
+                      Text('late ${a.lateMinutes}m',
+                          style: AppTypography.caption
+                              .copyWith(color: AppColors.warning)),
+                    if (a.overtimeHours > 0)
+                      Padding(
+                        padding: const EdgeInsets.only(left: 8),
+                        child: Text('OT ${a.overtimeHours}h',
+                            style: AppTypography.caption
+                                .copyWith(color: AppColors.accent)),
+                      ),
+                  ],
+                ),
+              ),
+            ),
+        ],
+      ),
+    );
+  }
+}
+
+class _LeavesTab extends ConsumerWidget {
+  const _LeavesTab({required this.employee});
+  final Employee employee;
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final query = (employeeId: employee.id, status: null);
+    final async = ref.watch(leavesProvider(query));
+    return async.when(
+      loading: () => const Center(child: CircularProgressIndicator()),
+      error: (e, _) => Center(
+        child: Padding(
+          padding: const EdgeInsets.all(AppSpacing.screenPadding),
+          child: AppInlineBanner(
+              message: 'Could not load leaves.', type: BannerType.error),
+        ),
+      ),
+      data: (leaves) => ListView(
+        padding: const EdgeInsets.all(AppSpacing.screenPadding),
+        children: [
+          PermissionGate(
+            module: 'hr',
+            action: 'create',
+            child: Padding(
+              padding: const EdgeInsets.only(bottom: AppSpacing.md),
+              child: AppButton(
+                label: 'Apply Leave',
+                icon: Icons.add,
+                variant: AppButtonVariant.tinted,
+                fullWidth: true,
+                onPressed: () => showApplyLeaveSheet(
+                    context: context,
+                    employeeId: employee.id,
+                    invalidateQuery: query),
+              ),
+            ),
+          ),
+          if (leaves.isEmpty)
+            Center(
+              child: Text('No leaves.',
+                  style: AppTypography.footnote
+                      .copyWith(color: AppColors.textMuted)),
+            ),
+          for (final l in leaves)
+            Padding(
+              padding: const EdgeInsets.only(bottom: AppSpacing.sm),
+              child: LeaveRow(leave: l, invalidateQuery: query),
             ),
         ],
       ),

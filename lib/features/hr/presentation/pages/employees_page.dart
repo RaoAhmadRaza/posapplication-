@@ -52,6 +52,18 @@ class _EmployeesPageState extends ConsumerState<EmployeesPage> {
         title: Text('Employees', style: AppTypography.headline),
         actions: [
           IconButton(
+            icon: const Icon(Icons.calendar_month_outlined,
+                color: AppColors.accent),
+            tooltip: 'Attendance',
+            onPressed: () => context.push('/hr/attendance'),
+          ),
+          IconButton(
+            icon: const Icon(Icons.event_note_outlined,
+                color: AppColors.accent),
+            tooltip: 'Leaves',
+            onPressed: () => context.push('/hr/leaves'),
+          ),
+          IconButton(
             icon: const Icon(Icons.schedule, color: AppColors.accent),
             tooltip: 'Shifts',
             onPressed: () => context.push('/hr/shifts'),
