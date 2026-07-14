@@ -28,6 +28,18 @@ class HrRemoteDataSource {
   static const _leaveCols = 'id, tenant_id, employee_id, type, from_date,'
       ' to_date, days, reason, status, rejection_reason, employees(name)';
 
+  static const _runCols = 'id, tenant_id, branch_id, period, period_start,'
+      ' period_end, status, total_gross, total_deductions, total_net,'
+      ' employee_count, journal_entry_id';
+
+  static const _itemCols = 'id, run_id, employee_id, basic, allowances_json,'
+      ' deductions_json, overtime_hours, overtime_amount, gross_salary,'
+      ' total_deductions, net_salary, status, employees(name)';
+
+  static const _advanceCols = 'id, tenant_id, employee_id, amount, balance,'
+      ' recovery_amount, disbursed_at, fully_recovered_at, journal_entry_id,'
+      ' notes';
+
   Future<List<Map<String, dynamic>>> loadEmployees({
     String? branchId,
     String? status,
@@ -204,6 +216,89 @@ class HrRemoteDataSource {
       'p_leave_id': leaveId,
       'p_approve': approve,
       'p_rejection_reason': rejectionReason,
+    });
+    return result as Map<String, dynamic>;
+  }
+
+  Future<List<Map<String, dynamic>>> loadPayrollRuns() async {
+    return _client
+        .from('payroll_runs')
+        .select(_runCols)
+        .order('period_start', ascending: false);
+  }
+
+  Future<Map<String, dynamic>> loadPayrollRun(String id) async {
+    return _client.from('payroll_runs').select(_runCols).eq('id', id).single();
+  }
+
+  Future<List<Map<String, dynamic>>> loadPayrollItems(String runId) async {
+    return _client
+        .from('payroll_items')
+        .select(_itemCols)
+        .eq('run_id', runId)
+        .order('net_salary', ascending: false);
+  }
+
+  /// All advances for one employee (most recent first).
+  Future<List<Map<String, dynamic>>> loadEmployeeAdvances(
+      String employeeId) async {
+    return _client
+        .from('salary_advances')
+        .select(_advanceCols)
+        .eq('employee_id', employeeId)
+        .order('disbursed_at', ascending: false);
+  }
+
+  Future<Map<String, dynamic>> createPayrollRun(
+      Map<String, dynamic> data) async {
+    final result = await _client.rpc('create_payroll_run', params: {
+      'p_branch_id': data['p_branch_id'],
+      'p_period': data['p_period'],
+      'p_start': data['p_start'],
+      'p_end': data['p_end'],
+      'p_notes': data['p_notes'],
+    });
+    return result as Map<String, dynamic>;
+  }
+
+  Future<Map<String, dynamic>> calculatePayroll({
+    required String runId,
+    Map<String, dynamic> allowances = const {},
+    Map<String, dynamic> extraDeductions = const {},
+  }) async {
+    final result = await _client.rpc('calculate_payroll', params: {
+      'p_run_id': runId,
+      'p_allowances': allowances,
+      'p_extra_deductions': extraDeductions,
+    });
+    return result as Map<String, dynamic>;
+  }
+
+  Future<Map<String, dynamic>> approvePayrollRun(String runId) async {
+    final result = await _client
+        .rpc('approve_payroll_run', params: {'p_run_id': runId});
+    return result as Map<String, dynamic>;
+  }
+
+  Future<Map<String, dynamic>> disbursePayrollRun({
+    required String runId,
+    required String payAccount,
+  }) async {
+    final result = await _client.rpc('disburse_payroll_run', params: {
+      'p_run_id': runId,
+      'p_pay_account': payAccount,
+    });
+    return result as Map<String, dynamic>;
+  }
+
+  Future<Map<String, dynamic>> disburseSalaryAdvance(
+      Map<String, dynamic> data) async {
+    final result = await _client.rpc('disburse_salary_advance', params: {
+      'p_employee_id': data['p_employee_id'],
+      'p_amount': data['p_amount'],
+      'p_recovery_amount': data['p_recovery_amount'],
+      'p_pay_account': data['p_pay_account'],
+      'p_notes': data['p_notes'],
     });
     return result as Map<String, dynamic>;
   }

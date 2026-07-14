@@ -5,6 +5,8 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 import '../../domain/entities/attendance.dart';
 import '../../domain/entities/employee.dart';
 import '../../domain/entities/leave.dart';
+import '../../domain/entities/payroll.dart';
+import '../../domain/entities/salary_advance.dart';
 import '../../domain/entities/shift.dart';
 import '../../domain/failures/hr_failure.dart';
 import '../../domain/repositories/hr_repository.dart';
@@ -12,6 +14,9 @@ import '../datasources/hr_remote_datasource.dart';
 import '../models/attendance_model.dart';
 import '../models/employee_model.dart';
 import '../models/leave_model.dart';
+import '../models/payroll_item_model.dart';
+import '../models/payroll_run_model.dart';
+import '../models/salary_advance_model.dart';
 import '../models/shift_model.dart';
 
 final hrRepositoryProvider = Provider<HrRepository>((ref) {
@@ -222,6 +227,105 @@ class HrRepositoryImpl implements HrRepository {
         approve: approve,
         rejectionReason: rejectionReason,
       );
+      return null;
+    } catch (e) {
+      return _mapError(e);
+    }
+  }
+
+  @override
+  Future<(List<PayrollRun>, HrFailure?)> loadPayrollRuns() async {
+    try {
+      final rows = await _ds.loadPayrollRuns();
+      return (rows.map(PayrollRunModel.fromJson).toList(), null);
+    } catch (e) {
+      return (<PayrollRun>[], _mapError(e));
+    }
+  }
+
+  @override
+  Future<(PayrollRun?, List<PayrollItem>, HrFailure?)> loadPayrollRun(
+      String id) async {
+    try {
+      final runRow = await _ds.loadPayrollRun(id);
+      final itemRows = await _ds.loadPayrollItems(id);
+      return (
+        PayrollRunModel.fromJson(runRow),
+        itemRows.map(PayrollItemModel.fromJson).toList(),
+        null,
+      );
+    } catch (e) {
+      return (null, <PayrollItem>[], _mapError(e));
+    }
+  }
+
+  @override
+  Future<(List<SalaryAdvance>, HrFailure?)> loadEmployeeAdvances(
+      String employeeId) async {
+    try {
+      final rows = await _ds.loadEmployeeAdvances(employeeId);
+      return (rows.map(SalaryAdvanceModel.fromJson).toList(), null);
+    } catch (e) {
+      return (<SalaryAdvance>[], _mapError(e));
+    }
+  }
+
+  @override
+  Future<(String?, HrFailure?)> createPayrollRun(
+      Map<String, dynamic> data) async {
+    try {
+      final row = await _ds.createPayrollRun(data);
+      return (row['run_id'] as String?, null);
+    } catch (e) {
+      return (null, _mapError(e));
+    }
+  }
+
+  @override
+  Future<HrFailure?> calculatePayroll({
+    required String runId,
+    Map<String, dynamic> allowances = const {},
+    Map<String, dynamic> extraDeductions = const {},
+  }) async {
+    try {
+      await _ds.calculatePayroll(
+        runId: runId,
+        allowances: allowances,
+        extraDeductions: extraDeductions,
+      );
+      return null;
+    } catch (e) {
+      return _mapError(e);
+    }
+  }
+
+  @override
+  Future<HrFailure?> approvePayrollRun(String runId) async {
+    try {
+      await _ds.approvePayrollRun(runId);
+      return null;
+    } catch (e) {
+      return _mapError(e);
+    }
+  }
+
+  @override
+  Future<HrFailure?> disbursePayrollRun({
+    required String runId,
+    required String payAccount,
+  }) async {
+    try {
+      await _ds.disbursePayrollRun(runId: runId, payAccount: payAccount);
+      return null;
+    } catch (e) {
+      return _mapError(e);
+    }
+  }
+
+  @override
+  Future<HrFailure?> disburseSalaryAdvance(Map<String, dynamic> data) async {
+    try {
+      await _ds.disburseSalaryAdvance(data);
       return null;
     } catch (e) {
       return _mapError(e);

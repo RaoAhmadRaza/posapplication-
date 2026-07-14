@@ -1,6 +1,8 @@
 import '../entities/attendance.dart';
 import '../entities/employee.dart';
 import '../entities/leave.dart';
+import '../entities/payroll.dart';
+import '../entities/salary_advance.dart';
 import '../entities/shift.dart';
 import '../failures/hr_failure.dart';
 
@@ -55,4 +57,31 @@ abstract class HrRepository {
     required bool approve,
     String? rejectionReason,
   });
+
+  Future<(List<PayrollRun>, HrFailure?)> loadPayrollRuns();
+
+  /// One run plus its items (items empty until calculated).
+  Future<(PayrollRun?, List<PayrollItem>, HrFailure?)> loadPayrollRun(
+      String id);
+
+  Future<(List<SalaryAdvance>, HrFailure?)> loadEmployeeAdvances(
+      String employeeId);
+
+  /// Returns the new run id on success.
+  Future<(String?, HrFailure?)> createPayrollRun(Map<String, dynamic> data);
+
+  Future<HrFailure?> calculatePayroll({
+    required String runId,
+    Map<String, dynamic> allowances = const {},
+    Map<String, dynamic> extraDeductions = const {},
+  });
+
+  Future<HrFailure?> approvePayrollRun(String runId);
+
+  Future<HrFailure?> disbursePayrollRun({
+    required String runId,
+    required String payAccount,
+  });
+
+  Future<HrFailure?> disburseSalaryAdvance(Map<String, dynamic> data);
 }
