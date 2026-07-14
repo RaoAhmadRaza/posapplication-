@@ -695,6 +695,12 @@ class _QuickLaunch extends ConsumerWidget {
             label: 'Sales History',
             onTap: () => context.push('/sales/history'),
           ),
+        if (matrix.contains('reports:read'))
+          _QuickButton(
+            icon: Icons.bar_chart,
+            label: 'Reports',
+            onTap: () => context.push('/reports'),
+          ),
       ],
     );
   }

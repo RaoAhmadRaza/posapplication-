@@ -25,6 +25,12 @@ import 'features/auth/presentation/pages/mfa_enroll_screen.dart';
 import 'features/dashboard/presentation/pages/dashboard_page.dart';
 import 'features/dashboard/presentation/pages/drilldown_page.dart';
 import 'features/dashboard/domain/entities/drilldown.dart';
+import 'features/reporting/presentation/pages/reports_hub_page.dart';
+import 'features/reporting/presentation/pages/inventory_reporting_page.dart';
+import 'features/reporting/presentation/pages/product_performance_page.dart';
+import 'features/reporting/presentation/pages/customer_reporting_page.dart';
+import 'features/reporting/presentation/pages/supplier_reporting_page.dart';
+import 'features/reporting/presentation/pages/trend_analysis_page.dart';
 import 'features/inventory/presentation/pages/inventory_hub_page.dart';
 import 'features/inventory/presentation/pages/categories_page.dart';
 import 'features/inventory/presentation/pages/category_form_page.dart';
@@ -589,6 +595,30 @@ final appRouter = GoRouter(
         final nav = state.extra as ({DrilldownArgs args, String title});
         return DrilldownPage(args: nav.args, title: nav.title);
       },
+    ),
+    GoRoute(
+      path: '/reports',
+      builder: (context, state) => const ReportsHubPage(),
+    ),
+    GoRoute(
+      path: '/reports/inventory',
+      builder: (context, state) => const InventoryReportingPage(),
+    ),
+    GoRoute(
+      path: '/reports/products',
+      builder: (context, state) => const ProductPerformancePage(),
+    ),
+    GoRoute(
+      path: '/reports/customers',
+      builder: (context, state) => const CustomerReportingPage(),
+    ),
+    GoRoute(
+      path: '/reports/suppliers',
+      builder: (context, state) => const SupplierReportingPage(),
+    ),
+    GoRoute(
+      path: '/reports/trends',
+      builder: (context, state) => const TrendAnalysisPage(),
     ),
     GoRoute(
       path: '/accounting/vouchers',
