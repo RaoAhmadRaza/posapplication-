@@ -66,9 +66,6 @@ expenses/reports + all 6 auto-post money paths) · 2026-07-13 device per-tenant 
 (repair_stock_movement_enum REPAIR_USE, repair_lifecycle_rpcs, repair_parts_consumption, repair_close_invoice,
 inventory_service_type_guard) + inventory SERVICE non-stock guard.
 
-## Bugfixes Applied
-Full detail in DECISIONS.md. Headlines: RPC single-row Map parsing; canonical warehouse_id NULL stock; per-tenant device fingerprint uniqueness (login-time 42501 fix).
-
 ## Peripheral features — COMPLETE (detail in DECISIONS.md)
 Barcode scanning (mobile_scanner, shared scanBarcode/BarcodeScanPage); label printing (pdf/printing/barcode,
 LabelPdfService + LabelPrintPage); notifications (+prefs, trg_low_stock_notify, hub bell badge); bulk CSV import
@@ -95,26 +92,20 @@ zero). Full per-slice detail in DECISIONS.md.
 ### Sales V1 Deferred
 delivery_orders, loyalty, tax_rules/payment_methods tables, customer_groups, pricing-tier, offline sync.
 
-## Dashboard V1 — COMPLETE
-
-Clean-arch (data+domain+controller in features/dashboard/, page in features/auth/pages/dashboard_page.dart). UI:
-PermissionGate(reports:read), pull-to-refresh, 6-card KPI grid, recent sales, matrix-gated quick-launch, fl_chart
-7-day bar + payment pie. dashboard_summary extended (dashboard_kpis_extend): + payables_total, cash/bank balances,
-pl_snapshot from mv_account_balances. Deferred → M08: drilldowns, scheduled/email reports, KPI-grid config,
-Flutter surfacing of the 4 new KPIs.
+## Dashboard V2 — COMPLETE (relocated to features/dashboard/, clean-arch)
+page moved out of auth/ → features/dashboard/presentation/pages/. reports:read gate, pull-refresh, fl_chart bar+pie,
+recent sales, quick-launch. 10-KPI grid (6 orig + payables/cash/bank/pl) CONFIGURABLE — show/hide + order per-device
+in shared_preferences (edit-layout toggle; server prefs deferred, DECISION#2 client-side). Each KPI taps a DrilldownPage
+over drilldown_* RPCs; rows deep-link (invoice→/sales/invoice, product→/inventory/stock, journal→/accounting/journal).
 
 ## M08 Reporting — backend LIVE (DB layer), all gate-proven rolled-back
 - MVs (reporting_materialized_views): 6 matviews (daily_sales [fan-out FIXED], inventory_valuation [canonical],
-  account_balances, customer/supplier_aging, product_performance) refreshed CONCURRENTLY by fn_refresh_materialized_
-  views; not RLS-capable → raw select revoked, reads via definer RPCs.
-- Drilldowns (reporting_drilldowns): drilldown_sales LIVE + leak-proven; 4 siblings stubbed.
-- Scheduling (reporting_schedules + deliveries_fix): upsert/run_due (pg_cron */15) queue PENDING report_deliveries
-  rows (old communication_logs target NOT-NULL-broke → fixed); email SEND = M11 dep.
-- Analytics (analytics_events): immutable partitioned + gin, RLS read-own/definer-write. FLAG: no partition helper
-  → all rows in default partition.
-- AI recs (ai_recommendations): generate_reorder_recommendations rules-based off below_reorder (idempotent) +
-  act_on_recommendation accept/dismiss; ML/other types deferred.
-NEXT: remaining drilldowns, read RPCs/wrapper views, partition helper, M11 sender, Flutter reporting surface.
+  account_balances, customer/supplier_aging, product_performance) refreshed CONCURRENTLY; raw select revoked (definer RPCs).
+- Drilldowns (reporting_drilldowns + _complete): all 5 LIVE + leak-proven (sales/low_stock/receivables/account/product).
+- Scheduling (reporting_schedules + deliveries_fix): run_due (pg_cron */15) queues PENDING report_deliveries; SEND = M11 dep.
+- Analytics (analytics_events): immutable partitioned + gin, RLS read-own/definer-write. FLAG: no partition helper yet.
+- AI recs (ai_recommendations): generate_reorder_recommendations (idempotent) + act_on_recommendation; ML/other deferred.
+NEXT: read RPCs/wrapper views, partition helper, M11 sender, Flutter surface for scheduling/analytics/recs.
 
 ## Purchasing — COMPLETE (back end + Flutter)
 
