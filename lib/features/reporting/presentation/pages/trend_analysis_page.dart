@@ -10,6 +10,7 @@ import '../../../../core/design/widgets/app_inline_banner.dart';
 import '../../../../core/widgets/permission_gate.dart';
 import '../../domain/entities/reporting.dart';
 import '../controllers/reporting_controllers.dart';
+import '../widgets/report_export_button.dart';
 
 /// yyyy-MM-dd for the daily-sales range params.
 String _isoDay(DateTime d) => d.toIso8601String().substring(0, 10);
@@ -50,6 +51,23 @@ class _TrendAnalysisPageState extends ConsumerState<TrendAnalysisPage> {
           backgroundColor: AppColors.background,
           surfaceTintColor: AppColors.background,
           title: Text('Trends', style: AppTypography.largeTitle),
+          actions: [
+            ReportExportButton(
+              title: 'Sales Trend',
+              headers: const ['Date', 'Revenue', 'Profit', 'Invoices'],
+              rowsBuilder: () {
+                final rows = ref.read(dailySalesProvider(_range)).value ?? [];
+                return rows
+                    .map((r) => [
+                          r.saleDate.toIso8601String().substring(0, 10),
+                          r.totalRevenue.toStringAsFixed(2),
+                          r.totalProfit.toStringAsFixed(2),
+                          r.invoiceCount.toString(),
+                        ])
+                    .toList();
+              },
+            ),
+          ],
         ),
         body: _buildBody(),
       ),

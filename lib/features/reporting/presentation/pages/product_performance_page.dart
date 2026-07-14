@@ -11,6 +11,7 @@ import '../../../../core/design/widgets/app_inline_banner.dart';
 import '../../../../core/widgets/permission_gate.dart';
 import '../controllers/reporting_controllers.dart';
 import '../../domain/entities/reporting.dart';
+import '../widgets/report_export_button.dart';
 
 /// Metric used to sort/chart the product-performance rows.
 enum _SortMetric {
@@ -69,6 +70,35 @@ class _ProductPerformancePageState
         backgroundColor: AppColors.background,
         surfaceTintColor: AppColors.background,
         title: Text('Product Performance', style: AppTypography.largeTitle),
+        actions: [
+          ReportExportButton(
+            title: 'Product Performance',
+            headers: const [
+              'Product',
+              'SKU',
+              'Units',
+              'Revenue',
+              'Profit',
+              'Invoices',
+            ],
+            rowsBuilder: () {
+              final rows =
+                  ref.read(productPerformanceProvider).value ?? [];
+              final sorted = [...rows]
+                ..sort((a, b) => _metric.value(b).compareTo(_metric.value(a)));
+              return sorted
+                  .map((r) => [
+                        r.productName,
+                        r.sku ?? '',
+                        r.unitsSold.toStringAsFixed(0),
+                        r.revenue.toStringAsFixed(2),
+                        r.profit.toStringAsFixed(2),
+                        r.invoiceCount.toString(),
+                      ])
+                  .toList();
+            },
+          ),
+        ],
       ),
       body: rowsAsync.when(
         loading: () => const Center(child: CircularProgressIndicator()),

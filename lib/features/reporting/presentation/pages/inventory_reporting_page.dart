@@ -11,6 +11,7 @@ import '../../../../core/design/widgets/app_inline_banner.dart';
 import '../../../../core/widgets/permission_gate.dart';
 import '../../domain/entities/reporting.dart';
 import '../controllers/reporting_controllers.dart';
+import '../widgets/report_export_button.dart';
 
 class InventoryReportingPage extends ConsumerWidget {
   const InventoryReportingPage({super.key});
@@ -23,6 +24,36 @@ class InventoryReportingPage extends ConsumerWidget {
         backgroundColor: AppColors.background,
         surfaceTintColor: AppColors.background,
         title: Text('Inventory', style: AppTypography.largeTitle),
+        actions: [
+          ReportExportButton(
+            title: 'Inventory Valuation',
+            headers: const [
+              'Product',
+              'SKU',
+              'Category',
+              'Qty',
+              'Avg Cost',
+              'Total Value',
+              'Retail Value',
+              'Below Reorder',
+            ],
+            rowsBuilder: () {
+              final rows = ref.read(inventoryValuationProvider).value ?? [];
+              return rows
+                  .map((r) => [
+                        r.productName,
+                        r.sku ?? '',
+                        r.categoryName ?? '',
+                        r.qtyOnHand.toStringAsFixed(0),
+                        r.avgCost.toStringAsFixed(2),
+                        r.totalValue.toStringAsFixed(2),
+                        r.retailValue.toStringAsFixed(2),
+                        r.belowReorder ? 'Yes' : 'No',
+                      ])
+                  .toList();
+            },
+          ),
+        ],
       ),
       body: PermissionGate(
         module: 'reports',

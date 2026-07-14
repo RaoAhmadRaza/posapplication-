@@ -1,8 +1,15 @@
+import '../../domain/entities/ai_recommendation.dart';
+import '../../domain/entities/report_schedule.dart';
 import '../../domain/entities/reporting.dart';
 
 double _num(dynamic v) => double.tryParse(v.toString()) ?? 0;
 int _int(dynamic v) => (v is int) ? v : int.tryParse(v.toString()) ?? 0;
 DateTime? _date(dynamic v) => v == null ? null : DateTime.tryParse(v.toString());
+
+List<String> _strList(dynamic v) =>
+    (v is List) ? v.map((e) => e.toString()).toList() : <String>[];
+Map<String, dynamic> _map(dynamic v) =>
+    (v is Map) ? Map<String, dynamic>.from(v) : <String, dynamic>{};
 
 class ReportingModels {
   static InventoryValuationRow inventory(Map<String, dynamic> j) =>
@@ -51,5 +58,30 @@ class ReportingModels {
         totalRevenue: _num(j['total_revenue']),
         totalProfit: _num(j['total_profit']),
         invoiceCount: _int(j['invoice_count']),
+      );
+
+  static ReportSchedule schedule(Map<String, dynamic> j) => ReportSchedule(
+        id: j['id'].toString(),
+        reportType: (j['report_type'] ?? '').toString(),
+        name: (j['name'] ?? '').toString(),
+        frequency: (j['frequency'] ?? 'DAILY').toString(),
+        recipients: _strList(j['recipients_json']),
+        outputFormat: (j['output_format'] ?? 'PDF').toString(),
+        filters: _map(j['filters_json']),
+        isActive: j['is_active'] == true,
+        nextRunAt: _date(j['next_run_at']),
+        lastRunAt: _date(j['last_run_at']),
+      );
+
+  static AiRecommendation recommendation(Map<String, dynamic> j) =>
+      AiRecommendation(
+        id: j['id'].toString(),
+        recommendationType: (j['recommendation_type'] ?? '').toString(),
+        entityType: (j['entity_type'] ?? '').toString(),
+        entityId: j['entity_id'].toString(),
+        recommendation: _map(j['recommendation_json']),
+        confidenceScore: _num(j['confidence_score']),
+        reasoning: j['reasoning'] as String?,
+        status: (j['status'] ?? 'PENDING').toString(),
       );
 }

@@ -31,6 +31,9 @@ import 'features/reporting/presentation/pages/product_performance_page.dart';
 import 'features/reporting/presentation/pages/customer_reporting_page.dart';
 import 'features/reporting/presentation/pages/supplier_reporting_page.dart';
 import 'features/reporting/presentation/pages/trend_analysis_page.dart';
+import 'features/reporting/presentation/pages/scheduled_reports_page.dart';
+import 'features/reporting/presentation/pages/smart_insights_page.dart';
+import 'features/reporting/presentation/pages/forecasting_page.dart';
 import 'features/inventory/presentation/pages/inventory_hub_page.dart';
 import 'features/inventory/presentation/pages/categories_page.dart';
 import 'features/inventory/presentation/pages/category_form_page.dart';
@@ -619,6 +622,18 @@ final appRouter = GoRouter(
     GoRoute(
       path: '/reports/trends',
       builder: (context, state) => const TrendAnalysisPage(),
+    ),
+    GoRoute(
+      path: '/reports/schedules',
+      builder: (context, state) => const ScheduledReportsPage(),
+    ),
+    GoRoute(
+      path: '/reports/insights',
+      builder: (context, state) => const SmartInsightsPage(),
+    ),
+    GoRoute(
+      path: '/reports/forecast',
+      builder: (context, state) => const ForecastingPage(),
     ),
     GoRoute(
       path: '/accounting/vouchers',

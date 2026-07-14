@@ -81,6 +81,18 @@ class ReportsHubPage extends StatelessWidget {
                   subtitle: 'Revenue and profit over a date range',
                   onTap: () => context.push('/reports/trends'),
                 ),
+                _ReportRow(
+                  icon: Icons.auto_graph,
+                  title: 'Forecasting',
+                  subtitle: 'Rules-based revenue projection (estimate)',
+                  onTap: () => context.push('/reports/forecast'),
+                ),
+                _ReportRow(
+                  icon: Icons.lightbulb_outline,
+                  title: 'Smart Insights',
+                  subtitle: 'Reorder recommendations to accept or dismiss',
+                  onTap: () => context.push('/reports/insights'),
+                ),
                 const SizedBox(height: AppSpacing.xl),
                 _section('Receivables & Payables'),
                 _ReportRow(
@@ -101,8 +113,7 @@ class ReportsHubPage extends StatelessWidget {
                   icon: Icons.schedule,
                   title: 'Scheduled Reports',
                   subtitle: 'Recurring report deliveries (email via M11)',
-                  onTap: () => context.push('/approvals/workflows'),
-                  enabled: false,
+                  onTap: () => context.push('/reports/schedules'),
                 ),
                 const SizedBox(height: AppSpacing.xxl),
               ],
@@ -126,14 +137,12 @@ class _ReportRow extends StatelessWidget {
     required this.title,
     required this.subtitle,
     required this.onTap,
-    this.enabled = true,
   });
 
   final IconData icon;
   final String title;
   final String subtitle;
   final VoidCallback onTap;
-  final bool enabled;
 
   @override
   Widget build(BuildContext context) {
@@ -160,12 +169,12 @@ class _ReportRow extends StatelessWidget {
             style:
                 AppTypography.headline.copyWith(color: AppColors.textPrimary)),
         subtitle: Text(
-          enabled ? subtitle : '$subtitle · coming soon',
+          subtitle,
           style: AppTypography.footnote.copyWith(color: AppColors.textHint),
         ),
         trailing:
             const Icon(Icons.chevron_right, color: AppColors.separator),
-        onTap: enabled ? onTap : null,
+        onTap: onTap,
       ),
     );
   }

@@ -10,6 +10,7 @@ import '../../../../core/design/widgets/app_card.dart';
 import '../../../../core/design/widgets/app_inline_banner.dart';
 import '../../../../core/widgets/permission_gate.dart';
 import '../../domain/entities/reporting.dart';
+import './report_export_button.dart';
 
 /// Shared aging-report UI. Both customer and supplier pages wrap this,
 /// passing the matching provider + labels.
@@ -42,6 +43,36 @@ class AgingReportView extends ConsumerWidget {
         backgroundColor: AppColors.background,
         surfaceTintColor: AppColors.background,
         title: Text(title, style: AppTypography.largeTitle),
+        actions: [
+          ReportExportButton(
+            title: '$entityLabel Aging',
+            headers: [
+              entityLabel,
+              'Total',
+              'Current',
+              '1-30',
+              '31-60',
+              '61-90',
+              '90+',
+              'Max Days',
+            ],
+            rowsBuilder: () {
+              final rows = ref.read(provider).value ?? [];
+              return rows
+                  .map((r) => [
+                        r.name,
+                        r.totalBalance.toStringAsFixed(2),
+                        r.current.toStringAsFixed(2),
+                        r.b1to30.toStringAsFixed(2),
+                        r.b31to60.toStringAsFixed(2),
+                        r.b61to90.toStringAsFixed(2),
+                        r.b90plus.toStringAsFixed(2),
+                        r.maxDaysOverdue.toString(),
+                      ])
+                  .toList();
+            },
+          ),
+        ],
       ),
       body: PermissionGate(
         module: 'reports',
