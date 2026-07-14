@@ -71,13 +71,9 @@ Full detail in DECISIONS.md. Headlines: RPC single-row Map parsing; canonical wa
 per-tenant device fingerprint uniqueness (login-time 42501 fix, 2026-07-13).
 
 ## Peripheral features — COMPLETE (detail in DECISIONS.md)
-
-- **Barcode scanning** (`mobile_scanner`): shared `scanBarcode()`/`BarcodeScanPage`, platform-guarded; wired
-  into products search, product form, IMEI lookup, count session.
-- **Label printing** (`pdf`/`printing`/`barcode`): `LabelPdfService` A4 grid; multi-select → `LabelPrintPage`.
-- **Notifications**: `notifications`(+prefs), `trg_low_stock_notify`, `NotificationsPage` + hub bell badge.
-- **Bulk import** (`file_picker`/`csv`): `bulk_import_products` RPC + 3-step CSV `ImportProductsPage`.
-- **Voice search** (`speech_to_text`): guarded mic in products search → `ProductsController.search()`.
+Barcode scanning (mobile_scanner, shared scanBarcode/BarcodeScanPage); label printing (pdf/printing/barcode,
+LabelPdfService + LabelPrintPage); notifications (+prefs, trg_low_stock_notify, hub bell badge); bulk CSV import
+(bulk_import_products RPC + ImportProductsPage); voice search (speech_to_text mic in products search).
 
 ## Known Issues
 
@@ -215,7 +211,7 @@ parts/assign; close BRANCHES Close&Invoice vs Warranty-no-charge; warranty link 
 (perf metrics), history (search), QR device label. analyze clean; data-path gate-verified, device tap-through
 user-driven. DEFERRED: /repair/:id/edit (no RPC), intake signature, board branch filter, customer SMS/email.
 
-## M10 HR & Payroll — Backend COMPLETE (H1–H6) + HR UI (H7.1–H7.2)
+## M10 HR & Payroll — COMPLETE (backend H1–H6 + UI H7.1–H7.3)
 Backend (all migrations applied + rolled-back-gate-verified; full per-phase detail in DECISIONS 2026-07-14):
 - H1 foundation: 7 enums, employees + shifts tables, RLS (tenant read / hr-gated writes), NEW `hr` permission
   module (backfilled ADMINs + trg_seed_hr_perms), CoA seeds 6200 Salary / 2120 Deductions Payable / 1150
@@ -243,6 +239,11 @@ apply_leave/decide_leave; families attendanceMonthProvider/leavesProvider/branch
 AttendanceGridPage (employees×days grid, colour+letter, month nav, cell→mark sheet, NOTES-required-on-edit →
 ERR_EDIT_REASON_REQUIRED inline), LeavesPage (status chips, Apply hr:create, Approve/Reject hr:approve+reason),
 ClockInOutPage (self clock, MANUAL). Profile Attendance+Leaves tabs wired. Routes /hr/attendance|leaves|clock.
-analyze clean; device tap-through user-driven.
-NEXT: H7.3 payroll UI (run→calculate→approve→disburse, advances). Pre-existing gap: handle_new_user seeds no
-CoA → future tenants lack HR accounts until provisioning is fixed.
+H7.3 payroll UI (additive): +payroll runs/items/advances reads + create/calculate/approve/disburse_payroll_run
++ disburse_salary_advance RPCs; PayrollItem +allowances/deductions maps. Providers payrollRuns/payrollRunDetail/
+employeeAdvances + PayrollActions/AdvanceActions. Pages: PayrollRunsPage (New Run = month picker), PayrollRunDetail
+(status-driven single action: DRAFT Calculate hr:create → CALCULATED Approve → APPROVED Disburse hr:approve w/
+confirm[net+1000 Cash] → DISBURSED "View journal" /accounting/journal/:id; non-APPROVED can't disburse). Per-item
++ print-all PayslipPdfService (Printing.layoutPdf). Give-Advance (disburse_salary_advance) + advances list w/
+recovery bar on Profile Payroll tab. Routes /hr/payroll[/:id]. analyze clean; device tap-through user-driven.
+Pre-existing gap: handle_new_user seeds no CoA → future tenants lack HR accounts until provisioning is fixed.

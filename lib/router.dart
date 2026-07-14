@@ -81,6 +81,8 @@ import 'features/hr/presentation/pages/shifts_page.dart';
 import 'features/hr/presentation/pages/attendance_grid_page.dart';
 import 'features/hr/presentation/pages/leaves_page.dart';
 import 'features/hr/presentation/pages/clock_in_out_page.dart';
+import 'features/hr/presentation/pages/payroll_runs_page.dart';
+import 'features/hr/presentation/pages/payroll_run_detail_page.dart';
 import 'features/inventory/presentation/pages/products_page.dart';
 import 'features/inventory/presentation/pages/product_form_page.dart';
 import 'features/inventory/presentation/pages/barcode_templates_page.dart';
@@ -512,6 +514,15 @@ final appRouter = GoRouter(
     GoRoute(
       path: '/hr/clock',
       builder: (context, state) => const ClockInOutPage(),
+    ),
+    GoRoute(
+      path: '/hr/payroll',
+      builder: (context, state) => const PayrollRunsPage(),
+    ),
+    GoRoute(
+      path: '/hr/payroll/:id',
+      builder: (context, state) =>
+          PayrollRunDetailPage(runId: state.pathParameters['id']!),
     ),
     GoRoute(
       path: '/hr/employees/new',
