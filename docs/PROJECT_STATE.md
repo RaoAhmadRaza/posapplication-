@@ -103,12 +103,13 @@ over drilldown_* RPCs; rows deep-link (invoice→/sales/invoice, product→/inve
   account_balances, customer/supplier_aging, product_performance) refreshed CONCURRENTLY; raw select revoked (definer RPCs).
 - Drilldowns (reporting_drilldowns + _complete): all 5 LIVE + leak-proven (sales/low_stock/receivables/account/product).
 - Scheduling (reporting_schedules + deliveries_fix): run_due (pg_cron */15) queues PENDING report_deliveries; SEND = M11 dep.
-- Analytics (analytics_events): immutable partitioned + gin, RLS read-own/definer-write. FLAG: no partition helper yet.
-- AI recs (ai_recommendations): generate_reorder_recommendations (idempotent) + act_on_recommendation; ML/other deferred.
+- Analytics (analytics_events): immutable partitioned + gin, RLS read-own/definer-write (FLAG: no partition helper). AI recs
+  (ai_recommendations): generate_reorder_recommendations (idempotent) + act_on_recommendation; ML deferred.
 - Reporting UI COMPLETE (features/reporting/ + reporting_read_rpcs): ReportsHubPage /reports (Financial→existing
   accounting reports) + Inventory/Product-Perf/Cust-Supp-Aging/Trends/Forecasting (fl_chart, definer read RPCs over MVs),
   ScheduledReports (upsert, reports:export), SmartInsights (ai_recs accept/dismiss + REORDER→Create-PO), PDF/CSV export.
-NEXT: partition helper, M11 email sender (report_deliveries sit PENDING), analytics depth.
+- Ops (pg_cron, MANUAL — not in migrations): mv_refresh_15min + report_schedules_runner (*/15) + reorder_daily (06:00) + approvals_escalation_hourly, all active.
+NEXT: analytics_events partition helper, M11 email sender (report_deliveries sit PENDING), analytics/ML depth.
 
 ## Purchasing — COMPLETE (back end + Flutter)
 
