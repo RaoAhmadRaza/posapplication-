@@ -1,6 +1,6 @@
 # PROJECT STATE — Lumina POS
 
-Last updated: 2026-07-14
+Last updated: 2026-07-15
 
 ## Stack & Architecture
 
@@ -70,6 +70,16 @@ LabelPdfService + LabelPrintPage); notifications (+prefs, trg_low_stock_notify, 
 
 ## Known Issues
 - Profile loaded once (no pull-to-refresh); IMEI section not yet in product edit form (SERIALIZED)
+- Tenant provisioning: golden seed (accounts/series/tax/fiscal/templates/sentinel/warehouse) was backfilled
+  per-migration, NOT on tenant creation. P1 gate `verify_all_tenants_provisioning()` + P2 seeder
+  `provision_tenant()` (migrations tenant_provisioning_verify / _seed / _seed_tax_mode_cast_fix) DONE: idempotent,
+  definer, 2 gate bugs fixed (tax mode enum-cast 42804; warehouse auth-guard 42501). Sweep applied → all 5 tenants
+  complete=true, open_fiscal_period>=1 (Ahmad Store's STOCK_TRANSFER/STOCK_COUNT drift closed; all tenants now 4 tax
+  rules vs prior 1, additive). P3 DONE (migration tenant_provisioning_wire_signup): handle_new_user's new-tenant
+  branch calls provision_tenant() in the signup txn (no exception swallow — provisioning failure rolls signup back
+  atomically). Gate green: non-business signup → Demo Store CASHIER unaffected; business signup → new tenant born
+  ADMIN + complete:true, zero manual steps. Provisioning is now creation-time; the "new tenant can't post GL" gap
+  is closed.
 
 ## Migration Import — COMPLETE
 `lib/features/migration_import/` clean-arch (reuses InventoryFailure). 4 set-based RPCs (migrate_import_categories/
