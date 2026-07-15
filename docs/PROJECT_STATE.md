@@ -70,13 +70,20 @@ LabelPdfService + LabelPrintPage); notifications (+prefs, trg_low_stock_notify, 
 
 ## Known Issues
 - Profile loaded once (no pull-to-refresh); IMEI section not yet in product edit form (SERIALIZED)
+- ⚠️ FISCAL ROLLOVER CLIFF: provision_tenant seeds only the current-year OPEN period. Next Jan 1 every tenant
+  needs a new period or ALL journal posting stops tenant-wide. No rollover job — fix = fn_ensure_current_fiscal_period()
+  on cron (idempotent). Flagged, not built. (See DECISIONS P5 follow-ups.)
+- ⚠️ number_series_type_enum landmines: JOURNAL_ENTRY + RECEIPT_VOUCHER seeded by no tenant; next_number() for them
+  fails for every tenant at once if a feature ever uses them. Seed (JV-/RV-) or drop from enum. (DECISIONS P5.)
 
 ## Tenant Provisioning — COMPLETE (creation-time, gate-proven; detail in DECISIONS.md)
 `provision_tenant()` seeds the golden set (20 CoA / 8 number_series / 4 tax / OPEN fiscal / 3+3 templates /
 REPAIR-SERVICE sentinel / Main Warehouse) idempotently; `verify_tenant_provisioning()` gates it. Migrations
 tenant_provisioning_verify/_seed/_seed_tax_mode_cast_fix/_wire_signup. handle_new_user now calls it in the signup
 txn (no exception swallow — failure rolls signup back atomically). All 5 tenants complete=true; new business signups
-born complete with zero manual steps. Closed: "new tenant can't post GL" gap. (2 gate bugs fixed: 42804 tax
+born complete with zero manual steps. P4 gate: a real-signup tenant sells (balanced journal, INV-BR01-000001),
+closes a repair (4200), and disburses payroll (6200) with zero manual seeding — the fault is closed end-to-end.
+Ops: cron verify_provisioning_daily (jobid 10) alerts admins on any complete=false. (2 gate bugs fixed: 42804 tax
 enum-cast, 42501 warehouse auth-guard. Side effect: all tenants 1→4 tax rules, additive, GST17 default kept.)
 
 ## Migration Import — COMPLETE
