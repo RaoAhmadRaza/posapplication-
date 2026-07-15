@@ -94,8 +94,10 @@ delivery_orders, loyalty, customer_groups, pricing-tier, offline sync. (tax_rule
 
 ## Dashboard V2 — COMPLETE (relocated to features/dashboard/, clean-arch)
 page moved out of auth/ → features/dashboard/presentation/pages/. reports:read gate, pull-refresh, fl_chart bar+pie,
-recent sales, quick-launch. 10-KPI grid (6 orig + payables/cash/bank/pl) CONFIGURABLE — show/hide + order per-device
-in shared_preferences (edit-layout toggle; server prefs deferred, DECISION#2 client-side). Each KPI taps a DrilldownPage
+recent sales, quick-launch. 10-KPI grid (6 orig + payables/cash/bank/pl) CONFIGURABLE — show/hide + order persisted
+SERVER-SIDE per user via ui_preferences.dashboard_layout_json / upsert_ui_preferences (clean-arch: datasource→repo→
+usecases→KpiLayoutController; read on load, write on change). First run migrates any legacy shared_preferences layout
+up once (not discarded), then server-authoritative; SP no longer written. Each KPI taps a DrilldownPage
 over drilldown_* RPCs; rows deep-link (invoice→/sales/invoice, product→/inventory/stock, journal→/accounting/journal).
 
 ## M08 Reporting — backend LIVE (DB layer), all gate-proven rolled-back
