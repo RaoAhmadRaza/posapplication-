@@ -22,6 +22,7 @@ import '../controllers/categories_controller.dart';
 import '../controllers/brands_controller.dart';
 import '../controllers/product_edit_controller.dart';
 import '../controllers/products_controller.dart';
+import '../../../accounting/domain/usecases/resolve_tax_rate.dart';
 
 class ProductFormPage extends ConsumerStatefulWidget {
   const ProductFormPage({super.key, this.productId});
@@ -67,6 +68,14 @@ class _ProductFormPageState extends ConsumerState<ProductFormPage> {
     if (_isEditing) {
       Future.microtask(() {
         ref.read(productEditProvider.notifier).loadForEdit(widget.productId!);
+      });
+    } else {
+      // New product: default the tax rate from the tenant's default tax_rule
+      // (resolve_tax_rate) instead of a hardcoded value — user can still override.
+      Future.microtask(() async {
+        final (resolved, _) = await ref.read(resolveTaxRateUseCaseProvider)();
+        if (!mounted || resolved == null || _taxRateCtrl.text.isNotEmpty) return;
+        _taxRateCtrl.text = resolved.rate.toString();
       });
     }
   }
