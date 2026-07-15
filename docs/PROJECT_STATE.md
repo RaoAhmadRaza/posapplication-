@@ -95,9 +95,8 @@ delivery_orders, loyalty, customer_groups, pricing-tier, offline sync. (tax_rule
 ## Dashboard V2 — COMPLETE (relocated to features/dashboard/, clean-arch)
 page moved out of auth/ → features/dashboard/presentation/pages/. reports:read gate, pull-refresh, fl_chart bar+pie,
 recent sales, quick-launch. 10-KPI grid (6 orig + payables/cash/bank/pl) CONFIGURABLE — show/hide + order persisted
-SERVER-SIDE per user via ui_preferences.dashboard_layout_json / upsert_ui_preferences (clean-arch: datasource→repo→
-usecases→KpiLayoutController; read on load, write on change). First run migrates any legacy shared_preferences layout
-up once (not discarded), then server-authoritative; SP no longer written. Each KPI taps a DrilldownPage
+SERVER-SIDE per user via ui_preferences.dashboard_layout_json / upsert_ui_preferences (clean-arch, read on load / write
+on change; first run migrates any legacy shared_preferences layout up once, then server-authoritative). Each KPI taps a DrilldownPage
 over drilldown_* RPCs; rows deep-link (invoice→/sales/invoice, product→/inventory/stock, journal→/accounting/journal).
 
 ## M08 Reporting — backend LIVE (DB layer), all gate-proven rolled-back
@@ -185,7 +184,10 @@ PURCHASE_RETURN (postings + cost-basis rule in DECISIONS; GRN posts no GL).
 GL reconciles 1:1 with AR/AP subledgers. Sale payments resolve per method via resolve_payment_account (S2 — bank
 split done, unmapped→1000). **A6 UI shipped:** `lib/features/accounting/` full clean-arch — hub, CoA tree, account ledger,
 journal list+detail (reverse gated accounting:approve), balance-enforced manual voucher, expenses+categories,
-bank/tax-rule CRUD. Reports (A6.2): filterable TrialBalance/ProfitLoss/BalanceSheet/CashBankBook (as-of/range +
+bank/tax-rule CRUD. tax_rules now CONSUMED (S4): resolve_tax_rate(tenant,product) defaults the product-form Tax Rate %
+(product override → is_default rule → 0); create_sale untouched (caller p_tax_pct authoritative, no totals move);
+TaxRulesPage reachable via Settings→Configuration (accounting route kept). Reports (A6.2): filterable
+TrialBalance/ProfitLoss/BalanceSheet/CashBankBook (as-of/range +
 branch, export gated accounting:export). Customer collect-payment on CustomerDetailPage (gated sales:create).
 **Period control + bank recon (A6.3):** FiscalPeriodsPage (close/reopen gated accounting:approve) +
 BankReconciliationPage (per-bank statement-vs-books snapshot, create→difference→complete). Fixed a
