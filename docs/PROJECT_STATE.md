@@ -66,8 +66,10 @@ LabelPdfService + LabelPrintPage); notifications (+prefs, trg_low_stock_notify, 
 REPAIR-SERVICE sentinel / Main Warehouse) idempotently; `verify_tenant_provisioning()` gates it. Migrations
 tenant_provisioning_verify/_seed/_seed_tax_mode_cast_fix/_wire_signup. handle_new_user now calls it in the signup
 txn (no exception swallow — failure rolls signup back atomically). All 5 tenants complete=true; new business signups
-born complete with zero manual steps. P4 gate: a real-signup tenant sells (balanced journal, INV-BR01-000001),
-closes a repair (4200), and disburses payroll (6200) with zero manual seeding — the fault is closed end-to-end.
+born complete with zero manual steps. P4 gate (rolled-back txn firing the real on_auth_user_created trigger, NOT a
+live app signup): a provisioned tenant sells (balanced journal INV-BR01-000001), closes a repair (4200), disburses
+payroll (6200), and posts a journal into its monthly period — zero manual seeding. Fault closed end-to-end; first
+genuine customer signup will be the first LIVE execution of the wired path.
 Ops: cron verify_provisioning_daily (jobid 10) alerts admins on any complete=false. Fiscal: provision_tenant reuses
 current_fiscal_period (sole creator, MONTHLY, self-aligning) — annual-seed divergence (P2) fixed; verify now checks
 fiscal_period_monthly so the monitor catches granularity drift. (Gate bugs fixed: 42804 tax cast, 42501 warehouse
