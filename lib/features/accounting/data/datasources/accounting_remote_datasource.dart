@@ -299,6 +299,16 @@ class AccountingRemoteDataSource {
         .order('name');
   }
 
+  /// Resolves the applicable tax rate for the tenant (+ optional product override)
+  /// via resolve_tax_rate. Returns {rate, source, code?, mode?}.
+  Future<Map<String, dynamic>> resolveTaxRate(String? productId) async {
+    final result = await _client.rpc('resolve_tax_rate', params: {
+      'p_tenant_id': await _tenantId(),
+      'p_product_id': productId,
+    });
+    return result as Map<String, dynamic>;
+  }
+
   Future<Map<String, dynamic>> insertTaxRule(Map<String, dynamic> data) async {
     final payload = {...data, 'tenant_id': await _tenantId()};
     final list = await _client

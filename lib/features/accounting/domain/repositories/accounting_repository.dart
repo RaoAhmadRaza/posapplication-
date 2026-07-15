@@ -8,6 +8,7 @@ import '../entities/expense_category.dart';
 import '../entities/financial_reports.dart';
 import '../entities/fiscal_period.dart';
 import '../entities/journal_entry.dart';
+import '../entities/resolved_tax_rate.dart';
 import '../entities/reconciliation_result.dart';
 import '../entities/journal_line.dart';
 import '../entities/tax_rule.dart';
@@ -109,6 +110,10 @@ abstract class AccountingRepository {
   });
 
   Future<(List<TaxRule>, AccountingFailure?)> loadTaxRules();
+
+  Future<(ResolvedTaxRate?, AccountingFailure?)> resolveTaxRate(
+    String? productId,
+  );
 
   Future<(TaxRule?, AccountingFailure?)> createTaxRule({
     required String name,

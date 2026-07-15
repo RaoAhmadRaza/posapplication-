@@ -12,6 +12,7 @@ import '../../domain/entities/expense_category.dart';
 import '../../domain/entities/financial_reports.dart';
 import '../../domain/entities/fiscal_period.dart';
 import '../../domain/entities/journal_entry.dart';
+import '../../domain/entities/resolved_tax_rate.dart';
 import '../../domain/entities/reconciliation_result.dart';
 import '../../domain/entities/journal_line.dart';
 import '../../domain/entities/tax_rule.dart';
@@ -400,6 +401,26 @@ class AccountingRepositoryImpl implements AccountingRepository {
       return (rows.map(TaxRuleModel.fromJson).toList(), null);
     } catch (e) {
       return (<TaxRule>[], _mapError(e));
+    }
+  }
+
+  @override
+  Future<(ResolvedTaxRate?, AccountingFailure?)> resolveTaxRate(
+    String? productId,
+  ) async {
+    try {
+      final row = await _ds.resolveTaxRate(productId);
+      return (
+        ResolvedTaxRate(
+          rate: (row['rate'] as num).toDouble(),
+          source: row['source'] as String,
+          code: row['code'] as String?,
+          mode: row['mode'] as String?,
+        ),
+        null,
+      );
+    } catch (e) {
+      return (null, _mapError(e));
     }
   }
 
