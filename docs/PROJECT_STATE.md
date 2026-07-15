@@ -45,9 +45,8 @@ post_stock_movement; negative blocked; warehouses CRUD + opening-balance + level
 ## Database Migrations
 
 Ordered, applied set lives in `supabase/migrations/` (filenames = the index); each migration's rationale is
-logged in DECISIONS.md by date. Coverage: auth/RBAC · catalog + stock engine/ops · sales + returns · dashboard ·
-purchasing + supplier ledger · cust/supp CRM + ledgers · M07 accounting (6 auto-post money paths) · M08 reporting
-(MVs/drilldowns/scheduling/analytics/AI recs) · M09 repair · M11 notification templates.
+logged in DECISIONS.md by date. Coverage: auth/RBAC → catalog/stock → sales/returns → dashboard → purchasing/CRM
+ledgers → M07 accounting (7 money paths post-S8) → M08 reporting → M09 repair → M11 notifications.
 
 ## Peripheral features — COMPLETE (detail in DECISIONS.md)
 Barcode scanning (mobile_scanner, shared scanBarcode/BarcodeScanPage); label printing (pdf/printing/barcode,
@@ -179,17 +178,19 @@ bounded, SERIALIZED lines need exactly qty IMEIs via type/scan, reason required,
 DB-level double-entry GL. `post_journal` = sole ledger writer (balance/period/immutability enforced; ungated
 auto-posts pass `p_gate=false`). All 6 money paths — SALE, CUSTOMER_PAYMENT, PURCHASE_INVOICE, SUPPLIER_PAYMENT,
 PURCHASE_RETURN, SALES_RETURN — emit a balanced journal (six-path rolled-back gate green; trial_balance +
-balance_sheet true); GL reconciles 1:1 with AR/AP subledgers. Payment→GL split CLOSED (S1–S2):
-resolve_payment_account is the SOLE resolver in every money RPC; unmapped→1000, linked→bank's GL. tax_rules CONSUMED
+balance_sheet true); GL reconciles 1:1 with AR/AP subledgers. Payment→GL split CLOSED (S1–S2, S8): all 4 divergent M07
+hardcodes gone; resolve_payment_account SOLE resolver in 7 money paths (incl. sales-return tier-1 bank_account_id mirror); close_repair_job keeps literal 1000 (cash-only by construction — Deferral A; verify pg_get_functiondef on PROD, not grep — migrations append-only).
+unmapped→1000, linked→bank's GL. tax_rules CONSUMED
 (S4): resolve_tax_rate defaults product/POS tax (create_sale untouched, caller p_tax_pct authoritative).
 **A6 UI:** `lib/features/accounting/` clean-arch — hub, CoA tree, ledger, journal list+detail (reverse gated),
 manual voucher, expenses, bank/tax-rule CRUD, Reports (export gated), fiscal periods + bank reconciliation.
 
-## Settings — S1–S6 COMPLETE (backend S1–S5 gated settings:update; per-phase detail in DECISIONS)
+## Settings / M12 — S1–S8 COMPLETE (backend gated settings:update; per-phase detail in DECISIONS)
 UI (S6): `lib/features/settings/` clean-arch, ONE settings_remote_datasource, typed SettingsFailure. SettingsHubPage
 is the bottom-nav /settings target (gated settings:read) → Profile&Security (/settings/profile, reused auth page),
-Business settings (settings_json), Branches (per-branch currency/timezone/…), Payment methods (link bank → shows
-resolved GL per method), Tax rules, Number series (read-only; fiscal_year_reset inert/disabled), Preferences
+Business settings (settings_json), Branches (per-branch currency/timezone/…), Payment methods (update/link/toggle
+only — the 7 enum-backed rows are the complete set by construction; no add/delete), Tax rules, Number series
+(read-only; fiscal_year_reset inert/disabled), Preferences
 (theme[light-only]/language/default branch), Notifications (link). formatPkr symbol now follows the active branch's
 currency (setDisplayCurrency; display-only). NOTE: auth SettingsPage stays in features/auth/ (move deferred — breaks its imports).
 

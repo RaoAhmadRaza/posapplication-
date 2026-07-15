@@ -129,6 +129,10 @@ supabase/
   schema doc's SET LOCAL app.current_tenant_id pattern.
 - RBAC: role → permissions(module, action, branch_scope, granted). App loads the matrix on login;
   gate UI with PermissionGate(module, action).
+- MONEY→GL INVARIANT: any new money path resolves its GL account via
+  resolve_payment_account(tenant, method, bank_account_id) — never a literal, never a 5th CASE. Pass the
+  payment's bank_account_id (not null) so tier 1 works. No method/bank concept → it's cash-only by
+  construction; say so in a comment (see close_repair_job).
 
 ## Migrations
 - Path supabase/migrations/. Create with `supabase migration new <name>` (timestamped, ordered).
