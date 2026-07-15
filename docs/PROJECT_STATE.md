@@ -31,30 +31,16 @@ lib/
   features/{purchasing,suppliers,customers,accounting,repair,hr}/ (full clean-arch per feature)
 ```
 
-## Auth — Complete
+## Auth — COMPLETE
+All flows end-to-end. 33+ routes, auth redirect, StatefulShellRoute bottom nav. RBAC, branch selection, PIN lock
++ biometric, TOTP MFA (clean-arch, typed AuthFailure — transient fault shows retry banner, not lockout),
+device/session/security management.
 
-All flows end-to-end. 33+ routes, auth redirect, StatefulShellRoute bottom nav.
-RBAC, branch selection, PIN lock + biometric, TOTP MFA, device/session/security management.
-MFA is clean-arch (audit D.1): MfaRemoteDataSource + MfaRepository + usecases; verify returns typed
-AuthFailure? — transient network fault shows a connection/retry banner, only a real rejection shows
-"Incorrect code" (no more permanent MFA lockout on flaky connections). MfaService deleted.
-
-## Inventory — Product Catalog (Slice A) — COMPLETE
-
-Categories, brands, products (variants/images/pricing), barcode templates.
-Trigram ILIKE search. SKU auto-gen. Soft-delete via SECURITY DEFINER RPCs.
-
-## Stock Engine (Slice B) — COMPLETE
-
-Migration `20260613061924_stock_engine.sql`. Trigger-maintained stock_balance projection
-of immutable stock_ledger. All writes via post_stock_movement RPC. Negative blocked.
-Warehouses CRUD + opening-balance form + stock levels list + product detail + ledger.
-
-## Stock Ops (Slice C) — COMPLETE
-
-Migration `20260613075616_stock_ops.sql`: adjustments, transfers, counts, imei_records, inventory_settings,
-number_series (+4 enums, 10 RPCs, all posting through the Slice B ledger). Flutter: full clean-arch
-(6 entities, 16 usecases, 4 controllers, 8 pages, +13 routes) — detail in DECISIONS.
+## Inventory — COMPLETE (Slices A/B/C; detail in DECISIONS.md)
+Catalog (categories/brands/products + variants/images/pricing, barcode templates, trigram search, SKU auto-gen,
+soft-delete RPCs). Stock engine (trigger-maintained stock_balance over immutable stock_ledger; all writes via
+post_stock_movement; negative blocked; warehouses CRUD + opening-balance + levels + ledger). Stock ops
+(adjustments/transfers/counts, imei_records, inventory_settings, number_series; +4 enums, 10 RPCs; full clean-arch).
 
 ## Database Migrations
 
@@ -70,11 +56,10 @@ LabelPdfService + LabelPrintPage); notifications (+prefs, trg_low_stock_notify, 
 
 ## Known Issues
 - Profile loaded once (no pull-to-refresh); IMEI section not yet in product edit form (SERIALIZED)
-- ⚠️ FISCAL ROLLOVER CLIFF: provision_tenant seeds only the current-year OPEN period. Next Jan 1 every tenant
-  needs a new period or ALL journal posting stops tenant-wide. No rollover job — fix = fn_ensure_current_fiscal_period()
-  on cron (idempotent). Flagged, not built. (See DECISIONS P5 follow-ups.)
 - ⚠️ number_series_type_enum landmines: JOURNAL_ENTRY + RECEIPT_VOUCHER seeded by no tenant; next_number() for them
   fails for every tenant at once if a feature ever uses them. Seed (JV-/RV-) or drop from enum. (DECISIONS P5.)
+- (RETRACTED) the earlier "fiscal rollover cliff" is NOT real: current_fiscal_period is the sole creator and
+  lazily makes the covering monthly period on demand — no Aug-1/Jan-1 freeze. See DECISIONS 2026-07-15 fiscal correction.
 
 ## Tenant Provisioning — COMPLETE (creation-time, gate-proven; detail in DECISIONS.md)
 `provision_tenant()` seeds the golden set (20 CoA / 8 number_series / 4 tax / OPEN fiscal / 3+3 templates /
@@ -83,8 +68,10 @@ tenant_provisioning_verify/_seed/_seed_tax_mode_cast_fix/_wire_signup. handle_ne
 txn (no exception swallow — failure rolls signup back atomically). All 5 tenants complete=true; new business signups
 born complete with zero manual steps. P4 gate: a real-signup tenant sells (balanced journal, INV-BR01-000001),
 closes a repair (4200), and disburses payroll (6200) with zero manual seeding — the fault is closed end-to-end.
-Ops: cron verify_provisioning_daily (jobid 10) alerts admins on any complete=false. (2 gate bugs fixed: 42804 tax
-enum-cast, 42501 warehouse auth-guard. Side effect: all tenants 1→4 tax rules, additive, GST17 default kept.)
+Ops: cron verify_provisioning_daily (jobid 10) alerts admins on any complete=false. Fiscal: provision_tenant reuses
+current_fiscal_period (sole creator, MONTHLY, self-aligning) — annual-seed divergence (P2) fixed; verify now checks
+fiscal_period_monthly so the monitor catches granularity drift. (Gate bugs fixed: 42804 tax cast, 42501 warehouse
+guard. Side effect: all tenants 1→4 tax rules, additive, GST17 default kept.)
 
 ## Migration Import — COMPLETE
 `lib/features/migration_import/` clean-arch (reuses InventoryFailure). 4 set-based RPCs (migrate_import_categories/
