@@ -42,6 +42,10 @@ class SettingsPage extends ConsumerWidget {
               _SectionLabel('Administration'),
               const SizedBox(height: AppSpacing.sm),
               const _AdminSection(),
+              const SizedBox(height: AppSpacing.lg),
+              _SectionLabel('Configuration'),
+              const SizedBox(height: AppSpacing.sm),
+              const _ConfigurationSection(),
               const SizedBox(height: AppSpacing.xxl),
               AppButton(
                 label: 'Log out',
@@ -313,6 +317,28 @@ class _AdminSection extends StatelessWidget {
             ),
           ),
         ],
+      ),
+    );
+  }
+}
+
+class _ConfigurationSection extends StatelessWidget {
+  const _ConfigurationSection();
+
+  @override
+  Widget build(BuildContext context) {
+    return AppCard(
+      child: PermissionGate(
+        module: 'accounting',
+        action: 'read',
+        child: _SettingsRow(
+          icon: Icons.percent,
+          title: 'Tax rules',
+          subtitle: 'Rates applied as defaults on products and sales.',
+          trailing:
+              const Icon(Icons.chevron_right, color: AppColors.textMuted),
+          onTap: () => context.push('/accounting/tax-rules'),
+        ),
       ),
     );
   }
