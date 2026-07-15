@@ -109,7 +109,7 @@ class AuthRemoteDataSource {
   Future<List<Map<String, dynamic>>> loadUserBranches(String userId) async {
     final list = await _client
         .from('user_branch_assignments')
-        .select('is_default, branches(id, name, code, is_main)')
+        .select('is_default, branches(id, name, code, is_main, currency)')
         .eq('user_id', userId);
     return List<Map<String, dynamic>>.from(list);
   }

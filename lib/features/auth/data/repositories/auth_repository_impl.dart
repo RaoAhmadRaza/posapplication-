@@ -211,6 +211,7 @@ class AuthRepositoryImpl implements AuthRepository {
           code: b['code'] as String,
           isMain: b['is_main'] as bool,
           isDefault: r['is_default'] as bool,
+          currency: (b['currency'] ?? 'PKR') as String,
         );
       }).toList();
       return (branches, null);

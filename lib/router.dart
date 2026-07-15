@@ -134,6 +134,12 @@ import 'features/sales/presentation/pages/sales_history_page.dart';
 import 'features/sales/presentation/pages/invoice_detail_page.dart';
 import 'features/sales/presentation/pages/sales_return_page.dart';
 import 'features/auth/presentation/pages/settings_page.dart';
+import 'features/settings/presentation/pages/settings_hub_page.dart';
+import 'features/settings/presentation/pages/business_settings_page.dart';
+import 'features/settings/presentation/pages/branches_page.dart';
+import 'features/settings/presentation/pages/payment_methods_page.dart';
+import 'features/settings/presentation/pages/number_series_page.dart';
+import 'features/settings/presentation/pages/preferences_page.dart';
 
 class _GoRouterRefreshStream extends ChangeNotifier {
   String? _lastUid;
@@ -443,6 +449,31 @@ final appRouter = GoRouter(
     GoRoute(
       path: '/notifications/settings',
       builder: (context, state) => const NotificationSettingsPage(),
+    ),
+    // Settings hub sub-pages (pushed over the /settings tab).
+    GoRoute(
+      path: '/settings/profile',
+      builder: (context, state) => const SettingsPage(),
+    ),
+    GoRoute(
+      path: '/settings/business',
+      builder: (context, state) => const BusinessSettingsPage(),
+    ),
+    GoRoute(
+      path: '/settings/branches',
+      builder: (context, state) => const BranchesPage(),
+    ),
+    GoRoute(
+      path: '/settings/payment-methods',
+      builder: (context, state) => const PaymentMethodsPage(),
+    ),
+    GoRoute(
+      path: '/settings/number-series',
+      builder: (context, state) => const NumberSeriesPage(),
+    ),
+    GoRoute(
+      path: '/settings/preferences',
+      builder: (context, state) => const PreferencesPage(),
     ),
     GoRoute(
       path: '/notifications/templates',
@@ -912,7 +943,7 @@ final appRouter = GoRouter(
           routes: [
             GoRoute(
               path: '/settings',
-              builder: (context, state) => const SettingsPage(),
+              builder: (context, state) => const SettingsHubPage(),
             ),
           ],
         ),

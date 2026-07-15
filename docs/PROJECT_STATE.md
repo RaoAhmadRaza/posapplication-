@@ -177,29 +177,21 @@ bounded, SERIALIZED lines need exactly qty IMEIs via type/scan, reason required,
 ### M07 Accounting — COMPLETE (all 6 money paths auto-post)
 
 DB-level double-entry GL. `post_journal` = sole ledger writer (balance/period/immutability enforced; ungated
-auto-posts pass `p_gate=false`). CoA/fiscal/vouchers/expenses/reports live. All five money RPCs emit a balanced
-journal, verified via rolled-back dry-runs incl. a five-path gate (every entry balanced, trial_balance +
-balance_sheet true). Canonical `reference_type`: SALE, CUSTOMER_PAYMENT, PURCHASE_INVOICE, SUPPLIER_PAYMENT,
-PURCHASE_RETURN (postings + cost-basis rule in DECISIONS; GRN posts no GL).
-GL reconciles 1:1 with AR/AP subledgers. Sale payments resolve per method via resolve_payment_account (S2 — bank
-split done, unmapped→1000). **A6 UI shipped:** `lib/features/accounting/` full clean-arch — hub, CoA tree, account ledger,
-journal list+detail (reverse gated accounting:approve), balance-enforced manual voucher, expenses+categories,
-bank/tax-rule CRUD. tax_rules CONSUMED (S4): resolve_tax_rate(tenant,product) defaults the product-form Tax Rate % (product override → is_default rule → 0); create_sale untouched (caller p_tax_pct authoritative). TaxRulesPage reachable via Settings→Configuration. Settings config RPCs (S5, gated settings:update): update_tenant_settings shallow-merges tenants.settings_json (empty config slot; keys business_address/phone/logo_url/receipt_footer/ntn/fiscal_year_start_month), update_branch_settings edits per-branch currency/timezone/country/city. Both RPC-surface-only; Settings hub UI = S6. Reports (A6.2): filterable
-TrialBalance/ProfitLoss/BalanceSheet/CashBankBook (as-of/range +
-branch, export gated accounting:export). Customer collect-payment on CustomerDetailPage (gated sales:create).
-**Period control + bank recon (A6.3):** FiscalPeriodsPage (close/reopen gated accounting:approve) +
-BankReconciliationPage (per-bank statement-vs-books snapshot, create→difference→complete). Fixed a
-close-bypass: current_fiscal_period auto-minted a fresh OPEN period after close, defeating the guard — now
-resolves the covering period regardless of status (trg_journal_check_period is the sole enforcer), creating
-only on a genuine gap. Verified: close→journal rejected, reopen→posts, gap-month→auto-creates.
-**LEDGER COMPLETE:** all 6 money paths — SALE, CUSTOMER_PAYMENT, PURCHASE_INVOICE, SUPPLIER_PAYMENT,
-PURCHASE_RETURN, SALES_RETURN (tax-free refund, goods back at cost) — post a balanced journal; six-path
-rolled-back gate green (trial_balance + balance_sheet true). Journal immutable/balanced/period-guarded. Deferrals: sales returns refund tax-free (no Output-Tax reversal). Payment→GL split CLOSED
-(Settings S1+S2): `resolve_payment_account(tenant,method,bank_account_id)` 3-tier (explicit → method's bank acct →
-'1000' fallback) is the SOLE resolver, wired into every money RPC — create_sale (per-account grouped debit, split
-tender), record_customer_payment/record_supplier_payment, create_expense, disburse_payroll_run/salary_advance.
-Unmapped methods → 1000 (cash-only tenants byte-identical; all re-gated). A tenant maps a method→bank in the UI
-(S6, pending) to route it to 1010/other. See DECISIONS 2026-07-15 Settings S1/S2a/S2b/S2c.
+auto-posts pass `p_gate=false`). All 6 money paths — SALE, CUSTOMER_PAYMENT, PURCHASE_INVOICE, SUPPLIER_PAYMENT,
+PURCHASE_RETURN, SALES_RETURN — emit a balanced journal (six-path rolled-back gate green; trial_balance +
+balance_sheet true); GL reconciles 1:1 with AR/AP subledgers. Payment→GL split CLOSED (S1–S2):
+resolve_payment_account is the SOLE resolver in every money RPC; unmapped→1000, linked→bank's GL. tax_rules CONSUMED
+(S4): resolve_tax_rate defaults product/POS tax (create_sale untouched, caller p_tax_pct authoritative).
+**A6 UI:** `lib/features/accounting/` clean-arch — hub, CoA tree, ledger, journal list+detail (reverse gated),
+manual voucher, expenses, bank/tax-rule CRUD, Reports (export gated), fiscal periods + bank reconciliation.
+
+## Settings — S1–S6 COMPLETE (backend S1–S5 gated settings:update; per-phase detail in DECISIONS)
+UI (S6): `lib/features/settings/` clean-arch, ONE settings_remote_datasource, typed SettingsFailure. SettingsHubPage
+is the bottom-nav /settings target (gated settings:read) → Profile&Security (/settings/profile, reused auth page),
+Business settings (settings_json), Branches (per-branch currency/timezone/…), Payment methods (link bank → shows
+resolved GL per method), Tax rules, Number series (read-only; fiscal_year_reset inert/disabled), Preferences
+(theme[light-only]/language/default branch), Notifications (link). formatPkr symbol now follows the active branch's
+currency (setDisplayCurrency; display-only). NOTE: auth SettingsPage stays in features/auth/ (move deferred — breaks its imports).
 
 ## M09 Repair & Service — COMPLETE (backend + Flutter)
 Backend (applied + gate-verified; full per-phase detail in DECISIONS 2026-07-13/14): repair_jobs/parts/

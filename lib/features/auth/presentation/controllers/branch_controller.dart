@@ -1,6 +1,7 @@
 import 'package:flutter/foundation.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
+import '../../../../core/design/format.dart';
 import '../../domain/entities/branch.dart';
 import '../../domain/usecases/load_user_branches.dart';
 
@@ -26,7 +27,10 @@ class CurrentBranchNotifier extends Notifier<Branch?> {
   @override
   Branch? build() => null;
 
-  void setBranch(Branch? branch) => state = branch;
+  void setBranch(Branch? branch) {
+    state = branch;
+    setDisplayCurrency(branch?.currency); // money display symbol follows the branch
+  }
 }
 
 class BranchRouterState extends ChangeNotifier {

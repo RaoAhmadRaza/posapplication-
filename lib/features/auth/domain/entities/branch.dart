@@ -4,6 +4,7 @@ class Branch {
   final String code;
   final bool isMain;
   final bool isDefault;
+  final String currency;
 
   const Branch({
     required this.id,
@@ -11,5 +12,6 @@ class Branch {
     required this.code,
     required this.isMain,
     required this.isDefault,
+    this.currency = 'PKR',
   });
 }
