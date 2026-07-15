@@ -63,17 +63,16 @@ LabelPdfService + LabelPrintPage); notifications (+prefs, trg_low_stock_notify, 
 
 ## Tenant Provisioning — COMPLETE (creation-time, gate-proven; detail in DECISIONS.md)
 `provision_tenant()` seeds the golden set (20 CoA / 8 number_series / 4 tax / OPEN fiscal / 3+3 templates /
-REPAIR-SERVICE sentinel / Main Warehouse) idempotently; `verify_tenant_provisioning()` gates it. Migrations
-tenant_provisioning_verify/_seed/_seed_tax_mode_cast_fix/_wire_signup. handle_new_user now calls it in the signup
+REPAIR-SERVICE sentinel / Main Warehouse / 7 payment methods) idempotently; `verify_tenant_provisioning()` gates
+it (payment_methods expected 7, folded into `complete`). Migrations tenant_provisioning_verify/_seed/
+_seed_tax_mode_cast_fix/_wire_signup + settings_payment_methods/_provision_tenant_payment_methods. handle_new_user calls it in the signup
 txn (no exception swallow — failure rolls signup back atomically). All 5 tenants complete=true; new business signups
 born complete with zero manual steps. P4 gate (rolled-back txn firing the real on_auth_user_created trigger, NOT a
 live app signup): a provisioned tenant sells (balanced journal INV-BR01-000001), closes a repair (4200), disburses
 payroll (6200), and posts a journal into its monthly period — zero manual seeding. Fault closed end-to-end; first
 genuine customer signup will be the first LIVE execution of the wired path.
-Ops: cron verify_provisioning_daily (jobid 10) alerts admins on any complete=false. Fiscal: provision_tenant reuses
-current_fiscal_period (sole creator, MONTHLY, self-aligning) — annual-seed divergence (P2) fixed; verify now checks
-fiscal_period_monthly so the monitor catches granularity drift. (Gate bugs fixed: 42804 tax cast, 42501 warehouse
-guard. Side effect: all tenants 1→4 tax rules, additive, GST17 default kept.)
+Ops: cron verify_provisioning_daily (jobid 10) alerts admins on any complete=false. Fiscal: reuses
+current_fiscal_period (sole creator, MONTHLY, self-aligning); verify checks fiscal_period_monthly for granularity drift.
 
 ## Migration Import — COMPLETE
 `lib/features/migration_import/` clean-arch (reuses InventoryFailure). 4 set-based RPCs (migrate_import_categories/
@@ -91,7 +90,7 @@ close_cashier_session gated sales:create + owner-only. Live-sales banner via ses
 zero). Full per-slice detail in DECISIONS.md.
 
 ### Sales V1 Deferred
-delivery_orders, loyalty, tax_rules/payment_methods tables, customer_groups, pricing-tier, offline sync.
+delivery_orders, loyalty, customer_groups, pricing-tier, offline sync. (tax_rules + payment_methods tables now built.)
 
 ## Dashboard V2 — COMPLETE (relocated to features/dashboard/, clean-arch)
 page moved out of auth/ → features/dashboard/presentation/pages/. reports:read gate, pull-refresh, fl_chart bar+pie,
@@ -181,8 +180,8 @@ auto-posts pass `p_gate=false`). CoA/fiscal/vouchers/expenses/reports live. All 
 journal, verified via rolled-back dry-runs incl. a five-path gate (every entry balanced, trial_balance +
 balance_sheet true). Canonical `reference_type`: SALE, CUSTOMER_PAYMENT, PURCHASE_INVOICE, SUPPLIER_PAYMENT,
 PURCHASE_RETURN (postings + cost-basis rule in DECISIONS; GRN posts no GL).
-GL reconciles 1:1 with AR/AP subledgers. Ceilings: sale payments → Cash 1000 (bank split deferred); sales-return
-GL not yet hooked. **A6 UI shipped:** `lib/features/accounting/` full clean-arch — hub, CoA tree, account ledger,
+GL reconciles 1:1 with AR/AP subledgers. Sale payments resolve per method via resolve_payment_account (S2 — bank
+split done, unmapped→1000). **A6 UI shipped:** `lib/features/accounting/` full clean-arch — hub, CoA tree, account ledger,
 journal list+detail (reverse gated accounting:approve), balance-enforced manual voucher, expenses+categories,
 bank/tax-rule CRUD. Reports (A6.2): filterable TrialBalance/ProfitLoss/BalanceSheet/CashBankBook (as-of/range +
 branch, export gated accounting:export). Customer collect-payment on CustomerDetailPage (gated sales:create).
@@ -191,12 +190,14 @@ BankReconciliationPage (per-bank statement-vs-books snapshot, create→differenc
 close-bypass: current_fiscal_period auto-minted a fresh OPEN period after close, defeating the guard — now
 resolves the covering period regardless of status (trg_journal_check_period is the sole enforcer), creating
 only on a genuine gap. Verified: close→journal rejected, reopen→posts, gap-month→auto-creates.
-**LEDGER COMPLETE:** create_sales_return now auto-posts SALES_RETURN (tax-free: Dr 4100 / Cr 1000 refund /
-Cr 1100 AR; goods back at COST BASIS Dr 1200 / Cr 5000). All 6 money paths — SALE, CUSTOMER_PAYMENT,
-PURCHASE_INVOICE, SUPPLIER_PAYMENT, PURCHASE_RETURN, SALES_RETURN — post a balanced journal; verified by a
-six-path rolled-back gate (all balanced, trial_balance + balance_sheet true). Journal immutable/balanced/
-period-guarded. Deferrals: sales returns refund tax-free (no Output-Tax reversal); non-cash payments still
-debit 1000 Cash not 1010 Bank (payment-method→account split pending — Bank Book/Recon run near-empty).
+**LEDGER COMPLETE:** all 6 money paths — SALE, CUSTOMER_PAYMENT, PURCHASE_INVOICE, SUPPLIER_PAYMENT,
+PURCHASE_RETURN, SALES_RETURN (tax-free refund, goods back at cost) — post a balanced journal; six-path
+rolled-back gate green (trial_balance + balance_sheet true). Journal immutable/balanced/period-guarded. Deferrals: sales returns refund tax-free (no Output-Tax reversal). Payment→GL split CLOSED
+(Settings S1+S2): `resolve_payment_account(tenant,method,bank_account_id)` 3-tier (explicit → method's bank acct →
+'1000' fallback) is the SOLE resolver, wired into every money RPC — create_sale (per-account grouped debit, split
+tender), record_customer_payment/record_supplier_payment, create_expense, disburse_payroll_run/salary_advance.
+Unmapped methods → 1000 (cash-only tenants byte-identical; all re-gated). A tenant maps a method→bank in the UI
+(S6, pending) to route it to 1010/other. See DECISIONS 2026-07-15 Settings S1/S2a/S2b/S2c.
 
 ## M09 Repair & Service — COMPLETE (backend + Flutter)
 Backend (applied + gate-verified; full per-phase detail in DECISIONS 2026-07-13/14): repair_jobs/parts/
@@ -230,7 +231,6 @@ H7.1 employees/shifts: EmployeesPage, EmployeeFormPage (create-only code/branch/
 LeavesPage (apply/approve/reject), ClockInOutPage; Profile tabs. H7.3 payroll: PayrollRunsPage + PayrollRunDetail
 (status-driven single action DRAFT→CALCULATED→APPROVED→DISBURSED, "View journal"), PayslipPdfService, Give-Advance.
 Routes /hr/*; Inventory-hub "HR & Payroll" gated hr:read. analyze clean.
-Pre-existing gap: handle_new_user seeds no CoA → future tenants lack HR accounts until provisioning is fixed.
 
 ## M11 Approvals — Backend (foundation+engine+escalation) + Approval Center + Workflow-config UI
 Foundation `20260714093114_approvals_foundation.sql`: approval_status_enum(6) + approval_workflow_type_enum(8); tables
