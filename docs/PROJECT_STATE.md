@@ -184,9 +184,7 @@ PURCHASE_RETURN (postings + cost-basis rule in DECISIONS; GRN posts no GL).
 GL reconciles 1:1 with AR/AP subledgers. Sale payments resolve per method via resolve_payment_account (S2 — bank
 split done, unmapped→1000). **A6 UI shipped:** `lib/features/accounting/` full clean-arch — hub, CoA tree, account ledger,
 journal list+detail (reverse gated accounting:approve), balance-enforced manual voucher, expenses+categories,
-bank/tax-rule CRUD. tax_rules now CONSUMED (S4): resolve_tax_rate(tenant,product) defaults the product-form Tax Rate %
-(product override → is_default rule → 0); create_sale untouched (caller p_tax_pct authoritative, no totals move);
-TaxRulesPage reachable via Settings→Configuration (accounting route kept). Reports (A6.2): filterable
+bank/tax-rule CRUD. tax_rules CONSUMED (S4): resolve_tax_rate(tenant,product) defaults the product-form Tax Rate % (product override → is_default rule → 0); create_sale untouched (caller p_tax_pct authoritative). TaxRulesPage reachable via Settings→Configuration. Settings config RPCs (S5, gated settings:update): update_tenant_settings shallow-merges tenants.settings_json (empty config slot; keys business_address/phone/logo_url/receipt_footer/ntn/fiscal_year_start_month), update_branch_settings edits per-branch currency/timezone/country/city. Both RPC-surface-only; Settings hub UI = S6. Reports (A6.2): filterable
 TrialBalance/ProfitLoss/BalanceSheet/CashBankBook (as-of/range +
 branch, export gated accounting:export). Customer collect-payment on CustomerDetailPage (gated sales:create).
 **Period control + bank recon (A6.3):** FiscalPeriodsPage (close/reopen gated accounting:approve) +
