@@ -1,75 +1,70 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+import '../../domain/entities/kpi_pref.dart';
+import '../../domain/usecases/load_kpi_layout.dart';
+import '../../domain/usecases/save_kpi_layout.dart';
 
-/// Canonical KPI keys in default order (all shown by default).
-const kpiKeysDefault = <String>[
-  'today_sales',
-  'today_txns',
-  'today_profit',
-  'receivables',
-  'stock_value',
-  'low_stock',
-  'payables',
-  'cash',
-  'bank',
-  'pl',
-];
+// Re-export so existing importers (dashboard_page) keep the same import path.
+export '../../domain/entities/kpi_pref.dart' show KpiPref, kpiKeysDefault;
 
-const _prefsKey = 'dashboard_kpi_layout';
-
-/// One KPI card's layout state: its key + whether it is shown. List order = grid order.
-class KpiPref {
-  final String key;
-  final bool visible;
-  const KpiPref(this.key, this.visible);
-
-  KpiPref copyWith({bool? visible}) => KpiPref(key, visible ?? this.visible);
-}
+/// Legacy per-device store (M08 stopgap, taken before ui_preferences existed).
+/// Read ONCE to migrate an existing layout to the server on first run; never written.
+const _legacyPrefsKey = 'dashboard_kpi_layout';
 
 final kpiLayoutProvider =
     AsyncNotifierProvider<KpiLayoutController, List<KpiPref>>(
   KpiLayoutController.new,
 );
 
-/// Persists KPI show/hide + order in shared_preferences (per device).
-/// Stored as a string list of "key:1" (visible) / "key:0" (hidden) entries.
+/// KPI show/hide + order, persisted server-side per user via
+/// ui_preferences.dashboard_layout_json (read on load, write on change).
 class KpiLayoutController extends AsyncNotifier<List<KpiPref>> {
+  LoadKpiLayout get _loadUseCase => ref.read(loadKpiLayoutUseCaseProvider);
+  SaveKpiLayout get _saveUseCase => ref.read(saveKpiLayoutUseCaseProvider);
+
   @override
   Future<List<KpiPref>> build() async {
-    final prefs = await SharedPreferences.getInstance();
-    final saved = prefs.getStringList(_prefsKey);
-    if (saved == null || saved.isEmpty) {
-      return kpiKeysDefault.map((k) => KpiPref(k, true)).toList();
+    final (server, _) = await _loadUseCase();
+    if (server != null) return server;
+
+    // No server layout yet — migrate an existing per-device layout up once so a
+    // user's current KPI arrangement is not silently discarded.
+    final legacy = await _readLegacyLayout();
+    if (legacy != null) {
+      await _saveUseCase(legacy); // failure tolerated: legacy shown, retried on next change
+      return legacy;
     }
+    return _defaults();
+  }
+
+  List<KpiPref> _defaults() =>
+      kpiKeysDefault.map((k) => KpiPref(k, true)).toList();
+
+  Future<List<KpiPref>?> _readLegacyLayout() async {
+    final prefs = await SharedPreferences.getInstance();
+    final saved = prefs.getStringList(_legacyPrefsKey);
+    if (saved == null || saved.isEmpty) return null;
     final parsed = <KpiPref>[];
     for (final entry in saved) {
       final parts = entry.split(':');
-      final key = parts.first;
-      if (kpiKeysDefault.contains(key) && !parsed.any((p) => p.key == key)) {
-        parsed.add(KpiPref(key, parts.length < 2 || parts[1] != '0'));
+      if (parts.first.isNotEmpty) {
+        parsed.add(KpiPref(parts.first, parts.length < 2 || parts[1] != '0'));
       }
     }
-    // Forward-compat: append any new default keys not yet persisted (visible).
-    for (final k in kpiKeysDefault) {
-      if (!parsed.any((p) => p.key == k)) parsed.add(KpiPref(k, true));
-    }
-    return parsed;
+    return reconcileKpiLayout(parsed);
   }
 
   Future<void> _persist(List<KpiPref> next) async {
-    state = AsyncData(next);
-    final prefs = await SharedPreferences.getInstance();
-    await prefs.setStringList(
-      _prefsKey,
-      next.map((p) => '${p.key}:${p.visible ? 1 : 0}').toList(),
-    );
+    state = AsyncData(next); // optimistic — layout is non-critical UX
+    await _saveUseCase(next); // failure tolerated; next change retries
   }
 
   Future<void> toggle(String key) async {
     final current = state.value;
     if (current == null) return;
     await _persist([
-      for (final p in current) p.key == key ? p.copyWith(visible: !p.visible) : p,
+      for (final p in current)
+        p.key == key ? p.copyWith(visible: !p.visible) : p,
     ]);
   }
 
@@ -82,7 +77,5 @@ class KpiLayoutController extends AsyncNotifier<List<KpiPref>> {
     await _persist(next);
   }
 
-  Future<void> reset() async => _persist(
-        kpiKeysDefault.map((k) => KpiPref(k, true)).toList(),
-      );
+  Future<void> reset() async => _persist(_defaults());
 }
