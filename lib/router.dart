@@ -94,6 +94,7 @@ import 'features/hr/presentation/pages/leaves_page.dart';
 import 'features/hr/presentation/pages/clock_in_out_page.dart';
 import 'features/hr/presentation/pages/payroll_runs_page.dart';
 import 'features/hr/presentation/pages/payroll_run_detail_page.dart';
+import 'features/sync/presentation/pages/sync_exception_centre_page.dart';
 import 'features/approvals/presentation/pages/pending_approvals_page.dart';
 import 'features/approvals/presentation/pages/approval_detail_page.dart';
 import 'features/approvals/presentation/pages/approval_history_page.dart';
@@ -624,6 +625,10 @@ final appRouter = GoRouter(
       path: '/hr/employees/:id',
       builder: (context, state) =>
           EmployeeProfilePage(employeeId: state.pathParameters['id']!),
+    ),
+    GoRoute(
+      path: '/sync/exceptions',
+      builder: (context, state) => const SyncExceptionCentrePage(),
     ),
     GoRoute(
       path: '/approvals',
