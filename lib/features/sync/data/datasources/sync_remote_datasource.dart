@@ -65,4 +65,11 @@ class SyncRemoteDataSource {
     await _client
         .rpc('resolve_sync_exception', params: {'p_id': id, 'p_note': note});
   }
+
+  /// Re-queue a stuck (ABANDONED/FAILED) intent and replay it server-side as the
+  /// original cashier. Safe by uq_invoices_idem + create_sale's key guard.
+  Future<void> retryIntent(String outboxId) async {
+    await _client
+        .rpc('retry_sync_intent', params: {'p_outbox_id': outboxId});
+  }
 }

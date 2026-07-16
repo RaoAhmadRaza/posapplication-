@@ -104,10 +104,25 @@ class _ExceptionCard extends ConsumerWidget {
           PermissionGate(
             module: 'sync',
             action: 'resolve',
-            child: AppButton(
-              label: 'Resolve',
-              icon: Icons.check,
-              onPressed: () => _resolve(context, ref),
+            child: Row(
+              children: [
+                Expanded(
+                  child: AppButton(
+                    label: 'Retry',
+                    icon: Icons.refresh,
+                    onPressed: () => _retry(context, ref),
+                  ),
+                ),
+                const SizedBox(width: AppSpacing.sm),
+                Expanded(
+                  child: AppButton(
+                    label: 'Resolve',
+                    icon: Icons.check,
+                    variant: AppButtonVariant.tinted,
+                    onPressed: () => _resolve(context, ref),
+                  ),
+                ),
+              ],
             ),
           ),
         ],
@@ -141,6 +156,33 @@ class _ExceptionCard extends ConsumerWidget {
     if (!context.mounted) return;
     ScaffoldMessenger.of(context).showSnackBar(SnackBar(
       content: Text(failure?.message ?? 'Exception resolved.'),
+    ));
+  }
+
+  /// Re-queue + replay this intent. The idempotency key guarantees one invoice,
+  /// so a retry cannot double-post — but it DOES post a real sale, hence the confirm.
+  Future<void> _retry(BuildContext context, WidgetRef ref) async {
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        backgroundColor: AppColors.background,
+        title: Text('Retry this sale?', style: AppTypography.headline),
+        content: Text(
+          'Re-queues the intent and posts it as the original cashier once the '
+          'blocking issue is fixed. Safe to repeat — it never double-posts.',
+          style: AppTypography.subhead.copyWith(color: AppColors.textMuted),
+        ),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text('Cancel')),
+          TextButton(onPressed: () => Navigator.pop(ctx, true), child: const Text('Retry')),
+        ],
+      ),
+    );
+    if (confirmed != true) return;
+    final failure = await ref.read(drainActionsProvider).retryIntent(exception.outboxId);
+    if (!context.mounted) return;
+    ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+      content: Text(failure?.message ?? 'Intent re-queued and replayed.'),
     ));
   }
 }

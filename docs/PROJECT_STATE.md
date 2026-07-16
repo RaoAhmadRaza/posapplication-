@@ -121,13 +121,17 @@ Landed cost by line_total; canonical warehouse_id NULL stock via post_stock_move
 imei_records AVAILABLE. PO lifecycle DRAFT→SUBMITTED→APPROVED→PARTIALLY_RECEIVED/RECEIVED→INVOICED, CANCELLED. Two
 receive_goods bugs forward-fixed: enum-cast (20260711101802), imei IN_STOCK→AVAILABLE (20260711111535).
 
-## Sync / Offline (§3.3) — D1–D10 LIVE — SYNC & OFFLINE COMPLETE (gate-proven)
-D10 sync_replay_classifier_fix (20260716160000, LIVE — not money): closed bug class #7 (silent FAILED-at-cap). replay terminal
-regex += NO_TENANT|PERMISSION_DENIED (impersonating drain on a revoked/tenant-less cashier never succeeds → ABANDONED + exception;
-was mis-classed transient → stuck FAILED<cap, invisible); AND a transient that EXHAUSTS retries (attempts+1≥5) now also surfaces
-in the Exception Centre. Gate before/after (rolled-back): 3 silent holes → all visible; below-cap transient still retries (no
-over-fire). SIGN-OFF #5 (p_transaction_date) DECIDED deferred — current_date always posts to an OPEN period (no live D6 conflict);
-build in its own money-RPC gate + add ERR_PERIOD_CLOSED to the classifier then.
+## Sync / Offline (§3.3) — D1–D11 LIVE — SYNC & OFFLINE COMPLETE (gate-proven)
+D11 sync_retry_intent (20260716161000, LIVE — not money): closed the exception GRAVEYARD (resolve only ANNOTATED; the lost sale
+never posted). retry_sync_intent (sync:resolve) re-queues an ABANDONED/FAILED intent + replays inline impersonating the original
+cashier; D4 key ⇒ exactly one invoice, already-applied = no-op. sync_replay guard OPEN-scoped so a re-failed retry re-surfaces.
+Flutter Retry action beside Resolve. Gate green: graveyard→recover→no-double-post→re-surface.
+D10 sync_replay_classifier_fix (20260716160000, LIVE — not money): closed bug class #7 (silent FAILED-at-cap). terminal regex +=
+NO_TENANT|PERMISSION_DENIED (revoked/tenant-less cashier → ABANDONED+exception; was stuck FAILED<cap invisible); transient at cap
+(attempts+1≥5) now also surfaces. Gate before/after: 3 silent holes → visible; below-cap transient still retries (no over-fire).
+SIGN-OFF #5 (p_transaction_date) DEFERRED BY CHOICE — accepted latent misstatement, NOT "safe": posting at current_date IS the
+defect, open period only makes it SILENT (sale synced across midnight/month-end books to the wrong day/period, all gates green).
+REVISIT at month-end or on any overnight-offline report. See DECISIONS Sign-off #5.
 D1 sync_pull_reference (20260716073759 + fix 125000, LIVE): Class A pull-only delta + stock_balance full pull; SECURITY DEFINER
 per-subquery tenant filter evicts soft-delete tombstones (INVOKER RLS silently dropped them). D2 sync_foundation (075906):
 sync_outbox + sync_exceptions (append-only, NEVER makes an invoice) + 2 enums + `sync` perm; RPC-only writes (insert→42501).
@@ -138,17 +142,12 @@ D7.1 CLIENT (lib/features/sync/, mirrors approvals; +sqflite/ffi/connectivity_pl
 DAOs) + pull-reference watermark delta (deleted_at→evict); ConnectivityMonitor. Offline CASH-ONLY — a cash sale appends a SALE
 intent (uuid key, provisional local_ref), NEVER create_sale. POS: SyncStatusWidget; credit/returns/customer/close-register
 disabled offline w/ reason; search cache-first; success shows local_ref PROVISIONAL.
-D7.2 replay drain + Exception Centre (migration sync_push_intent 20260716151500 — idempotent client→server enqueue; the
-missing D2/D5 piece): on reconnect DRAIN oldest-first ONE AT A TIME (push→sync_replay_sale_intent→mark DONE + real
-invoice_number / ABANDONED / retry). Idempotent 3 ways (push key + replay guard + create_sale key) → drain-twice/kill-mid-drain
-= 3 invoices not 6. SyncExceptionCentrePage /sync/exceptions (sync:read, product deep-link to /inventory/products/:id, Resolve
-+note → resolve_sync_exception sync:resolve). SyncStatusSheet (queue/last-sync/per-intent). Reconciliation: local_ref↔invoice#
-searchable. sqflite v2 (onUpgrade). analyze clean (0 new); device airplane→reconnect flow not driven headless.
-D8 ops (migration sync_drain_cron 20260716154500): cron `sync_outbox_drain_5min` (*/5, MANUAL like the other 6 jobs)
-drains server-side. The spec's direct-replay cron would mass-FAIL (pg_cron has no JWT → create_sale ERR_NO_TENANT); FIX =
-sync_drain_cron impersonates each row's cashier (set jwt from user_id) then routes through sync_replay_sale_intent; granted
-service_role only. Registered AFTER D4/D5 green (M11 keys-first). DEFERRED (by design; full list in DECISIONS): sync_log/
-conflicts/domain_events (superseded LWW design); offline variants/stock caching; p_transaction_date [#5]; reachability probe.
+D7.2 replay drain + Exception Centre (sync_push_intent 20260716151500 — idempotent client→server enqueue): on reconnect DRAIN
+oldest-first ONE AT A TIME; idempotent 3 ways (push key + replay guard + create_sale key) → drain-twice/kill-mid = 3 invoices not 6.
+SyncExceptionCentrePage /sync/exceptions (sync:read, product deep-links, Resolve/Retry). SyncStatusSheet. sqflite v2 (onUpgrade).
+D8 ops (sync_drain_cron 20260716154500): cron `sync_outbox_drain_5min` (*/5, MANUAL) drains server-side — impersonates each row's
+cashier (pg_cron has no JWT) then routes through sync_replay_sale_intent; service_role only; registered AFTER D4/D5 green.
+DEFERRED (full list in DECISIONS): sync_log/conflicts/domain_events (superseded LWW); offline variants/stock caching; #5; probe.
 D5 sync_replay_driver (20260716134500, LIVE): sync_replay_sale_intent (for-update-skip-locked → create_sale w/ the outbox key →
 APPLIED + stamps is_offline/synced_at/device_id/local_ref) + resolve_sync_exception. Terminal→ABANDONED + sync_exceptions;
 transient→FAILED. RELAXED fn_invoice_immutability for a metadata-only stamp on a PAID invoice (jsonb-diff, financials still

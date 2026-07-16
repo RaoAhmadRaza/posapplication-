@@ -37,6 +37,12 @@ class ResolveSyncException {
   Future<SyncFailure?> call(String id, String note) => _repo.resolveException(id, note);
 }
 
+class RetrySyncIntent {
+  RetrySyncIntent(this._repo);
+  final SyncRepository _repo;
+  Future<SyncFailure?> call(String outboxId) => _repo.retryIntent(outboxId);
+}
+
 final drainOutboxUseCaseProvider =
     Provider((ref) => DrainOutbox(ref.read(syncRepositoryProvider)));
 final loadOutboxIntentsUseCaseProvider =
@@ -47,3 +53,5 @@ final loadSyncExceptionsUseCaseProvider =
     Provider((ref) => LoadSyncExceptions(ref.read(syncRepositoryProvider)));
 final resolveSyncExceptionUseCaseProvider =
     Provider((ref) => ResolveSyncException(ref.read(syncRepositoryProvider)));
+final retrySyncIntentUseCaseProvider =
+    Provider((ref) => RetrySyncIntent(ref.read(syncRepositoryProvider)));

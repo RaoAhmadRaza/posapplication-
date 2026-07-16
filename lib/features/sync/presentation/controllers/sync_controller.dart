@@ -92,6 +92,18 @@ class DrainActions {
     if (failure == null) _ref.invalidate(syncExceptionsProvider);
     return failure;
   }
+
+  /// Re-queue + replay a stuck intent. On success the exception clears and (if the
+  /// replay applied) an invoice posts — refresh the queue, count and exceptions.
+  Future<SyncFailure?> retryIntent(String outboxId) async {
+    final failure = await _ref.read(retrySyncIntentUseCaseProvider).call(outboxId);
+    if (failure == null) {
+      _ref.invalidate(syncExceptionsProvider);
+      _ref.invalidate(outboxIntentsProvider);
+      await _ref.read(outboxCountProvider.notifier).refresh();
+    }
+    return failure;
+  }
 }
 
 final drainActionsProvider = Provider<DrainActions>((ref) => DrainActions(ref));

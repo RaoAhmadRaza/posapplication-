@@ -49,6 +49,10 @@ abstract class SyncRepository {
   /// Resolve an exception with a note (gated sync:resolve server-side).
   Future<SyncFailure?> resolveException(String id, String note);
 
+  /// Re-queue a stuck intent and replay it (gated sync:resolve server-side).
+  /// The idempotency key guarantees at most one invoice.
+  Future<SyncFailure?> retryIntent(String outboxId);
+
   /// Timestamp of the last successful drain, if any.
   Future<String?> lastSyncAt();
 }

@@ -234,6 +234,16 @@ class SyncRepositoryImpl implements SyncRepository {
   }
 
   @override
+  Future<SyncFailure?> retryIntent(String outboxId) async {
+    try {
+      await _remote.retryIntent(outboxId);
+      return null;
+    } catch (e) {
+      return _mapError(e);
+    }
+  }
+
+  @override
   Future<String?> lastSyncAt() => _local.getLastSyncAt();
 
   OutboxEntry _outboxEntry(Map<String, Object?> r) => OutboxEntry(
