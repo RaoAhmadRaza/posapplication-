@@ -203,7 +203,7 @@ manual voucher, expenses, bank/tax-rule CRUD, Reports (export gated), fiscal per
 UI (S6): `lib/features/settings/` clean-arch, ONE settings_remote_datasource, typed SettingsFailure. SettingsHubPage is the
 bottom-nav /settings target (settings:read) → Profile&Security (reused auth page), Business settings (settings_json), Branches
 (per-branch currency/timezone), Payment methods (update/link/toggle only — 7 enum rows are the complete set), Tax rules, Number
-series (read-only; fiscal_year_reset inert), Preferences (theme/language/default branch), Notifications. formatPkr follows the
+series (read-only; fiscal_year_reset DROPPED 2026-07-16 D2, sign-off #1), Preferences (theme/language/default branch), Notifications. formatPkr follows the
 active branch currency. auth SettingsPage stays in features/auth/ (move deferred — breaks imports).
 
 ## M09 Repair & Service — COMPLETE (backend + Flutter)
