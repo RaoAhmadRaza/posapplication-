@@ -55,7 +55,7 @@ class _ImportProductsPageState extends ConsumerState<ImportProductsPage> {
   // --- Pick ---
 
   Future<void> _pickFile() async {
-    final result = await FilePicker.platform.pickFiles(
+    final result = await FilePicker.pickFiles(
       type: FileType.custom,
       allowedExtensions: ['csv'],
       withData: true,

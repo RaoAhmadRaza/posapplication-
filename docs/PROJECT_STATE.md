@@ -57,8 +57,8 @@ LabelPdfService + LabelPrintPage); notifications (+prefs, trg_low_stock_notify, 
 - Profile loaded once (no pull-to-refresh); IMEI section not yet in product edit form (SERIALIZED)
 - ⚠️ number_series_type_enum landmines: JOURNAL_ENTRY + RECEIPT_VOUCHER seeded by no tenant; next_number() for them
   fails for every tenant at once if a feature ever uses them. Seed (JV-/RV-) or drop from enum. (DECISIONS P5.)
-- BUILD STATE (re-probed 2026-07-16): macOS build FIXED (osx 10.15→11.0 for speech_to_text). ANDROID APK STILL BROKEN — file_picker
-  3.0.4 lacks an AGP-8 namespace (NOT speech_to_text); production device E2E blocked by file_picker, bump=NEXT commit; iOS platform commented→latent. (DECISIONS 2026-07-16.)
+- BUILD STATE (2026-07-16): macOS FIXED (osx 10.15→11.0). ANDROID FIXED — file_picker 3.0.4→12.0.0-beta.7 (only 12.x clears the win32-6
+  clash) + `.platform` removed at 2 sites; `build apk` ✓; 6 withData/bytes deprecation infos kept (readAsBytes=future task). (DECISIONS.)
 
 ## Tenant Provisioning — COMPLETE (creation-time, gate-proven; detail in DECISIONS.md)
 `provision_tenant()` seeds the golden set (20 CoA / 8 number_series / 4 tax / OPEN fiscal / 3+3 templates /

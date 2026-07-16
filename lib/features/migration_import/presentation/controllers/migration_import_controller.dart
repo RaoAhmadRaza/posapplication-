@@ -131,7 +131,7 @@ class MigrationImportController extends Notifier<MigrationImportState> {
   }
 
   Future<void> pickAndParse(ImportTableKind kind) async {
-    final result = await FilePicker.platform.pickFiles(
+    final result = await FilePicker.pickFiles(
       type: FileType.custom,
       allowedExtensions: ['csv'],
       withData: true,
