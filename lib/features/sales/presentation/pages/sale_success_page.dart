@@ -50,7 +50,7 @@ class SaleSuccessPage extends ConsumerWidget {
                 child: const Icon(Icons.check, size: 36, color: AppColors.success),
               ),
               const SizedBox(height: AppSpacing.xl),
-              Text('Sale Complete', style: AppTypography.title2),
+              Text(result.status == 'OFFLINE' ? 'Sale Queued' : 'Sale Complete', style: AppTypography.title2),
               const SizedBox(height: AppSpacing.xs),
               Row(
                 mainAxisAlignment: MainAxisAlignment.center,
@@ -60,6 +60,14 @@ class SaleSuccessPage extends ConsumerWidget {
                   _StatusChip(status: result.status),
                 ],
               ),
+              if (result.status == 'OFFLINE') ...[
+                const SizedBox(height: AppSpacing.xs),
+                Text(
+                  'Provisional reference — not an invoice number.\nSyncs and gets its real number when back online.',
+                  textAlign: TextAlign.center,
+                  style: AppTypography.caption.copyWith(color: AppColors.textMuted),
+                ),
+              ],
               const SizedBox(height: AppSpacing.xxl),
               _Row(label: 'Grand Total', value: result.grandTotal, bold: true),
               _Row(label: 'Paid', value: result.paidAmount),
@@ -68,13 +76,16 @@ class SaleSuccessPage extends ConsumerWidget {
               if (result.balance > 0)
                 _Row(label: 'Balance Due', value: result.balance, color: AppColors.warning),
               const SizedBox(height: AppSpacing.xxxl),
-              AppButton(
-                label: 'Receipt',
-                onPressed: () => context.push('/sales/receipt', extra: result.invoiceId),
-                fullWidth: true,
-                icon: Icons.receipt_long,
-              ),
-              const SizedBox(height: AppSpacing.md),
+              // Offline: a device cannot fetch a server invoice (none exists yet) — no
+              // server receipt. The provisional local_ref above IS the customer's slip.
+              if (result.status != 'OFFLINE')
+                AppButton(
+                  label: 'Receipt',
+                  onPressed: () => context.push('/sales/receipt', extra: result.invoiceId),
+                  fullWidth: true,
+                  icon: Icons.receipt_long,
+                ),
+              if (result.status != 'OFFLINE') const SizedBox(height: AppSpacing.md),
               AppButton(
                 label: 'New Sale',
                 onPressed: () {
@@ -114,6 +125,7 @@ class _StatusChip extends StatelessWidget {
       'PAID' => (AppColors.success, 'PAID'),
       'PARTIALLY_PAID' => (AppColors.warning, 'PARTIALLY PAID'),
       'CONFIRMED' => (AppColors.accent, 'CREDIT'),
+      'OFFLINE' => (AppColors.warning, 'QUEUED'),
       _ => (AppColors.textMuted, status),
     };
     return Container(

@@ -14,6 +14,10 @@ import '../../../../core/widgets/barcode_scan_page.dart';
 import '../../../../core/widgets/no_access_scaffold.dart';
 import '../../../../core/widgets/permission_gate.dart';
 import '../../../auth/presentation/controllers/branch_controller.dart';
+import '../../../sync/presentation/controllers/connectivity_controller.dart';
+import '../../../sync/presentation/controllers/offline_products_controller.dart';
+import '../../../sync/presentation/controllers/sync_controller.dart';
+import '../../../sync/presentation/widgets/sync_status_widget.dart';
 import '../../../inventory/presentation/controllers/products_controller.dart';
 import '../../../inventory/presentation/controllers/stock_levels_controller.dart';
 import '../../../inventory/domain/entities/product.dart';
@@ -38,6 +42,8 @@ class _PosTerminalPageState extends ConsumerState<PosTerminalPage>
   final _searchCtrl = TextEditingController();
   Timer? _debounce;
   bool _showAutoSavedNote = false;
+  bool _pulledOnce = false;
+  String _query = '';
 
   @override
   void initState() {
@@ -98,6 +104,7 @@ class _PosTerminalPageState extends ConsumerState<PosTerminalPage>
     _debounce?.cancel();
     _debounce = Timer(const Duration(milliseconds: 300), () {
       if (!mounted) return;
+      setState(() => _query = _searchCtrl.text); // drives the offline cache query
       ref.read(productsProvider.notifier).search(_searchCtrl.text);
     });
   }
@@ -128,6 +135,15 @@ class _PosTerminalPageState extends ConsumerState<PosTerminalPage>
   }
 
   Future<void> _openCustomerPicker() async {
+    // Offline is cash-only by construction: no credit, so no customer needed, and
+    // customer creation is a server write. Block it with a reason, don't queue it.
+    final online = ref.read(connectivityProvider).maybeWhen(data: (v) => v, orElse: () => true);
+    if (!online) {
+      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
+        content: Text('Offline: cash-only sales. Customer selection/creation needs a connection.'),
+      ));
+      return;
+    }
     await showCustomerPicker(context);
   }
 
@@ -160,7 +176,11 @@ class _PosTerminalPageState extends ConsumerState<PosTerminalPage>
     final branch = ref.watch(currentBranchProvider);
     final sessionState = ref.watch(sessionProvider);
     final cart = ref.watch(posCartProvider);
-    final products = ref.watch(productsProvider);
+    final online = ref.watch(connectivityProvider).maybeWhen(data: (v) => v, orElse: () => true);
+    // Offline: resolve product search + price from the local reference cache.
+    final products = online
+        ? ref.watch(productsProvider)
+        : ref.watch(offlineProductSearchProvider(_query));
     final stockLevels = ref.watch(stockLevelsProvider).value ?? <StockLevel>[];
 
     if (branch == null) {
@@ -183,6 +203,13 @@ class _PosTerminalPageState extends ConsumerState<PosTerminalPage>
     final wide = MediaQuery.of(context).size.width >= 768;
     final isLandscape = MediaQuery.of(context).orientation == Orientation.landscape;
 
+    // Refresh the reference cache once per terminal open while online, so an
+    // offline sale later has products/prices/customers to resolve from.
+    if (online && !_pulledOnce) {
+      _pulledOnce = true;
+      Future.microtask(() => ref.read(syncActionsProvider).pull());
+    }
+
     final stockMap = <String, StockLevel>{};
     for (final s in stockLevels) {
       if (s.warehouseId == null) stockMap[s.productId] = s;
@@ -195,6 +222,7 @@ class _PosTerminalPageState extends ConsumerState<PosTerminalPage>
         surfaceTintColor: AppColors.background,
         title: Text('POS', style: AppTypography.headline),
         actions: [
+          const Center(child: SyncStatusWidget()),
           IconButton(
             icon: const Icon(Icons.history, color: AppColors.accent, size: 22),
             onPressed: () => context.push('/sales/history'),
@@ -207,19 +235,24 @@ class _PosTerminalPageState extends ConsumerState<PosTerminalPage>
             },
             tooltip: 'Resume Held Sale',
           ),
+          // Returns need a server round-trip (create_sales_return) — disabled offline.
           PermissionGate(
             module: 'sales',
             action: 'update',
             child: IconButton(
-              icon: const Icon(Icons.keyboard_return, color: AppColors.accent, size: 22),
-              onPressed: () => context.push('/sales/return'),
-              tooltip: 'Sales Return',
+              icon: Icon(Icons.keyboard_return,
+                  color: online ? AppColors.accent : AppColors.textHint, size: 22),
+              onPressed: online ? () => context.push('/sales/return') : null,
+              tooltip: online ? 'Sales Return' : 'Returns need a connection',
             ),
           ),
+          // Closing a register posts to the server — disabled offline.
           if (session != null)
             TextButton(
-              onPressed: () => context.push('/sales/session/close'),
-              child: Text('Close Register', style: AppTypography.footnote.copyWith(color: AppColors.destructive)),
+              onPressed: online ? () => context.push('/sales/session/close') : null,
+              child: Text('Close Register',
+                  style: AppTypography.footnote.copyWith(
+                      color: online ? AppColors.destructive : AppColors.textHint)),
             ),
         ],
       ),

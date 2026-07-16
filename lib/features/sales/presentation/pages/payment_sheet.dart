@@ -11,6 +11,7 @@ import '../../../../core/design/widgets/app_inline_banner.dart';
 import '../../../../core/design/widgets/app_text_field.dart';
 import '../../../../core/widgets/no_access_scaffold.dart';
 import '../../../../core/widgets/permission_gate.dart';
+import '../../../sync/presentation/controllers/connectivity_controller.dart';
 import '../controllers/pos_cart_controller.dart';
 
 class PaymentSheet extends ConsumerStatefulWidget {
@@ -88,9 +89,22 @@ class _PaymentSheetState extends ConsumerState<PaymentSheet> {
 
   Future<void> _complete() async {
     final cart = ref.read(posCartProvider);
+    final online = ref.read(connectivityProvider).maybeWhen(data: (v) => v, orElse: () => true);
     if (_paid <= 0) {
       setState(() => _error = 'Enter at least one payment.');
       return;
+    }
+    // Offline is CASH-ONLY BY CONSTRUCTION: no credit (no server credit-limit check),
+    // full amount required, no non-cash tender (no bank/GL resolution offline).
+    if (!online) {
+      if (_rows.any((r) => r.method != PaymentMethodLabel.cash)) {
+        setState(() => _error = 'Offline: cash only. Remove non-cash payment methods.');
+        return;
+      }
+      if (_balance > 0) {
+        setState(() => _error = 'Offline: cash only. Collect the full amount (no credit).');
+        return;
+      }
     }
     if (_balance > 0 && cart.customer == null) {
       setState(() => _error = 'Credit sales require a customer. Select a customer first.');
@@ -114,6 +128,7 @@ class _PaymentSheetState extends ConsumerState<PaymentSheet> {
     final failure = await notifier.checkout(
       branchId: widget.branchId,
       sessionId: widget.sessionId,
+      offline: !online,
     );
 
     if (!mounted) return;
@@ -139,6 +154,7 @@ class _PaymentSheetState extends ConsumerState<PaymentSheet> {
 
   Widget _buildContent(BuildContext context) {
     final hasCustomer = ref.watch(posCartProvider).customer != null;
+    final online = ref.watch(connectivityProvider).maybeWhen(data: (v) => v, orElse: () => true);
     return Scaffold(
       backgroundColor: AppColors.background,
       appBar: AppBar(
@@ -157,10 +173,19 @@ class _PaymentSheetState extends ConsumerState<PaymentSheet> {
                     const SizedBox(height: AppSpacing.xl),
                     _SummaryBox(label: 'Grand Total', value: _grand, bold: true),
                     const SizedBox(height: AppSpacing.xl),
+                    if (!online)
+                      Padding(
+                        padding: const EdgeInsets.only(bottom: AppSpacing.md),
+                        child: AppInlineBanner(
+                          message: 'Offline — cash only. Collect the full amount; the sale queues and syncs when back online.',
+                          type: BannerType.info,
+                        ),
+                      ),
                     ...List.generate(_rows.length, (i) => _PaymentRowWidget(
                           row: _rows[i],
                           index: i,
                           canRemove: _rows.length > 1,
+                          cashOnly: !online,
                           onMethodChanged: (m) => setState(() => _rows[i].method = m),
                           onRemove: () => _removeRow(i),
                         )),
@@ -228,6 +253,7 @@ class _PaymentRowWidget extends StatelessWidget {
     required this.row,
     required this.index,
     required this.canRemove,
+    required this.cashOnly,
     required this.onMethodChanged,
     required this.onRemove,
   });
@@ -235,6 +261,7 @@ class _PaymentRowWidget extends StatelessWidget {
   final _PaymentRow row;
   final int index;
   final bool canRemove;
+  final bool cashOnly;
   final ValueChanged<PaymentMethodLabel> onMethodChanged;
   final VoidCallback onRemove;
 
@@ -254,7 +281,8 @@ class _PaymentRowWidget extends StatelessWidget {
             children: [
               Expanded(
                 child: _MethodDropdown(
-                  value: row.method,
+                  value: cashOnly ? PaymentMethodLabel.cash : row.method,
+                  enabled: !cashOnly,
                   onChanged: onMethodChanged,
                 ),
               ),
@@ -291,17 +319,18 @@ class _PaymentRowWidget extends StatelessWidget {
 }
 
 class _MethodDropdown extends StatelessWidget {
-  const _MethodDropdown({required this.value, required this.onChanged});
+  const _MethodDropdown({required this.value, required this.onChanged, this.enabled = true});
   final PaymentMethodLabel value;
   final ValueChanged<PaymentMethodLabel> onChanged;
+  final bool enabled;
 
   @override
   Widget build(BuildContext context) {
-    return Container(
+    final dropdown = Container(
       height: 44,
       padding: const EdgeInsets.symmetric(horizontal: AppSpacing.md),
       decoration: BoxDecoration(
-        color: AppColors.background,
+        color: enabled ? AppColors.background : AppColors.fieldFill,
         borderRadius: BorderRadius.circular(AppRadius.field),
         border: Border.all(color: AppColors.separator),
       ),
@@ -311,7 +340,7 @@ class _MethodDropdown extends StatelessWidget {
           isExpanded: true,
           icon: Icon(Icons.keyboard_arrow_down, size: 18, color: AppColors.textMuted),
           style: AppTypography.subhead,
-          onChanged: (v) { if (v != null) onChanged(v); },
+          onChanged: enabled ? (v) { if (v != null) onChanged(v); } : null,
           items: PaymentMethodLabel.values.map((m) {
             return DropdownMenuItem(
               value: m,
@@ -331,6 +360,8 @@ class _MethodDropdown extends StatelessWidget {
         ),
       ),
     );
+    if (enabled) return dropdown;
+    return Tooltip(message: 'Offline: cash only', child: dropdown);
   }
 }
 
