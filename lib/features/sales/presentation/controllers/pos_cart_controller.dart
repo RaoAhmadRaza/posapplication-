@@ -8,6 +8,7 @@ import '../../domain/usecases/create_sale.dart';
 import '../../domain/usecases/hold_sale.dart';
 import '../../domain/usecases/load_held_sales.dart';
 import '../../domain/usecases/delete_held_sale.dart';
+import '../../../sync/presentation/controllers/sync_controller.dart';
 
 enum PaymentMethodLabel { cash, bankTransfer, card, mobileWallet, cheque, loyaltyPoints, creditNote }
 
@@ -245,6 +246,7 @@ class PosCartController extends Notifier<CartState> {
   Future<SalesFailure?> checkout({
     required String branchId,
     String? sessionId,
+    bool offline = false,
   }) async {
     if (state.lines.isEmpty) return EmptyCartFailure();
     state = CartState(
@@ -268,6 +270,48 @@ class PosCartController extends Notifier<CartState> {
           'amount': p.amount,
           if (p.reference != null && p.reference!.isNotEmpty) 'reference': p.reference,
         }).toList();
+
+    // Offline: NEVER call create_sale (a device can't allocate an invoice number).
+    // Persist a SALE intent to the local outbox; replay is D7.2. The success/receipt
+    // surface a provisional local_ref, not a server invoice number.
+    if (offline) {
+      final grand = state.grandTotal;
+      final paid = state.paid;
+      final change = state.change;
+      final (intent, syncFailure) = await ref.read(syncActionsProvider).enqueueSale(
+            branchId: branchId,
+            items: items,
+            payments: payments,
+            sessionId: sessionId,
+          );
+      if (syncFailure != null || intent == null) {
+        final f = UnknownFailure(syncFailure?.message ?? 'Failed to queue sale.');
+        state = CartState(
+          lines: state.lines,
+          customer: state.customer,
+          payments: state.payments,
+          submitting: false,
+          lastError: f,
+        );
+        return f;
+      }
+      state = CartState(
+        lines: [],
+        customer: null,
+        payments: [],
+        submitting: false,
+        lastResult: SaleResult(
+          invoiceId: '',
+          invoiceNumber: intent.localRef,
+          grandTotal: grand,
+          paidAmount: paid,
+          balance: 0,
+          changeAmount: change,
+          status: 'OFFLINE',
+        ),
+      );
+      return null;
+    }
 
     final (result, failure) = await ref.read(createSaleUseCaseProvider).call(
           branchId: branchId,
