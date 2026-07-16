@@ -8,7 +8,9 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 import '../../../../core/supabase.dart';
 import '../../domain/entities/cached_customer.dart';
 import '../../domain/entities/cached_product.dart';
+import '../../domain/entities/outbox_entry.dart';
 import '../../domain/entities/sale_intent.dart';
+import '../../domain/entities/sync_exception.dart';
 import '../../domain/failures/sync_failure.dart';
 import '../../domain/repositories/sync_repository.dart';
 import '../datasources/sync_local_datasource.dart';
@@ -113,6 +115,151 @@ class SyncRepositoryImpl implements SyncRepository {
     } catch (e) {
       return (0, _cache(e));
     }
+  }
+
+  @override
+  Future<(DrainSummary, SyncFailure?)> drainOutbox() async {
+    try {
+      final rows = await _local.drainable(); // OLDEST-FIRST
+      var applied = 0, abandoned = 0, failed = 0;
+      // ONE AT A TIME — serial replay is the whole reason there is nothing to merge.
+      for (final row in rows) {
+        final id = row['id'] as String;
+        final key = row['idempotency_key'] as String;
+        final localRef = (row['local_ref'] as String?) ?? '';
+        final clientCreatedAt = row['client_created_at'] as String;
+        final payload = jsonDecode(row['payload_json'] as String) as Map<String, dynamic>;
+        final branchId = payload['branch_id'] as String;
+
+        Map<String, dynamic> push;
+        try {
+          push = await _remote.pushIntent(
+            idempotencyKey: key,
+            branchId: branchId,
+            payload: payload,
+            clientCreatedAt: clientCreatedAt,
+            localRef: localRef,
+            deviceId: payload['device_id'] as String?,
+          );
+        } catch (e) {
+          await _local.markFailed(id, null, _mapError(e).message);
+          failed++;
+          continue;
+        }
+        final oid = push['outbox_id'] as String?;
+        if (oid == null) {
+          await _local.markFailed(id, null, 'push returned no outbox id');
+          failed++;
+          continue;
+        }
+        // Already applied server-side (a prior drain got this far) → reconcile only.
+        if (push['status'] == 'APPLIED') {
+          await _reconcileApplied(id, oid, key, null);
+          applied++;
+          continue;
+        }
+
+        Map<String, dynamic> rep;
+        try {
+          rep = await _remote.replayIntent(oid);
+        } catch (e) {
+          await _local.markFailed(id, oid, _mapError(e).message);
+          failed++;
+          continue;
+        }
+        if (rep['applied'] == true || rep['skipped'] == true) {
+          await _reconcileApplied(id, oid, key, rep['invoice_id']?.toString());
+          applied++;
+        } else if (rep['terminal'] == true) {
+          await _local.markAbandoned(id, oid, rep['error']?.toString() ?? 'terminal failure');
+          abandoned++;
+        } else {
+          await _local.markFailed(id, oid, rep['error']?.toString() ?? 'transient failure');
+          failed++;
+        }
+      }
+      await _local.setLastSyncAt(DateTime.now().toUtc().toIso8601String());
+      return ((applied: applied, abandoned: abandoned, failed: failed), null);
+    } catch (e) {
+      return ((applied: 0, abandoned: 0, failed: 0), _mapError(e));
+    }
+  }
+
+  Future<void> _reconcileApplied(
+      String id, String oid, String key, String? invoiceId) async {
+    // Fetch the REAL invoice number so provisional paper (local_ref) is searchable.
+    final inv = await _remote.invoiceForKey(key);
+    await _local.markApplied(
+        id, oid, (invoiceId ?? inv?['id'])?.toString(), inv?['invoice_number']?.toString());
+  }
+
+  @override
+  Future<(List<OutboxEntry>, SyncFailure?)> loadIntents() async {
+    try {
+      final rows = await _local.allIntents();
+      return (rows.map(_outboxEntry).toList(), null);
+    } catch (e) {
+      return (<OutboxEntry>[], _cache(e));
+    }
+  }
+
+  @override
+  Future<(List<OutboxEntry>, SyncFailure?)> findByRef(String query) async {
+    try {
+      final rows = await _local.findByRef(query);
+      return (rows.map(_outboxEntry).toList(), null);
+    } catch (e) {
+      return (<OutboxEntry>[], _cache(e));
+    }
+  }
+
+  @override
+  Future<(List<SyncException>, SyncFailure?)> loadOpenExceptions() async {
+    try {
+      final rows = await _remote.loadOpenExceptions();
+      return (rows.map(_syncException).toList(), null);
+    } catch (e) {
+      return (<SyncException>[], _mapError(e));
+    }
+  }
+
+  @override
+  Future<SyncFailure?> resolveException(String id, String note) async {
+    try {
+      await _remote.resolveException(id, note);
+      return null;
+    } catch (e) {
+      return _mapError(e);
+    }
+  }
+
+  @override
+  Future<String?> lastSyncAt() => _local.getLastSyncAt();
+
+  OutboxEntry _outboxEntry(Map<String, Object?> r) => OutboxEntry(
+        id: r['id'] as String,
+        idempotencyKey: r['idempotency_key'] as String,
+        localRef: (r['local_ref'] as String?) ?? '',
+        invoiceNumber: r['invoice_number'] as String?,
+        status: (r['status'] as String?) ?? 'PENDING',
+        clientCreatedAt: (r['client_created_at'] as String?) ?? '',
+        attempts: (r['attempts'] as int?) ?? 0,
+        lastError: r['last_error'] as String?,
+      );
+
+  SyncException _syncException(Map<String, dynamic> j) {
+    final raw = j['payload_json'];
+    final payload = raw is Map
+        ? raw.cast<String, dynamic>()
+        : (raw is String ? jsonDecode(raw) as Map<String, dynamic> : <String, dynamic>{});
+    return SyncException(
+      id: j['id'] as String,
+      outboxId: j['outbox_id'] as String,
+      errorCode: (j['error_code'] as String?) ?? 'ERR_UNKNOWN',
+      errorDetail: j['error_detail'] as String?,
+      payload: payload,
+      createdAt: (j['created_at'] as String?) ?? '',
+    );
   }
 
   // ---- mapping -------------------------------------------------------------
