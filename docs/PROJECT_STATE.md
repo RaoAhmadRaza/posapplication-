@@ -138,6 +138,13 @@ ORIGINAL invoice, never double-posts. drop+create (7-arg replace = overload → 
 next_number (else replay burns a gap-free number); guarded unique_violation handler for races; ACL re-hardened (create
 re-grants PUBLIC/anon → revoked to match original). GATE: regression 2 distinct invoices, replay→1 invoice/1 journal/1 stock
 move, counter +3 not 4.
+D7.1 CLIENT (lib/features/sync/, Flutter — WRITE path only): NEW clean-arch feature (mirrors approvals) — sqflite local
+cache (hand-written DAOs, NO build_runner) + sync_pull_reference remote; watermark delta persists products+customers,
+deleted_at→evict. ConnectivityMonitor StreamProvider. Offline CASH-ONLY: a cash sale writes a SALE intent to the outbox
+(uuid idempotency_key, client_created_at, provisional local_ref) — NEVER calls create_sale; replay is D7.2 (reconnect does
+not drain). POS: SyncStatusWidget in app bar; credit/returns/customer/close-register disabled offline w/ reason; product
+search cache-first offline; success shows local_ref labeled PROVISIONAL. deps +sqflite/ffi/connectivity_plus/uuid. analyze
+clean (0 new); device airplane-mode flow not driven headless.
 D5 sync_replay_driver (20260716134500, LIVE): sync_replay_sale_intent (for-update-skip-locked → create_sale w/ the outbox
 idempotency_key → APPLIED + stamps is_offline/synced_at/device_id/local_ref, the FIRST writer of those) + resolve_sync_exception
 (sync:resolve). Terminal (ERR_INSUFFICIENT_STOCK etc)→ABANDONED + sync_exceptions row; transient→FAILED. Fixed the spec's
@@ -221,32 +228,22 @@ Backend (all migrations applied + rolled-back-gate-verified; full per-phase deta
 - H6 salary advances (**9th money path**): disburse_salary_advance (Dr 1150 / Cr 1000), recovered via payroll.
   Both disburse RPCs forward-fixed a `post_journal() into uuid` 22P02 (jsonb→uuid) via `->>'journal_entry_id'`.
 
-HR UI (`lib/features/hr/`, full clean-arch; per-slice detail in DECISIONS H7.1–H7.3): 7 entities + 7 enums,
-sealed HrFailure(11), ONE HrRemoteDataSource (all selects + RPCs), repo→typed failures, usecases + controllers.
-H7.1 employees/shifts: EmployeesPage, EmployeeFormPage (create-only code/branch/joining/cnic), EmployeeProfilePage
-(4 tabs), ShiftsPage. H7.2 attendance/leaves: AttendanceGridPage (NOTES-required-on-edit → ERR_EDIT_REASON_REQUIRED),
-LeavesPage (apply/approve/reject), ClockInOutPage; Profile tabs. H7.3 payroll: PayrollRunsPage + PayrollRunDetail
-(status-driven single action DRAFT→CALCULATED→APPROVED→DISBURSED, "View journal"), PayslipPdfService, Give-Advance.
-Routes /hr/*; Inventory-hub "HR & Payroll" gated hr:read. analyze clean.
+HR UI (`lib/features/hr/`, full clean-arch; per-slice detail in DECISIONS H7.1–H7.3): 7 entities/enums, sealed HrFailure(11),
+ONE HrRemoteDataSource, usecases + controllers. H7.1 employees/shifts (form create-only, profile 4 tabs). H7.2 attendance/
+leaves (edit-reason required, apply/approve/reject, clock in/out). H7.3 payroll (status-driven DRAFT→CALCULATED→APPROVED→
+DISBURSED + View journal, PayslipPdf, Give-Advance). Routes /hr/*; hub gated hr:read. analyze clean.
 
 ## M11 Approvals — Backend (foundation+engine+escalation) + Approval Center + Workflow-config UI
 Foundation `20260714093114_approvals_foundation.sql`: approval_status_enum(6) + approval_workflow_type_enum(8); tables
 approval_workflows/requests/actions §3.17 + indexes (incl uq open-request-per-entity — one PENDING/ESCALATED per entity);
 RLS tenant-read / RPC-only writes; NEW `approvals` perm module (6 actions backfilled to ADMIN + trg_seed_approvals_perms).
-Engine `20260714093553_approvals_engine.sql` (gate-verified rolled-back — detail in DECISIONS): upsert_approval_workflow
-(levels_json validated), request_approval (resolves active workflow by threshold; NULL=always; no match → required:false
-so callers proceed unchanged; idempotent per open entity), act_on_approval (approvals:approve + level required_role
-[ADMIN super-approver]; min_approvers; advances current_level; last→APPROVED, REJECT→REJECTED; one action per actor/level;
-append-only audit), cancel_approval_request (requestor/admin), approval_status helper.
-Escalation `20260714094049_approvals_escalation.sql`: escalate_expired_approvals (PENDING past expires_at → ESCALATED
-+ audit; stays open/actionable). Scheduled pg_cron hourly (job approvals_escalation_hourly `0 * * * *`; ext enabled here).
-UI `lib/features/approvals/` (clean-arch mirror of hr/; detail in DECISIONS): ONE ApprovalsRemoteDataSource (open+history
-reads w/ requestor/workflow/actor embeds; act/cancel/request_approval RPCs), typed ApprovalFailure(8), controllers +
-pendingApprovalsCountProvider (hub badge) + approvalDetailProvider.family. Pages: PendingApprovalsPage /approvals,
-ApprovalDetailPage /approvals/:id (level ladder + timeline + entity deep link; Approve/Reject gated approvals:approve, Cancel),
-ApprovalHistoryPage /approvals/history. Inventory-hub "Approvals" gated approvals:read w/ live count. Workflow-config UI
-(gated approvals:update): ApprovalWorkflowsPage /approvals/workflows (by type, active switch) + WorkflowFormPage (type/
-threshold/TTL + levels editor {role dropdown, min_approvers, add/reorder} → upsert_approval_workflow; soft-delete=is_active
-false). analyze clean. A5 PO integration LIVE (migration po_approval_integration): submit_purchase_order raises
+Engine `20260714093553_approvals_engine.sql` (gate-verified): upsert_approval_workflow, request_approval (resolves workflow by
+threshold; no match → required:false so callers proceed; idempotent per open entity), act_on_approval (level required_role,
+ADMIN super-approver, min_approvers, advances level, last→APPROVED, append-only audit), cancel_approval_request.
+Escalation `20260714094049_approvals_escalation.sql`: escalate_expired_approvals (PENDING past expires_at → ESCALATED); pg_cron
+hourly (approvals_escalation_hourly). UI `lib/features/approvals/` (mirror of hr/): ONE datasource, ApprovalFailure(8),
+controllers + count/detail providers. Pages: PendingApprovals /approvals, Detail /approvals/:id (ladder + timeline + deep link,
+Approve/Reject gated), History. Workflow-config (approvals:update): Workflows + WorkflowForm (type/threshold/TTL + levels editor
+→ upsert_approval_workflow). analyze clean. A5 PO integration LIVE (po_approval_integration): submit_purchase_order raises
 request_approval('PURCHASE_ORDER',po,grand_total); approve_purchase_order blocked (ERR_APPROVAL_REQUIRED) while chain
 PENDING/ESCALATED/REJECTED. Inert w/o a workflow — regression-proven byte-for-byte. NEXT: wire other 7 types (deferred).
