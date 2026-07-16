@@ -121,7 +121,7 @@ Landed cost by line_total; canonical warehouse_id NULL stock via post_stock_move
 imei_records AVAILABLE. PO lifecycle DRAFT→SUBMITTED→APPROVED→PARTIALLY_RECEIVED/RECEIVED→INVOICED, CANCELLED. Two
 receive_goods bugs forward-fixed: enum-cast (20260711101802), imei IN_STOCK→AVAILABLE (20260711111535).
 
-## Sync / Offline (§3.3) — D1 read-cache + D2 intent queue + D3 idempotency cols LIVE (gate-proven)
+## Sync / Offline (§3.3) — D1 read-cache + D2 intent queue + D3 cols + D4 create_sale guard LIVE (gate-proven)
 D1 sync_pull_reference (20260716073759 + fix 20260716125000, LIVE): Class A pull-only delta (products/variants/customers/
 payment_methods/tax_rules over updated_at watermark now()-2s) + stock_balance full pull. SECURITY DEFINER (explicit
 `where tenant_id=v_tenant` per subquery = sole boundary) — INVOKER build silently dropped soft-delete tombstones (products/
@@ -132,8 +132,12 @@ resolve; 7th seed_*_perms trigger). RLS tenant-read, RPC-only writes (no insert 
 authenticated insert → 42501.
 D3 sync_invoice_idempotency (20260716131500, LIVE): invoices += idempotency_key/device_id/local_ref; uq_invoices_idem PARTIAL
 unique (tenant_id, idempotency_key) where key not null = un-raceable double-post guard; + idx_invoices_offline (doc-claimed,
-was absent). Additive/nullable, 0 impact. GATE: dup key→23505, two null keys both insert. NOT built: D4 create_sale
-idempotency guard, replay RPC (D5), sync_log/conflicts (superseded — append queue has nothing to merge).
+was absent). Additive/nullable, 0 impact. GATE: dup key→23505, two null keys both insert.
+D4 sync_create_sale_idempotency (20260716133000, LIVE — MONEY RPC): create_sale += p_idempotency_key; replay returns the
+ORIGINAL invoice, never double-posts. drop+create (7-arg replace = overload → breaks live 6-arg calls); guard BEFORE
+next_number (else replay burns a gap-free number); guarded unique_violation handler for races; ACL re-hardened (create
+re-grants PUBLIC/anon → revoked to match original). GATE: regression 2 distinct invoices, replay→1 invoice/1 journal/1 stock
+move, counter +3 not 4. NOT built: replay RPC (D5), sync_log/conflicts (superseded — append queue has nothing to merge).
 
 ### Purchasing (Flutter) — COMPLETE
 `lib/features/purchasing/` full clean-arch (mirrors suppliers/sales): 6 entities + 2 status enums + 5 RPC result types;
