@@ -57,8 +57,8 @@ LabelPdfService + LabelPrintPage); notifications (+prefs, trg_low_stock_notify, 
 - Profile loaded once (no pull-to-refresh); IMEI section not yet in product edit form (SERIALIZED)
 - ⚠️ number_series_type_enum landmines: JOURNAL_ENTRY + RECEIPT_VOUCHER seeded by no tenant; next_number() for them
   fails for every tenant at once if a feature ever uses them. Seed (JV-/RV-) or drop from enum. (DECISIONS P5.)
-- (RETRACTED) the earlier "fiscal rollover cliff" is NOT real: current_fiscal_period is the sole creator and
-  lazily makes the covering monthly period on demand — no Aug-1/Jan-1 freeze. See DECISIONS 2026-07-15 fiscal correction.
+- BUILD STATE (re-probed 2026-07-16): macOS build FIXED (osx 10.15→11.0 for speech_to_text). ANDROID APK STILL BROKEN — file_picker
+  3.0.4 lacks an AGP-8 namespace (NOT speech_to_text); production device E2E blocked by file_picker, bump=NEXT commit; iOS platform commented→latent. (DECISIONS 2026-07-16.)
 
 ## Tenant Provisioning — COMPLETE (creation-time, gate-proven; detail in DECISIONS.md)
 `provision_tenant()` seeds the golden set (20 CoA / 8 number_series / 4 tax / OPEN fiscal / 3+3 templates /
