@@ -56,8 +56,7 @@ LabelPdfService + LabelPrintPage); notifications (+prefs, trg_low_stock_notify, 
 ## Known Issues
 - Profile loaded once (no pull-to-refresh); IMEI section not yet in product edit form (SERIALIZED)
 - ✓ FIXED 2026-07-16: number_series landmine (D1: Golden 10 seeded + next_number raises on any gap); cron reproducibility (D5: all 7 pg_cron jobs now in migrations/cron_bootstrap.sql, reconciled from live + diffed clean). (DECISIONS.)
-- BUILD STATE (2026-07-16): macOS FIXED (osx 10.15→11.0). ANDROID FIXED — file_picker 3.0.4→12.0.0-beta.7 (only 12.x clears the win32-6
-  clash) + `.platform` removed at 2 sites; `build apk` ✓; 6 withData/bytes deprecation infos kept (readAsBytes=future task). (DECISIONS.)
+- BUILD STATE (2026-07-16): macOS + Android FIXED. file_picker STAYS ON 12.0.0-beta.7 (D4: win32-override escape hatch fails at `build apk` — no stable release's Windows platform code compiles under win32 6.x); withData/bytes readAsBytes() migration now urgent, not tidy. (DECISIONS.)
 
 ## Tenant Provisioning — COMPLETE (creation-time, gate-proven; detail in DECISIONS.md)
 `provision_tenant()` seeds the golden set (20 CoA / 10 number_series / 4 tax / OPEN fiscal / 3+3 templates /
@@ -83,7 +82,8 @@ open/close_cashier_session, create_sales_return, void_invoice; invoice-immutabil
 number_series seed. Full clean-arch sales feature: POS terminal (search+scan, cart, customer picker,
 multi-payment/credit, tax, hold/resume, void, return), DB-backed session lifecycle (open/close, variance,
 staleness), cart autosave, history+detail (Reprint/Share), 80mm receipt PDF. Permission-gated routes +
-bottom-nav. create_sale enforces min_selling_price + credit_limit (overridable by sales:approve).
+bottom-nav. create_sale enforces min_selling_price + credit_limit (overridable by sales:approve); tax is
+server-authoritative (D6, 2026-07-16 — from tax_rules, client tax_pct ignored, raises if no active rule).
 close_cashier_session gated sales:create + owner-only. Live-sales banner via sessionSalesProvider (no silent
 zero). Full per-slice detail in DECISIONS.md.
 
