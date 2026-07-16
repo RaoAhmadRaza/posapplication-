@@ -64,23 +64,6 @@ class _SeriesCard extends StatelessWidget {
             'Next: ${info.nextNumberPreview}',
             style: AppTypography.subtitleMuted,
           ),
-          const SizedBox(height: AppSpacing.sm),
-          Tooltip(
-            message:
-                'Inert: the number format has no year component, so year '
-                'reset is not applied.',
-            child: Row(
-              children: [
-                Expanded(
-                  child: Text(
-                    'Fiscal-year reset (inactive)',
-                    style: AppTypography.subtitleMuted,
-                  ),
-                ),
-                Switch(value: info.fiscalYearReset, onChanged: null),
-              ],
-            ),
-          ),
         ],
       ),
     );

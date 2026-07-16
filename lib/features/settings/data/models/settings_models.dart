@@ -50,7 +50,6 @@ class SettingsModels {
         prefix: (row['prefix'] ?? '').toString(),
         padding: (row['padding'] as num?)?.toInt() ?? 6,
         currentNumber: (row['current_number'] as num?)?.toInt() ?? 0,
-        fiscalYearReset: row['fiscal_year_reset'] as bool? ?? false,
       );
 
   static UiPreferences uiPreferences(Map<String, dynamic>? row) {

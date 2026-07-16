@@ -140,7 +140,7 @@ class SettingsRemoteDataSource {
   Future<List<Map<String, dynamic>>> loadNumberSeries() async {
     return _client
         .from('number_series')
-        .select('type, prefix, padding, current_number, fiscal_year_reset')
+        .select('type, prefix, padding, current_number')
         .eq('tenant_id', await _tenantId())
         .order('type');
   }
