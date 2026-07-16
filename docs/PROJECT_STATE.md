@@ -89,7 +89,7 @@ close_cashier_session gated sales:create + owner-only. Live-sales banner via ses
 zero). Full per-slice detail in DECISIONS.md.
 
 ### Sales V1 Deferred
-delivery_orders, loyalty, customer_groups, pricing-tier, offline sync. (tax_rules + payment_methods tables now built.)
+delivery_orders, loyalty, customer_groups, pricing-tier. (offline sync → Sync/Offline §3.3.)
 
 ## Dashboard V2 — COMPLETE (relocated to features/dashboard/, clean-arch)
 page moved out of auth/ → features/dashboard/presentation/pages/. reports:read gate, pull-refresh, fl_chart bar+pie,
@@ -102,9 +102,9 @@ over drilldown_* RPCs; rows deep-link (invoice→/sales/invoice, product→/inve
 - MVs (reporting_materialized_views): 6 matviews (daily_sales [fan-out FIXED], inventory_valuation [canonical], account_balances, cust/supp_aging, product_performance) refreshed CONCURRENTLY; raw select revoked (definer RPCs).
 - Drilldowns (reporting_drilldowns/_complete/_payables): 6 RPCs leak-proven; ALL 10 dashboard KPIs tappable (stock_value+pl→existing pages).
 - Scheduling (reporting_schedules + deliveries_fix): run_due (pg_cron */15) queues PENDING report_deliveries; SEND = M11 dep.
-- Analytics (analytics_events): immutable partitioned+gin, RLS read-own/definer-write (FLAG: no partition helper). AI recs (ai_recommendations): generate_reorder_recommendations (idempotent) + act_on_recommendation; ML deferred.
-- Reporting UI COMPLETE (features/reporting/ + reporting_read_rpcs): ReportsHubPage /reports (Financial→existing accounting reports) + Inventory/Product-Perf/Cust-Supp-Aging/Trends/Forecasting (fl_chart, definer RPCs over MVs), ScheduledReports (upsert, reports:export), SmartInsights (ai_recs accept/dismiss + REORDER→Create-PO), PDF/CSV export.
-- Ops (pg_cron, MANUAL — not in migrations): mv_refresh_15min + report_schedules_runner (*/15) + reorder_daily (06:00) + approvals_escalation_hourly, all active.
+- Analytics (analytics_events): immutable partitioned+gin, RLS read-own/definer-write (FLAG: only a DEFAULT partition, no time-bounded ones — inserts degrade not reject). AI recs (ai_recommendations): generate_reorder_recommendations + act_on_recommendation; ML deferred.
+- Reporting UI COMPLETE (features/reporting/ + reporting_read_rpcs): ReportsHubPage /reports + Inventory/Product-Perf/Cust-Supp-Aging/Trends/Forecasting (fl_chart, definer RPCs over MVs), ScheduledReports (reports:export), SmartInsights (ai_recs + REORDER→Create-PO), PDF/CSV export.
+- Ops (pg_cron, MANUAL): mv_refresh_15min + report_schedules_runner (*/15) + reorder_daily (06:00) + approvals_escalation_hourly, active.
 
 ## M11 Notifications — ACCEPTED (all layers LIVE; provider keys pending)
 - Templates (notifications_templates): sms_templates + email_templates (§3.13) seeded 3+3/tenant, {{placeholder}} convention. NEW 'notifications' perm module (6 grants/ADMIN × 5 tenants). RLS tenant read + notifications:update write. Gate-proven.
@@ -118,27 +118,29 @@ over drilldown_* RPCs; rows deep-link (invoice→/sales/invoice, product→/inve
 Back end (migrations, all applied): suppliers, purchase_orders(+items), grns(+items), purchase_invoices,
 supplier_payments; RPCs create/update/submit/approve/cancel_purchase_order, receive_goods,
 create_purchase_invoice, record_supplier_payment (overpayment guard), supplier_ledger, payables_aging.
-Landed cost allocated by line_total; canonical warehouse_id NULL stock via post_stock_movement
-PURCHASE_RECEIPT; serialized IMEI capture → imei_records AVAILABLE. PO lifecycle
-DRAFT→SUBMITTED→APPROVED→PARTIALLY_RECEIVED/RECEIVED→INVOICED, CANCELLED. Two receive_goods bugs found
-+ forward-fixed: enum-cast (20260711101802) and imei status IN_STOCK→AVAILABLE (20260711111535).
-NOTE: number_series.include_branch_code defaults true → numbers render PO-BR01-000001 / GRN-BR01-000001 /
-PV-BR01-000001 (drop branch code = one-line number_series change if desired).
+Landed cost by line_total; canonical warehouse_id NULL stock via post_stock_movement PURCHASE_RECEIPT; serialized IMEI →
+imei_records AVAILABLE. PO lifecycle DRAFT→SUBMITTED→APPROVED→PARTIALLY_RECEIVED/RECEIVED→INVOICED, CANCELLED. Two
+receive_goods bugs forward-fixed: enum-cast (20260711101802), imei IN_STOCK→AVAILABLE (20260711111535).
+
+## Sync / Offline (§3.3) — D1 read-cache + D2 intent queue LIVE (gate-proven)
+D1 sync_pull_reference (20260716073759 + fix 20260716125000, LIVE): Class A pull-only delta (products/variants/customers/
+payment_methods/tax_rules over updated_at watermark now()-2s) + stock_balance full pull. SECURITY DEFINER (explicit
+`where tenant_id=v_tenant` per subquery = sole boundary) — INVOKER build silently dropped soft-delete tombstones (products/
+variants read RLS carries `deleted_at IS NULL`); DEFINER bypasses so deleted rows evict. GATE 4/4 + both-direction isolation.
+D2 sync_foundation (20260716075906, LIVE): sync_outbox + sync_exceptions (append-only intent queue; device appends a SALE
+intent w/ client idempotency_key + true client_created_at, NEVER creates an invoice) + 2 enums + `sync` perm module (read/
+resolve; 7th seed_*_perms trigger). RLS tenant-read, RPC-only writes (no insert policy). GATE green: isolation own=1/foreign=0,
+authenticated insert → 42501. NOT built: replay RPC (D5), sync_log/conflicts (superseded — append queue has nothing to merge).
 
 ### Purchasing (Flutter) — COMPLETE
-`lib/features/purchasing/` full clean-arch (mirrors suppliers/sales). 6 entities + 2 status enums + 5 RPC
-result types; sealed PurchaseFailure (perm/badTransition/overReceipt/overpayment/grnMismatch/notFound/
-unknown); 13 usecases; ONE PurchaseRemoteDataSource (all selects + 8 RPCs); repo impl → typed failures.
-Controllers: PurchaseOrdersController (list+status+create/edit/submit/approve/cancel/receive) +
-purchaseOrderDetailProvider {po,items} + poGrnsProvider; PurchaseInvoicesController (create→match_variance)
-+ invoicePaymentsProvider; PurchasePaymentsController. 10 pages: PurchaseHubPage, PO list, PO form
-(supplier picker + inline product-search multi-line editor + charges + live totals; edit DRAFT-only;
-accepts reorder seed), PO detail (status-gated Submit/Approve/Cancel/Receive/Create-Invoice + linked
-GRNs/invoices), GrnReceivePage (per-line qty/reject/batch/expiry + IMEI capture for type==SERIALIZED, no
-warehouse picker), PurchaseInvoiceMatchPage (3-way match variance), invoices list + detail (payments +
-Record Payment), SupplierPaymentPage (payment_method_enum, blocks overpayment), ReorderSuggestionsPage
-(at/under reorder_point → seeds a new PO). Routes /purchasing/* + a 5th "Purchase" bottom-nav branch
-gated purchase:read. DB lifecycle verified end-to-end (impersonated ADMIN, rolled back). flutter analyze clean.
+`lib/features/purchasing/` full clean-arch (mirrors suppliers/sales): 6 entities + 2 status enums + 5 RPC result types;
+sealed PurchaseFailure; 13 usecases; ONE PurchaseRemoteDataSource (all selects + 8 RPCs) → typed failures. Controllers:
+PurchaseOrders (list/status/create/edit/submit/approve/cancel/receive) + detail/grns providers; PurchaseInvoices
+(create→match_variance) + payments; PurchasePayments. 10 pages: Hub, PO list, PO form (supplier + inline product-search
+editor + charges + live totals, edit DRAFT-only, accepts reorder seed), PO detail (status-gated actions + linked GRNs/
+invoices), GrnReceive (per-line qty/reject/batch/expiry + IMEI for SERIALIZED), InvoiceMatch (3-way variance), invoices
+list+detail (Record Payment), SupplierPayment (blocks overpayment), ReorderSuggestions (≤reorder_point → seeds PO).
+Routes /purchasing/* + 5th "Purchase" bottom-nav branch gated purchase:read. DB lifecycle verified rolled-back. analyze clean.
 
 ### Suppliers CRM (Flutter) — COMPLETE
 `lib/features/suppliers/` full clean-arch (own folder mirroring sales/customers). Supplier +
