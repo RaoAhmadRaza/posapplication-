@@ -180,8 +180,11 @@ credit. No migration (RPC + PR- series pre-live). Rolled-back dry-run verified i
 
 ### M07 Accounting — COMPLETE (all 6 money paths auto-post)
 
-DB-level double-entry GL. `post_journal` = sole ledger writer (balance/period/immutability enforced; ungated
-auto-posts pass `p_gate=false`). All 6 money paths — SALE, CUSTOMER_PAYMENT, PURCHASE_INVOICE, SUPPLIER_PAYMENT,
+DB-level double-entry GL. `post_journal` = sole ledger writer (balance + immutability + CLOSED-period guard enforced;
+ungated auto-posts pass `p_gate=false`). D6 (20260716140000): raises ERR_PERIOD_CLOSED into a CLOSED fiscal period —
+UNCONDITIONAL (not behind p_gate; a closed period is an accounting control, not a permission). fiscal_periods.status was
+decorative before (D11.4: no check existed); prerequisite for back-dating offline sales [SIGN-OFF #5]. All 6 money paths —
+SALE, CUSTOMER_PAYMENT, PURCHASE_INVOICE, SUPPLIER_PAYMENT,
 PURCHASE_RETURN, SALES_RETURN — emit a balanced journal (six-path gate green; trial_balance + balance_sheet true); GL
 reconciles 1:1 with AR/AP subledgers. Payment→GL split CLOSED (S1–S2, S8): all 4 divergent hardcodes gone;
 resolve_payment_account SOLE resolver in 7 money paths; close_repair_job keeps literal 1000 (cash-only by construction —
@@ -199,16 +202,13 @@ active branch currency. auth SettingsPage stays in features/auth/ (move deferred
 ## M09 Repair & Service — COMPLETE (backend + Flutter)
 Backend (applied + gate-verified; full per-phase detail in DECISIONS 2026-07-13/14): repair_jobs/parts/
 status_history + repair_status_enum(9), RJ- series, REPAIR-SERVICE sentinel (type=SERVICE) + 4200 Service
-Revenue, REPAIR_USE movement. Lifecycle RPCs + close_repair_job (**7th money path**: builds invoice directly +
-REPAIR_INVOICE journal; parts COGS Dr 5000/Cr 1200 at captured cost). Pipeline C3–C6: bulk_change_repair_status
-+ technician perf; C4 communication_logs notify intents (PENDING until M11 sender); C5 parts output tax;
-C6 WARRANTY_CLAIM re-repair (original_repair_id self-FK, 5200 Warranty Cost, cost-only revenue-free close).
-SERVICE non-stock guard at post_stock_movement. Signature capture (private bucket + RLS, SignaturePad, 60s
-signed URLs).
-Flutter (`lib/features/repair/`, full clean-arch): kanban (drag + multi-select bulk), intake, detail (diagnosis/
-parts/assign; close BRANCHES Close&Invoice vs Warranty-no-charge; warranty link card + live breakdown), workload
-(perf metrics), history (search), QR device label. analyze clean; data-path gate-verified, device tap-through
-user-driven. DEFERRED: /repair/:id/edit (no RPC), intake signature, board branch filter, customer SMS/email.
+Revenue, REPAIR_USE movement. Lifecycle RPCs + close_repair_job (7th money path: builds invoice + REPAIR_INVOICE journal;
+parts COGS Dr 5000/Cr 1200). Pipeline C3–C6: bulk_change_repair_status + technician perf; C4 communication_logs notify
+intents; C5 parts output tax; C6 WARRANTY_CLAIM re-repair (original_repair_id self-FK, 5200 Warranty Cost, revenue-free).
+SERVICE non-stock guard; signature capture (private bucket + RLS, 60s signed URLs).
+Flutter (`lib/features/repair/`): kanban (drag + bulk), intake, detail (diagnosis/parts/assign; close BRANCHES Close&Invoice
+vs Warranty-no-charge + warranty link card), workload, history, QR label. DEFERRED: /repair/:id/edit, intake signature,
+board branch filter, customer SMS/email.
 
 ## M10 HR & Payroll — COMPLETE (backend H1–H6 + UI H7.1–H7.3)
 Backend (all migrations applied + rolled-back-gate-verified; full per-phase detail in DECISIONS 2026-07-14):
