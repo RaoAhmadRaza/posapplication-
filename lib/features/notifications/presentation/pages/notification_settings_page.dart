@@ -193,16 +193,25 @@ class _PrefCard extends StatelessWidget {
                     _ChannelChip(
                       label: c.label,
                       selected: pref.channels.contains(c),
-                      onTap: () {
-                        final next = {...pref.channels};
-                        if (next.contains(c)) {
-                          next.remove(c);
-                        } else {
-                          next.add(c);
-                        }
-                        if (next.isEmpty) next.add(NotificationChannel.inApp);
-                        onChanged(pref.copyWith(channels: next));
-                      },
+                      // PUSH has no working delivery path: no device can register a
+                      // token (the Flutter half is deferred). Disabled, not hidden —
+                      // a missing control reads as a bug, a disabled one with a
+                      // reason reads as a roadmap.
+                      onTap: c == NotificationChannel.push
+                          ? null
+                          : () {
+                              final next = {...pref.channels};
+                              if (next.contains(c)) {
+                                next.remove(c);
+                              } else {
+                                next.add(c);
+                              }
+                              if (next.isEmpty) next.add(NotificationChannel.inApp);
+                              onChanged(pref.copyWith(channels: next));
+                            },
+                      disabledReason: c == NotificationChannel.push
+                          ? "Push notifications aren't available yet"
+                          : null,
                     ),
                 ],
               ),
@@ -219,36 +228,50 @@ class _ChannelChip extends StatelessWidget {
     required this.label,
     required this.selected,
     required this.onTap,
+    this.disabledReason,
   });
 
   final String label;
   final bool selected;
-  final VoidCallback onTap;
+  final VoidCallback? onTap;
+  final String? disabledReason;
 
   @override
   Widget build(BuildContext context) {
-    return GestureDetector(
-      onTap: onTap,
-      child: Container(
-        padding: const EdgeInsets.symmetric(horizontal: AppSpacing.md, vertical: 6),
-        decoration: BoxDecoration(
-          color: selected
-              ? AppColors.accent.withValues(alpha: 0.12)
-              : AppColors.fieldFill,
-          borderRadius: BorderRadius.circular(AppRadius.chip),
-          border: Border.all(
-            color: selected ? AppColors.accent : AppColors.separator,
-            width: 0.5,
-          ),
+    final disabled = onTap == null;
+    final chip = Container(
+      padding: const EdgeInsets.symmetric(horizontal: AppSpacing.md, vertical: 6),
+      decoration: BoxDecoration(
+        color: disabled
+            ? AppColors.fieldFill
+            : selected
+                ? AppColors.accent.withValues(alpha: 0.12)
+                : AppColors.fieldFill,
+        borderRadius: BorderRadius.circular(AppRadius.chip),
+        border: Border.all(
+          color: disabled
+              ? AppColors.separator
+              : selected
+                  ? AppColors.accent
+                  : AppColors.separator,
+          width: 0.5,
         ),
-        child: Text(
-          label,
-          style: AppTypography.footnote.copyWith(
-            color: selected ? AppColors.accent : AppColors.textMuted,
-            fontWeight: selected ? FontWeight.w600 : FontWeight.w400,
-          ),
+      ),
+      child: Text(
+        label,
+        style: AppTypography.footnote.copyWith(
+          color: disabled
+              ? AppColors.textHint
+              : selected
+                  ? AppColors.accent
+                  : AppColors.textMuted,
+          fontWeight: !disabled && selected ? FontWeight.w600 : FontWeight.w400,
         ),
       ),
     );
+    if (disabled) {
+      return Tooltip(message: disabledReason ?? '', child: chip);
+    }
+    return GestureDetector(onTap: onTap, child: chip);
   }
 }
