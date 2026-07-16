@@ -150,37 +150,27 @@ list+detail (Record Payment), SupplierPayment (blocks overpayment), ReorderSugge
 Routes /purchasing/* + 5th "Purchase" bottom-nav branch gated purchase:read. DB lifecycle verified rolled-back. analyze clean.
 
 ### Suppliers CRM (Flutter) — COMPLETE
-`lib/features/suppliers/` full clean-arch (own folder mirroring sales/customers). Supplier +
-SupplierStatus; SupplierLedger + PayablesAging entities (from the 2 read RPCs); sealed SupplierFailure;
-7 usecases; SuppliersRemoteDataSource (all supabase: ILIKE name/phone, status filter, deleted_at null,
-supplier_ledger/payables_aging RPCs); SuppliersController (list+search+status filter+create/edit/remove)
-+ ledger/aging FutureProviders. Pages: SuppliersPage (search, status chips, payable hint, FAB gated
-purchase:create), SupplierFormPage (grouped fields, gated purchase:update/delete), SupplierDetailPage
-(header + ledger balance/timeline + Record Payment TODO). Routes /suppliers[/create|/:id|/:id/edit];
-row on Inventory hub Purchasing section. DB pre-migrated. Verified vs live RLS.
+`lib/features/suppliers/` full clean-arch: Supplier/SupplierStatus + SupplierLedger/PayablesAging entities; sealed
+SupplierFailure; 7 usecases; SuppliersRemoteDataSource (ILIKE search, status filter, ledger/aging RPCs); controller +
+ledger/aging providers. Pages: list (search, status chips, payable hint, FAB purchase:create), form (purchase:update/
+delete), detail (ledger balance/timeline + Record Payment TODO). Routes /suppliers[/create|/:id|/:id/edit]; hub row. Verified vs live RLS.
 
 ### Customers CRM (Flutter) — COMPLETE (parity with suppliers)
-`lib/features/customers/` full clean-arch mirroring suppliers (Customer moved here from sales — old paths
-re-export). CustomerLedger/ReceivablesAging entities; sealed CustomerFailure; usecases + CustomersRemoteDataSource
-(ILIKE search, RPCs customer_ledger/receivables_aging) + controllers. Pages: list (search/status), form (all cols),
-detail (credit summary + ledger + Collect Payment), ReceivablesAging. **Collect-payment slice:**
-record_customer_payment RPC + unpaid-invoice picker → CustomerPaymentPage (/customers/:id/collect, gated
-sales:create, overpayment blocked). Routes + Inventory-hub Customers section + dashboard Receivables KPI; POS chip
-shows remaining credit; CreditLimitExceededFailure from create_sale. DEFERRED: groups, loyalty, comms, bulk
-import, statements. analyze clean.
+`lib/features/customers/` full clean-arch mirroring suppliers (Customer moved from sales — old paths re-export).
+CustomerLedger/ReceivablesAging entities; CustomerFailure; usecases + datasource (customer_ledger/receivables_aging) +
+controllers. Pages: list, form, detail (credit + ledger + Collect Payment), ReceivablesAging. Collect-payment:
+record_customer_payment + unpaid-invoice picker → CustomerPaymentPage (/customers/:id/collect, sales:create, overpayment
+blocked). Receivables KPI; POS chip shows remaining credit; CreditLimitExceededFailure from create_sale. DEFERRED: groups,
+loyalty, comms, bulk import, statements.
 
 ### Purchase Returns (Flutter) — COMPLETE
-`lib/features/purchasing/` extended (no new folder). Debit-note-style return of received goods to a supplier.
-Domain: PurchaseReturn + PurchaseReturnItem + PurchaseReturnStatus + ReturnCreateResult; PurchaseFailure
-gained ReturnExceedsReceived/ImeiCountMismatch/ImeiNotFound (invoice-mismatch reuses GrnMismatch). 4 usecases;
-datasource loadPurchaseReturns / loadPurchaseReturn(+items) / loadReturnedQtysForPo (embedded
-`purchase_returns!inner` filter, summed client-side) / rpc create_purchase_return (p_reduce_invoice=false).
-PurchaseReturnsController + detail/poReturnedQtys providers. Pages: list (+status filter), detail (lines +
-returned IMEIs), form (mirrors GRN receive: per received line shows received/already-returned/available, qty
-bounded, SERIALIZED lines need exactly qty IMEIs via type/scan, reason required, live total). Entry: PO detail
-"Return" (any qty_received>0) + invoice "Return Against Bill", gated purchase:update; hub row; routes
-/purchasing/returns[/create|/:id]. Supplier ledger renders kind=RETURN as a credit. No migration (RPC + tables
-+ PR- series pre-live). Rolled-back dry-run verified full chain incl. over-return guard. flutter analyze clean.
+`lib/features/purchasing/` extended. Debit-note-style return of received goods. Domain: PurchaseReturn(+Item/Status/
+ReturnCreateResult); PurchaseFailure += ReturnExceedsReceived/ImeiCountMismatch/ImeiNotFound. 4 usecases; datasource
+(loadPurchaseReturns/loadReturnedQtysForPo embedded-summed / rpc create_purchase_return p_reduce_invoice=false) +
+controller/providers. Pages: list (+status), detail (lines + returned IMEIs), form (mirrors GRN receive: received/
+already-returned/available per line, qty bounded, SERIALIZED needs exactly qty IMEIs, reason required). Entry: PO detail
+"Return" + invoice "Return Against Bill" (purchase:update); routes /purchasing/returns[/create|/:id]. Ledger kind=RETURN =
+credit. No migration (RPC + PR- series pre-live). Rolled-back dry-run verified incl. over-return guard.
 
 ### M07 Accounting — COMPLETE (all 6 money paths auto-post)
 
