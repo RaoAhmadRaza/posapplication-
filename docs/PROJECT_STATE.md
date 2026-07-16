@@ -104,14 +104,13 @@ over drilldown_* RPCs; rows deep-link (invoice→/sales/invoice, product→/inve
 - Scheduling (reporting_schedules + deliveries_fix): run_due (pg_cron */15) queues PENDING report_deliveries; SEND = M11 dep.
 - Analytics (analytics_events): immutable partitioned+gin, RLS read-own/definer-write (FLAG: only a DEFAULT partition, no time-bounded ones — inserts degrade not reject). AI recs (ai_recommendations): generate_reorder_recommendations + act_on_recommendation; ML deferred.
 - Reporting UI COMPLETE (features/reporting/ + reporting_read_rpcs): ReportsHubPage /reports + Inventory/Product-Perf/Cust-Supp-Aging/Trends/Forecasting (fl_chart, definer RPCs over MVs), ScheduledReports (reports:export), SmartInsights (ai_recs + REORDER→Create-PO), PDF/CSV export.
-- Ops (pg_cron, MANUAL): mv_refresh_15min + report_schedules_runner (*/15) + reorder_daily (06:00) + approvals_escalation_hourly, active.
 
 ## M11 Notifications — ACCEPTED (all layers LIVE; provider keys pending)
-- Templates (notifications_templates): sms_templates + email_templates (§3.13) seeded 3+3/tenant, {{placeholder}} convention. NEW 'notifications' perm module (6 grants/ADMIN × 5 tenants). RLS tenant read + notifications:update write. Gate-proven.
-- Dispatch (notifications_dispatch + notify_status_enum_cast_fix): notify() single producer entry — default IN_APP DELIVERED + one PENDING row/extra enabled channel for the sender; render_template({{var}}) / mark_all_notifications_read / unread_notification_count / upsert_notification_preference. Gate-proven rolled-back. Producers migrate to notify() incrementally.
-- Detectors (notifications_detectors + fn_overdue_receivables_date_fix): fn_overdue_receivables / fn_unpaid_salaries / fn_stock_mismatch → daily-idempotent IN_APP HIGH/URGENT admin alerts; pg_cron 07:00 (notif_detectors_daily, MANUAL). Joins fn_low_stock_notify. Gate-proven rolled-back.
-- Sender (edge fn notification-sender, N4+N5) + Push (notifications_device_tokens, SCHEMA EXT): service-role withSupabase auth:["secret"] (unauth→401) drains PENDING notifications(SMS/EMAIL/WHATSAPP + PUSH→device_tokens)+communication_logs+report_deliveries via Twilio+SendGrid+FCM v1, marks SENT/FAILED; deployed, inert until keys; TRIGGER DEFERRED (pg_net */2 cron would FAIL rows pre-keys). device_tokens + register_device_token gate-proven. Keys: supabase secrets set TWILIO_*/SENDGRID_KEY/FROM_EMAIL/FCM_SERVICE_ACCOUNT. FLUTTER firebase_messaging DEFERRED (needs Firebase project + config).
-- UI COMPLETE (features/notifications/, extended): NotificationBell (badge, 30s poll) on Dashboard+Inventory → /notifications Center (priority+unread filters, pull-refresh, deep-links repair/customer/product/payroll, mark-all-read) + /notifications/settings (6 event_types × 5 channel toggles). Admin (gated via settings links): /notifications/templates (notifications:update, edit SMS/email + is_active, direct RLS writes), /notifications/bulk (notifications:create, segment×channel×template → preview+enqueue via enqueue_bulk_communication definer RPC — comm_logs has no INSERT policy), /notifications/logs (notifications:read, merged comm_logs+report_deliveries+notifications, channel/status filters). NEXT: set provider keys + activate drain cron; migrate producers to notify(); Firebase-provision for push.
+- Templates (notifications_templates): sms+email (§3.13) seeded 3+3/tenant, {{placeholder}}. NEW 'notifications' perm module (6 grants/ADMIN × 5 tenants). RLS tenant-read + notifications:update. Gate-proven.
+- Dispatch (notifications_dispatch + notify_status_enum_cast_fix): notify() single producer — IN_APP DELIVERED + one PENDING/extra channel; render_template / mark_all_read / unread_count / upsert_preference. Producers migrate incrementally.
+- Detectors (notifications_detectors): fn_overdue_receivables / fn_unpaid_salaries / fn_stock_mismatch + fn_low_stock_notify → daily-idempotent IN_APP alerts; pg_cron 07:00 (MANUAL). Gate-proven.
+- Sender (edge fn notification-sender) + Push (notifications_device_tokens): service-role (unauth→401) drains PENDING notifications/comm_logs/report_deliveries via Twilio+SendGrid+FCM v1, marks SENT/FAILED; deployed, inert until keys; cron trigger DEFERRED. Keys: TWILIO_*/SENDGRID_KEY/FROM_EMAIL/FCM_SERVICE_ACCOUNT. Flutter firebase_messaging DEFERRED.
+- UI COMPLETE (features/notifications/): NotificationBell (badge, 30s poll) → /notifications Center (filters, deep-links, mark-all-read) + /settings (6 event_types × 5 channels). Admin: /templates, /bulk (segment×channel×template → enqueue_bulk_communication), /logs. NEXT: provider keys + drain cron; migrate producers to notify().
 
 ## Purchasing — COMPLETE (back end + Flutter)
 
@@ -122,7 +121,7 @@ Landed cost by line_total; canonical warehouse_id NULL stock via post_stock_move
 imei_records AVAILABLE. PO lifecycle DRAFT→SUBMITTED→APPROVED→PARTIALLY_RECEIVED/RECEIVED→INVOICED, CANCELLED. Two
 receive_goods bugs forward-fixed: enum-cast (20260711101802), imei IN_STOCK→AVAILABLE (20260711111535).
 
-## Sync / Offline (§3.3) — D1 read-cache + D2 intent queue LIVE (gate-proven)
+## Sync / Offline (§3.3) — D1 read-cache + D2 intent queue + D3 idempotency cols LIVE (gate-proven)
 D1 sync_pull_reference (20260716073759 + fix 20260716125000, LIVE): Class A pull-only delta (products/variants/customers/
 payment_methods/tax_rules over updated_at watermark now()-2s) + stock_balance full pull. SECURITY DEFINER (explicit
 `where tenant_id=v_tenant` per subquery = sole boundary) — INVOKER build silently dropped soft-delete tombstones (products/
@@ -130,7 +129,11 @@ variants read RLS carries `deleted_at IS NULL`); DEFINER bypasses so deleted row
 D2 sync_foundation (20260716075906, LIVE): sync_outbox + sync_exceptions (append-only intent queue; device appends a SALE
 intent w/ client idempotency_key + true client_created_at, NEVER creates an invoice) + 2 enums + `sync` perm module (read/
 resolve; 7th seed_*_perms trigger). RLS tenant-read, RPC-only writes (no insert policy). GATE green: isolation own=1/foreign=0,
-authenticated insert → 42501. NOT built: replay RPC (D5), sync_log/conflicts (superseded — append queue has nothing to merge).
+authenticated insert → 42501.
+D3 sync_invoice_idempotency (20260716131500, LIVE): invoices += idempotency_key/device_id/local_ref; uq_invoices_idem PARTIAL
+unique (tenant_id, idempotency_key) where key not null = un-raceable double-post guard; + idx_invoices_offline (doc-claimed,
+was absent). Additive/nullable, 0 impact. GATE: dup key→23505, two null keys both insert. NOT built: D4 create_sale
+idempotency guard, replay RPC (D5), sync_log/conflicts (superseded — append queue has nothing to merge).
 
 ### Purchasing (Flutter) — COMPLETE
 `lib/features/purchasing/` full clean-arch (mirrors suppliers/sales): 6 entities + 2 status enums + 5 RPC result types;
