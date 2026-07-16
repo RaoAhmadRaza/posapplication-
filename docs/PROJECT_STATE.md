@@ -1,6 +1,6 @@
 # PROJECT STATE — Lumina POS
 
-Last updated: 2026-07-15
+Last updated: 2026-07-16
 
 ## Stack & Architecture
 
@@ -121,22 +121,23 @@ Landed cost by line_total; canonical warehouse_id NULL stock via post_stock_move
 imei_records AVAILABLE. PO lifecycle DRAFT→SUBMITTED→APPROVED→PARTIALLY_RECEIVED/RECEIVED→INVOICED, CANCELLED. Two
 receive_goods bugs forward-fixed: enum-cast (20260711101802), imei IN_STOCK→AVAILABLE (20260711111535).
 
-## Sync / Offline (§3.3) — D1–D8 LIVE — SYNC & OFFLINE COMPLETE (gate-proven)
-D1 sync_pull_reference (20260716073759 + fix 125000, LIVE): Class A pull-only delta (products/variants/customers/pm/tax_rules
-over updated_at watermark now()-2s) + stock_balance full pull. SECURITY DEFINER (explicit per-subquery tenant filter = sole
-boundary) — INVOKER build silently dropped soft-delete tombstones (products/variants read RLS has deleted_at IS NULL); DEFINER
-evicts. GATE 4/4 + both-direction isolation. D2 sync_foundation (075906, LIVE): sync_outbox + sync_exceptions (append-only
-intent queue, NEVER creates an invoice) + 2 enums + `sync` perm module. RLS tenant-read, RPC-only writes (no insert policy →
-authenticated insert 42501). D3 sync_invoice_idempotency (131500, LIVE): invoices += idempotency_key/device_id/local_ref;
-uq_invoices_idem PARTIAL unique = un-raceable double-post guard; + idx_invoices_offline (was absent). D4
-sync_create_sale_idempotency (133000, LIVE — MONEY): create_sale += p_idempotency_key (drop+create, 7-arg); replay returns the
-ORIGINAL invoice; guard BEFORE next_number (no burned number); guarded unique_violation handler; ACL re-hardened. GATE:
-regression 2 invoices, replay→1 invoice/1 journal/1 stock, counter +3 not 4.
-D7.1 CLIENT (lib/features/sync/, mirrors approvals; deps +sqflite/ffi/connectivity_plus/uuid, NO build_runner): sqflite cache
-(hand-written DAOs) + sync_pull_reference watermark delta (products+customers, deleted_at→evict); ConnectivityMonitor
-StreamProvider. Offline CASH-ONLY — a cash sale writes a SALE intent to the outbox (uuid key, client_created_at, provisional
-local_ref), NEVER create_sale. POS: SyncStatusWidget; credit/returns/customer/close-register disabled offline w/ reason;
-product search cache-first; success shows local_ref PROVISIONAL.
+## Sync / Offline (§3.3) — D1–D10 LIVE — SYNC & OFFLINE COMPLETE (gate-proven)
+D10 sync_replay_classifier_fix (20260716160000, LIVE — not money): closed bug class #7 (silent FAILED-at-cap). replay terminal
+regex += NO_TENANT|PERMISSION_DENIED (impersonating drain on a revoked/tenant-less cashier never succeeds → ABANDONED + exception;
+was mis-classed transient → stuck FAILED<cap, invisible); AND a transient that EXHAUSTS retries (attempts+1≥5) now also surfaces
+in the Exception Centre. Gate before/after (rolled-back): 3 silent holes → all visible; below-cap transient still retries (no
+over-fire). SIGN-OFF #5 (p_transaction_date) DECIDED deferred — current_date always posts to an OPEN period (no live D6 conflict);
+build in its own money-RPC gate + add ERR_PERIOD_CLOSED to the classifier then.
+D1 sync_pull_reference (20260716073759 + fix 125000, LIVE): Class A pull-only delta + stock_balance full pull; SECURITY DEFINER
+per-subquery tenant filter evicts soft-delete tombstones (INVOKER RLS silently dropped them). D2 sync_foundation (075906):
+sync_outbox + sync_exceptions (append-only, NEVER makes an invoice) + 2 enums + `sync` perm; RPC-only writes (insert→42501).
+D3 sync_invoice_idempotency (131500): invoices += idempotency_key/device_id/local_ref; uq_invoices_idem PARTIAL = un-raceable
+double-post guard. D4 sync_create_sale_idempotency (133000, MONEY): create_sale += p_idempotency_key (drop+create 7-arg); replay
+returns the ORIGINAL invoice, guard BEFORE next_number, ACL re-hardened. (full per-D detail in DECISIONS)
+D7.1 CLIENT (lib/features/sync/, mirrors approvals; +sqflite/ffi/connectivity_plus/uuid, NO build_runner): sqflite cache (hand
+DAOs) + pull-reference watermark delta (deleted_at→evict); ConnectivityMonitor. Offline CASH-ONLY — a cash sale appends a SALE
+intent (uuid key, provisional local_ref), NEVER create_sale. POS: SyncStatusWidget; credit/returns/customer/close-register
+disabled offline w/ reason; search cache-first; success shows local_ref PROVISIONAL.
 D7.2 replay drain + Exception Centre (migration sync_push_intent 20260716151500 — idempotent client→server enqueue; the
 missing D2/D5 piece): on reconnect DRAIN oldest-first ONE AT A TIME (push→sync_replay_sale_intent→mark DONE + real
 invoice_number / ABANDONED / retry). Idempotent 3 ways (push key + replay guard + create_sale key) → drain-twice/kill-mid-drain
@@ -146,13 +147,12 @@ searchable. sqflite v2 (onUpgrade). analyze clean (0 new); device airplane→rec
 D8 ops (migration sync_drain_cron 20260716154500): cron `sync_outbox_drain_5min` (*/5, MANUAL like the other 6 jobs)
 drains server-side. The spec's direct-replay cron would mass-FAIL (pg_cron has no JWT → create_sale ERR_NO_TENANT); FIX =
 sync_drain_cron impersonates each row's cashier (set jwt from user_id) then routes through sync_replay_sale_intent; granted
-service_role only. Registered AFTER D4/D5 green (M11 keys-first). DEFERRED (by design): sync_log/conflicts/domain_events/
-job_queue_log (append queue has nothing to merge — superseded LWW design); offline variants/stock caching; p_transaction_date
-[SIGN-OFF #5, D6 prereq done]; reachability probe; timed backoff.
+service_role only. Registered AFTER D4/D5 green (M11 keys-first). DEFERRED (by design; full list in DECISIONS): sync_log/
+conflicts/domain_events (superseded LWW design); offline variants/stock caching; p_transaction_date [#5]; reachability probe.
 D5 sync_replay_driver (20260716134500, LIVE): sync_replay_sale_intent (for-update-skip-locked → create_sale w/ the outbox key →
-APPLIED + stamps is_offline/synced_at/device_id/local_ref, first writer of those) + resolve_sync_exception (sync:resolve).
-Terminal→ABANDONED + sync_exceptions; transient→FAILED. Fixed the spec's terminal-regex precedence bug; RELAXED
-fn_invoice_immutability for a metadata-only stamp on a PAID invoice (jsonb-diff, financials still immutable — gate-proven).
+APPLIED + stamps is_offline/synced_at/device_id/local_ref) + resolve_sync_exception. Terminal→ABANDONED + sync_exceptions;
+transient→FAILED. RELAXED fn_invoice_immutability for a metadata-only stamp on a PAID invoice (jsonb-diff, financials still
+immutable — gate-proven). Classifier holes later closed in D10.
 
 ### Purchasing (Flutter) — COMPLETE
 `lib/features/purchasing/` full clean-arch (mirrors suppliers/sales): 6 entities + 2 status enums + 5 RPC result types;
