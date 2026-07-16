@@ -121,7 +121,7 @@ Landed cost by line_total; canonical warehouse_id NULL stock via post_stock_move
 imei_records AVAILABLE. PO lifecycle DRAFT→SUBMITTED→APPROVED→PARTIALLY_RECEIVED/RECEIVED→INVOICED, CANCELLED. Two
 receive_goods bugs forward-fixed: enum-cast (20260711101802), imei IN_STOCK→AVAILABLE (20260711111535).
 
-## Sync / Offline (§3.3) — D1 cache + D2 queue + D3 cols + D4 guard + D5 replay driver LIVE (gate-proven)
+## Sync / Offline (§3.3) — DB D1–D6 LIVE + client D7.1/D7.2 — Sync & Offline UI COMPLETE (gate-proven)
 D1 sync_pull_reference (20260716073759 + fix 20260716125000, LIVE): Class A pull-only delta (products/variants/customers/
 payment_methods/tax_rules over updated_at watermark now()-2s) + stock_balance full pull. SECURITY DEFINER (explicit
 `where tenant_id=v_tenant` per subquery = sole boundary) — INVOKER build silently dropped soft-delete tombstones (products/
@@ -138,13 +138,17 @@ ORIGINAL invoice, never double-posts. drop+create (7-arg replace = overload → 
 next_number (else replay burns a gap-free number); guarded unique_violation handler for races; ACL re-hardened (create
 re-grants PUBLIC/anon → revoked to match original). GATE: regression 2 distinct invoices, replay→1 invoice/1 journal/1 stock
 move, counter +3 not 4.
-D7.1 CLIENT (lib/features/sync/, Flutter — WRITE path only): NEW clean-arch feature (mirrors approvals) — sqflite local
-cache (hand-written DAOs, NO build_runner) + sync_pull_reference remote; watermark delta persists products+customers,
-deleted_at→evict. ConnectivityMonitor StreamProvider. Offline CASH-ONLY: a cash sale writes a SALE intent to the outbox
-(uuid idempotency_key, client_created_at, provisional local_ref) — NEVER calls create_sale; replay is D7.2 (reconnect does
-not drain). POS: SyncStatusWidget in app bar; credit/returns/customer/close-register disabled offline w/ reason; product
-search cache-first offline; success shows local_ref labeled PROVISIONAL. deps +sqflite/ffi/connectivity_plus/uuid. analyze
-clean (0 new); device airplane-mode flow not driven headless.
+D7.1 CLIENT (lib/features/sync/, mirrors approvals; deps +sqflite/ffi/connectivity_plus/uuid, NO build_runner): sqflite cache
+(hand-written DAOs) + sync_pull_reference watermark delta (products+customers, deleted_at→evict); ConnectivityMonitor
+StreamProvider. Offline CASH-ONLY — a cash sale writes a SALE intent to the outbox (uuid key, client_created_at, provisional
+local_ref), NEVER create_sale. POS: SyncStatusWidget; credit/returns/customer/close-register disabled offline w/ reason;
+product search cache-first; success shows local_ref PROVISIONAL.
+D7.2 replay drain + Exception Centre (migration sync_push_intent 20260716151500 — idempotent client→server enqueue; the
+missing D2/D5 piece): on reconnect DRAIN oldest-first ONE AT A TIME (push→sync_replay_sale_intent→mark DONE + real
+invoice_number / ABANDONED / retry). Idempotent 3 ways (push key + replay guard + create_sale key) → drain-twice/kill-mid-drain
+= 3 invoices not 6. SyncExceptionCentrePage /sync/exceptions (sync:read, product deep-link to /inventory/products/:id, Resolve
++note → resolve_sync_exception sync:resolve). SyncStatusSheet (queue/last-sync/per-intent). Reconciliation: local_ref↔invoice#
+searchable. sqflite v2 (onUpgrade). analyze clean (0 new); device airplane→reconnect flow not driven headless.
 D5 sync_replay_driver (20260716134500, LIVE): sync_replay_sale_intent (for-update-skip-locked → create_sale w/ the outbox
 idempotency_key → APPLIED + stamps is_offline/synced_at/device_id/local_ref, the FIRST writer of those) + resolve_sync_exception
 (sync:resolve). Terminal (ERR_INSUFFICIENT_STOCK etc)→ABANDONED + sync_exceptions row; transient→FAILED. Fixed the spec's
