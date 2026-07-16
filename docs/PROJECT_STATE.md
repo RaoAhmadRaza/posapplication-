@@ -55,7 +55,7 @@ LabelPdfService + LabelPrintPage); notifications (+prefs, trg_low_stock_notify, 
 
 ## Known Issues
 - Profile loaded once (no pull-to-refresh); IMEI section not yet in product edit form (SERIALIZED)
-- ✓ number_series landmine FIXED (D1, 2026-07-16): JOURNAL_ENTRY/RECEIPT_VOUCHER seeded (Golden 10, all 5 tenants + provision_tenant); next_number raises ERR_NUMBER_SERIES_NOT_SEEDED on any future gap. (DECISIONS.)
+- ✓ FIXED 2026-07-16: number_series landmine (D1: Golden 10 seeded + next_number raises on any gap); cron reproducibility (D5: all 7 pg_cron jobs now in migrations/cron_bootstrap.sql, reconciled from live + diffed clean). (DECISIONS.)
 - BUILD STATE (2026-07-16): macOS FIXED (osx 10.15→11.0). ANDROID FIXED — file_picker 3.0.4→12.0.0-beta.7 (only 12.x clears the win32-6
   clash) + `.platform` removed at 2 sites; `build apk` ✓; 6 withData/bytes deprecation infos kept (readAsBytes=future task). (DECISIONS.)
 
@@ -107,7 +107,7 @@ over drilldown_* RPCs; rows deep-link (invoice→/sales/invoice, product→/inve
 ## M11 Notifications — ACCEPTED (all layers LIVE; provider keys pending)
 - Templates (notifications_templates): sms+email (§3.13) seeded 3+3/tenant, {{placeholder}}. NEW 'notifications' perm module (6 grants/ADMIN × 5 tenants). RLS tenant-read + notifications:update. Gate-proven.
 - Dispatch (notifications_dispatch + notify_status_enum_cast_fix): notify() single producer — IN_APP DELIVERED + one PENDING/extra channel; render_template / mark_all_read / unread_count / upsert_preference. Producers migrate incrementally.
-- Detectors (notifications_detectors): fn_overdue_receivables / fn_unpaid_salaries / fn_stock_mismatch + fn_low_stock_notify → daily-idempotent IN_APP alerts; pg_cron 07:00 (MANUAL). Gate-proven.
+- Detectors (notifications_detectors): fn_overdue_receivables / fn_unpaid_salaries / fn_stock_mismatch + fn_low_stock_notify → daily-idempotent IN_APP alerts; pg_cron 07:00 (in migrations/cron_bootstrap.sql, D5). Gate-proven.
 - Sender (edge fn notification-sender) + Push (notifications_device_tokens): service-role (unauth→401) drains PENDING notifications/comm_logs/report_deliveries via Twilio+SendGrid+FCM v1, marks SENT/FAILED; deployed, inert until keys; cron trigger DEFERRED. Keys: TWILIO_*/SENDGRID_KEY/FROM_EMAIL/FCM_SERVICE_ACCOUNT. Flutter firebase_messaging DEFERRED.
 - UI COMPLETE (features/notifications/): NotificationBell (badge, 30s poll) → /notifications Center (filters, deep-links, mark-all-read) + /settings (6 event_types × 5 channels, PUSH chip disabled-with-reason 2026-07-16 D3 — no device can register a token). Admin: /templates, /bulk, /logs. NEXT: sender FCM branch must SKIP not FAIL unsendable PUSH rows (D3, before any key is set); provider keys + drain cron; migrate producers to notify().
 
@@ -144,7 +144,7 @@ disabled offline w/ reason; search cache-first; success shows local_ref PROVISIO
 D7.2 replay drain + Exception Centre (sync_push_intent 20260716151500 — idempotent client→server enqueue): on reconnect DRAIN
 oldest-first ONE AT A TIME; idempotent 3 ways (push key + replay guard + create_sale key) → drain-twice/kill-mid = 3 invoices not 6.
 SyncExceptionCentrePage /sync/exceptions (sync:read, product deep-links, Resolve/Retry). SyncStatusSheet. sqflite v2 (onUpgrade).
-D8 ops (sync_drain_cron 20260716154500): cron `sync_outbox_drain_5min` (*/5, MANUAL) drains server-side — impersonates each row's
+D8 ops (sync_drain_cron 20260716154500): cron `sync_outbox_drain_5min` (*/5, in migrations/cron_bootstrap.sql) drains server-side — impersonates each row's
 cashier (pg_cron has no JWT) then routes through sync_replay_sale_intent; service_role only; registered AFTER D4/D5 green.
 DEFERRED (full list in DECISIONS): sync_log/conflicts/domain_events (superseded LWW); offline variants/stock caching; #5; probe.
 D5 sync_replay_driver (20260716134500, LIVE): sync_replay_sale_intent (for-update-skip-locked → create_sale w/ the outbox key →
