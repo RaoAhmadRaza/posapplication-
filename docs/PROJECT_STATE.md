@@ -121,7 +121,7 @@ Landed cost by line_total; canonical warehouse_id NULL stock via post_stock_move
 imei_records AVAILABLE. PO lifecycle DRAFT→SUBMITTED→APPROVED→PARTIALLY_RECEIVED/RECEIVED→INVOICED, CANCELLED. Two
 receive_goods bugs forward-fixed: enum-cast (20260711101802), imei IN_STOCK→AVAILABLE (20260711111535).
 
-## Sync / Offline (§3.3) — D1 read-cache + D2 intent queue + D3 cols + D4 create_sale guard LIVE (gate-proven)
+## Sync / Offline (§3.3) — D1 cache + D2 queue + D3 cols + D4 guard + D5 replay driver LIVE (gate-proven)
 D1 sync_pull_reference (20260716073759 + fix 20260716125000, LIVE): Class A pull-only delta (products/variants/customers/
 payment_methods/tax_rules over updated_at watermark now()-2s) + stock_balance full pull. SECURITY DEFINER (explicit
 `where tenant_id=v_tenant` per subquery = sole boundary) — INVOKER build silently dropped soft-delete tombstones (products/
@@ -137,7 +137,13 @@ D4 sync_create_sale_idempotency (20260716133000, LIVE — MONEY RPC): create_sal
 ORIGINAL invoice, never double-posts. drop+create (7-arg replace = overload → breaks live 6-arg calls); guard BEFORE
 next_number (else replay burns a gap-free number); guarded unique_violation handler for races; ACL re-hardened (create
 re-grants PUBLIC/anon → revoked to match original). GATE: regression 2 distinct invoices, replay→1 invoice/1 journal/1 stock
-move, counter +3 not 4. NOT built: replay RPC (D5), sync_log/conflicts (superseded — append queue has nothing to merge).
+move, counter +3 not 4.
+D5 sync_replay_driver (20260716134500, LIVE): sync_replay_sale_intent (for-update-skip-locked → create_sale w/ the outbox
+idempotency_key → APPLIED + stamps is_offline/synced_at/device_id/local_ref, the FIRST writer of those) + resolve_sync_exception
+(sync:resolve). Terminal (ERR_INSUFFICIENT_STOCK etc)→ABANDONED + sync_exceptions row; transient→FAILED. Fixed the spec's
+terminal-regex precedence bug (`~` binds tighter than `||`); RELAXED fn_invoice_immutability to allow a metadata-only stamp on
+a PAID invoice (jsonb-diff, financials still immutable — gate-proven). NO drain cron yet (M11 lesson: keys/green first — D8).
+NOT built: D8 drain cron + Flutter offline queue; sync_log/conflicts (superseded — append queue has nothing to merge).
 
 ### Purchasing (Flutter) — COMPLETE
 `lib/features/purchasing/` full clean-arch (mirrors suppliers/sales): 6 entities + 2 status enums + 5 RPC result types;
@@ -176,22 +182,19 @@ credit. No migration (RPC + PR- series pre-live). Rolled-back dry-run verified i
 
 DB-level double-entry GL. `post_journal` = sole ledger writer (balance/period/immutability enforced; ungated
 auto-posts pass `p_gate=false`). All 6 money paths — SALE, CUSTOMER_PAYMENT, PURCHASE_INVOICE, SUPPLIER_PAYMENT,
-PURCHASE_RETURN, SALES_RETURN — emit a balanced journal (six-path rolled-back gate green; trial_balance +
-balance_sheet true); GL reconciles 1:1 with AR/AP subledgers. Payment→GL split CLOSED (S1–S2, S8): all 4 divergent M07
-hardcodes gone; resolve_payment_account SOLE resolver in 7 money paths (incl. sales-return tier-1 bank_account_id mirror); close_repair_job keeps literal 1000 (cash-only by construction — Deferral A; verify pg_get_functiondef on PROD, not grep — migrations append-only).
-unmapped→1000, linked→bank's GL. tax_rules CONSUMED
-(S4): resolve_tax_rate defaults product/POS tax (create_sale untouched, caller p_tax_pct authoritative).
-**A6 UI:** `lib/features/accounting/` clean-arch — hub, CoA tree, ledger, journal list+detail (reverse gated),
+PURCHASE_RETURN, SALES_RETURN — emit a balanced journal (six-path gate green; trial_balance + balance_sheet true); GL
+reconciles 1:1 with AR/AP subledgers. Payment→GL split CLOSED (S1–S2, S8): all 4 divergent hardcodes gone;
+resolve_payment_account SOLE resolver in 7 money paths; close_repair_job keeps literal 1000 (cash-only by construction —
+Deferral A). tax_rules CONSUMED (S4): resolve_tax_rate defaults product/POS tax (create_sale untouched, caller p_tax_pct
+authoritative). A6 UI: `lib/features/accounting/` clean-arch — hub, CoA tree, ledger, journal list+detail (reverse gated),
 manual voucher, expenses, bank/tax-rule CRUD, Reports (export gated), fiscal periods + bank reconciliation.
 
 ## Settings / M12 — S1–S8 COMPLETE (backend gated settings:update; per-phase detail in DECISIONS)
-UI (S6): `lib/features/settings/` clean-arch, ONE settings_remote_datasource, typed SettingsFailure. SettingsHubPage
-is the bottom-nav /settings target (gated settings:read) → Profile&Security (/settings/profile, reused auth page),
-Business settings (settings_json), Branches (per-branch currency/timezone/…), Payment methods (update/link/toggle
-only — the 7 enum-backed rows are the complete set by construction; no add/delete), Tax rules, Number series
-(read-only; fiscal_year_reset inert/disabled), Preferences
-(theme[light-only]/language/default branch), Notifications (link). formatPkr symbol now follows the active branch's
-currency (setDisplayCurrency; display-only). NOTE: auth SettingsPage stays in features/auth/ (move deferred — breaks its imports).
+UI (S6): `lib/features/settings/` clean-arch, ONE settings_remote_datasource, typed SettingsFailure. SettingsHubPage is the
+bottom-nav /settings target (settings:read) → Profile&Security (reused auth page), Business settings (settings_json), Branches
+(per-branch currency/timezone), Payment methods (update/link/toggle only — 7 enum rows are the complete set), Tax rules, Number
+series (read-only; fiscal_year_reset inert), Preferences (theme/language/default branch), Notifications. formatPkr follows the
+active branch currency. auth SettingsPage stays in features/auth/ (move deferred — breaks imports).
 
 ## M09 Repair & Service — COMPLETE (backend + Flutter)
 Backend (applied + gate-verified; full per-phase detail in DECISIONS 2026-07-13/14): repair_jobs/parts/
