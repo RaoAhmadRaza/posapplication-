@@ -109,7 +109,7 @@ over drilldown_* RPCs; rows deep-link (invoice→/sales/invoice, product→/inve
 - Dispatch (notifications_dispatch + notify_status_enum_cast_fix): notify() single producer — IN_APP DELIVERED + one PENDING/extra channel; render_template / mark_all_read / unread_count / upsert_preference. Producers migrate incrementally.
 - Detectors (notifications_detectors): fn_overdue_receivables / fn_unpaid_salaries / fn_stock_mismatch + fn_low_stock_notify → daily-idempotent IN_APP alerts; pg_cron 07:00 (MANUAL). Gate-proven.
 - Sender (edge fn notification-sender) + Push (notifications_device_tokens): service-role (unauth→401) drains PENDING notifications/comm_logs/report_deliveries via Twilio+SendGrid+FCM v1, marks SENT/FAILED; deployed, inert until keys; cron trigger DEFERRED. Keys: TWILIO_*/SENDGRID_KEY/FROM_EMAIL/FCM_SERVICE_ACCOUNT. Flutter firebase_messaging DEFERRED.
-- UI COMPLETE (features/notifications/): NotificationBell (badge, 30s poll) → /notifications Center (filters, deep-links, mark-all-read) + /settings (6 event_types × 5 channels). Admin: /templates, /bulk (segment×channel×template → enqueue_bulk_communication), /logs. NEXT: provider keys + drain cron; migrate producers to notify().
+- UI COMPLETE (features/notifications/): NotificationBell (badge, 30s poll) → /notifications Center (filters, deep-links, mark-all-read) + /settings (6 event_types × 5 channels, PUSH chip disabled-with-reason 2026-07-16 D3 — no device can register a token). Admin: /templates, /bulk, /logs. NEXT: sender FCM branch must SKIP not FAIL unsendable PUSH rows (D3, before any key is set); provider keys + drain cron; migrate producers to notify().
 
 ## Purchasing — COMPLETE (back end + Flutter)
 
