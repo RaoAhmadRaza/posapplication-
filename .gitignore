@@ -46,6 +46,7 @@ app.*.map.json
 
 # iOS build artifacts (455MB, not source)
 ios/build/
+android/build/
 
 # Playwright MCP session artifacts
 .playwright-mcp/
