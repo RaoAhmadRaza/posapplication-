@@ -99,6 +99,15 @@ import 'features/approvals/presentation/pages/pending_approvals_page.dart';
 import 'features/approvals/presentation/pages/approval_detail_page.dart';
 import 'features/approvals/presentation/pages/approval_history_page.dart';
 import 'features/approvals/presentation/pages/approval_workflows_page.dart';
+import 'features/staff/presentation/pages/staff_invites_page.dart';
+import 'features/staff/presentation/pages/staff_invite_create_page.dart';
+import 'features/staff/presentation/pages/invite_qr_page.dart';
+import 'features/staff/presentation/pages/roles_page.dart';
+import 'features/staff/presentation/pages/role_form_page.dart';
+import 'features/staff/presentation/pages/user_role_page.dart';
+import 'features/staff/presentation/pages/join_scan_page.dart';
+import 'features/staff/presentation/pages/join_redeem_page.dart';
+import 'features/staff/domain/entities/staff_entities.dart';
 import 'features/inventory/presentation/pages/products_page.dart';
 import 'features/inventory/presentation/pages/product_form_page.dart';
 import 'features/inventory/presentation/pages/barcode_templates_page.dart';
@@ -180,7 +189,7 @@ String? _redirect(BuildContext context, GoRouterState state) {
   }
 
   if (!loggedIn) {
-    const authRoutes = {'/login', '/signup', '/otp', '/forgot'};
+    const authRoutes = {'/login', '/signup', '/otp', '/forgot', '/join/scan', '/join/redeem'};
     return authRoutes.contains(loc) ? null : '/login';
   }
 
@@ -646,6 +655,52 @@ final appRouter = GoRouter(
       path: '/approvals/:id',
       builder: (context, state) =>
           ApprovalDetailPage(requestId: state.pathParameters['id']!),
+    ),
+    GoRoute(
+      path: '/staff',
+      builder: (context, state) => const StaffInvitesPage(),
+    ),
+    GoRoute(
+      path: '/staff/invite',
+      builder: (context, state) {
+        final m = state.extra as Map<String, dynamic>?;
+        return StaffInviteCreatePage(
+          employeeId: m?['employeeId'] as String?,
+          prefillName: m?['name'] as String?,
+          prefillEmail: m?['email'] as String?,
+        );
+      },
+    ),
+    GoRoute(
+      path: '/staff/invite/:id/qr',
+      builder: (context, state) => InviteQrPage(
+        inviteId: state.pathParameters['id']!,
+        invite: state.extra as CreatedInvite?,
+      ),
+    ),
+    GoRoute(
+      path: '/settings/roles',
+      builder: (context, state) => const RolesPage(),
+    ),
+    GoRoute(
+      path: '/settings/roles/new',
+      builder: (context, state) => const RoleFormPage(),
+    ),
+    GoRoute(
+      path: '/settings/users/:id/role',
+      builder: (context, state) =>
+          UserRolePage(userId: state.pathParameters['id']!),
+    ),
+    GoRoute(
+      path: '/join/scan',
+      builder: (context, state) => const JoinScanPage(),
+    ),
+    GoRoute(
+      path: '/join/redeem',
+      builder: (context, state) {
+        final args = state.extra as ({String token, InviteValidation validation});
+        return JoinRedeemPage(token: args.token, validation: args.validation);
+      },
     ),
     GoRoute(
       path: '/accounting',
