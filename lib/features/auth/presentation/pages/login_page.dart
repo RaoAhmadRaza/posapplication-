@@ -132,6 +132,13 @@ class _LoginPageState extends ConsumerState<LoginPage> {
             onPressed: () => context.go('/signup'),
             fullWidth: true,
           ),
+          const SizedBox(height: AppSpacing.sm),
+          AppButton(
+            label: 'Joining a team? Scan your invite QR',
+            variant: AppButtonVariant.plain,
+            onPressed: () => context.push('/join/scan'),
+            fullWidth: true,
+          ),
         ],
       ),
       child: Column(
