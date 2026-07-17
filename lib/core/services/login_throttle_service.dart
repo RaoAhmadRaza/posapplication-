@@ -1,24 +1,19 @@
 import 'dart:convert';
-import 'package:flutter/foundation.dart';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
-import '../../features/auth/data/datasources/auth_remote_datasource.dart';
-import '../../features/auth/data/repositories/login_throttle_repository_impl.dart';
-import '../../features/auth/domain/repositories/login_throttle_repository.dart';
 import '../error/auth_failure.dart';
-import '../supabase.dart';
 
 const _storage = FlutterSecureStorage();
 const _attemptsPrefix = 'login_attempts_';
 const _lockedUntilPrefix = 'login_locked_';
 
+/// Local, device-side login throttle. The server-side counter
+/// (increment_failed_login / reset_failed_login) was removed in Phase 1.5A —
+/// it was anon-callable and a DoS surface; Supabase Auth rate-limits sign-in
+/// natively. Lockout is now enforced purely from secure storage.
 class LoginThrottleService {
-  LoginThrottleService({LoginThrottleRepository? repo})
-      : _repo =
-            repo ?? LoginThrottleRepositoryImpl(AuthRemoteDataSource(supabase));
+  LoginThrottleService();
 
   static final instance = LoginThrottleService();
-
-  final LoginThrottleRepository _repo;
 
   static const maxAttempts = 5;
   static const baseCooldown = 30;
@@ -68,28 +63,14 @@ class LoginThrottleService {
         key: _key(email, _lockedUntilPrefix),
         value: lockUntil.toIso8601String(),
       );
-    }
-
-    final (data, failure) = await _repo.incrementFailedLogin(email);
-    if (failure != null) {
-      // Server counter is best-effort; the local secure-storage throttle above
-      // already recorded this attempt. Log, don't block the login error path.
-      debugPrint('[LoginThrottle] increment failed: ${failure.message}');
-      return;
-    }
-    if (data != null && data['locked'] == true) {
-      throw AccountLockedException(
-        data['locked_until'] as String? ?? DateTime.now().toUtc().toIso8601String(),
-      );
+      // Local lockout kicked in. Surface it exactly as the removed server path
+      // did, so SignInController's `on AccountLockedException` catch is unchanged.
+      throw AccountLockedException(lockUntil.toIso8601String());
     }
   }
 
   Future<void> reset(String email) async {
     await _storage.delete(key: _key(email, _attemptsPrefix));
     await _storage.delete(key: _key(email, _lockedUntilPrefix));
-    final failure = await _repo.resetFailedLogin(email);
-    if (failure != null) {
-      debugPrint('[LoginThrottle] reset failed: ${failure.message}');
-    }
   }
 }
