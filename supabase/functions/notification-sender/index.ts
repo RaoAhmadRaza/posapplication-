@@ -1,6 +1,9 @@
 // Unified outbound sender. Drains PENDING rows from notifications (non-IN_APP),
 // communication_logs, and report_deliveries to Twilio (SMS/WhatsApp) + SendGrid (email)
-// + FCM (PUSH, fanned out to device_tokens), marking each SENT or FAILED.
+// + FCM (PUSH, fanned out to device_tokens), marking each SENT or FAILED — PUSH rows with no
+// active device token are SKIPPED instead (see the 1b) block: no device can register a token
+// yet, so that's not a transient error, and this sender is one-shot with no retry/attempts
+// column, so FAILED there would be permanent and unrecoverable except by hand-resetting status.
 // Service-role, all tenants — guarded by the secret key
 // (auth:["secret"]), so only the cron/scheduler (bearer = service key) can trigger it.
 //
@@ -117,7 +120,7 @@ async function dispatch(channel: string, to: string, subject: string, body: stri
 
 // deno-lint-ignore no-explicit-any
 async function drain(sb: any) {
-  let sent = 0, failed = 0;
+  let sent = 0, failed = 0, skipped = 0;
   const now = () => new Date().toISOString();
 
   // 1) user-directed notifications (PUSH has no transport yet — excluded)
@@ -145,7 +148,18 @@ async function drain(sb: any) {
     try {
       const { data: toks } = await sb.from("device_tokens")
         .select("token").eq("user_id", n.user_id).eq("is_active", true);
-      if (!toks?.length) throw new Error("no active device token");
+      if (!toks?.length) {
+        // Unsendable by construction, not a transient error: no device can register a token yet
+        // (the Flutter half of push was deferred, never built). SKIP, don't FAIL — this sender is
+        // one-shot (PENDING -> SENT or FAILED, no attempts column, no retry), so a FAILED row here
+        // is permanent and unrecoverable except by hand-resetting status. SKIPPED says "this was
+        // never going to work"; FAILED (below) stays reserved for a real send attempt that broke.
+        await sb.from("notifications")
+          .update({ status: "SKIPPED", failed_reason: "PUSH unsupported: no device token registration" })
+          .eq("id", n.id);
+        skipped++;
+        continue;
+      }
       for (const t of toks) await sendPush(t.token, n.title, n.body, n.action_url);
       await sb.from("notifications").update({ status: "SENT", sent_at: now() }).eq("id", n.id);
       sent++;
@@ -175,7 +189,7 @@ async function drain(sb: any) {
       }
     }
   }
-  return { sent, failed };
+  return { sent, failed, skipped };
 }
 
 export default {
