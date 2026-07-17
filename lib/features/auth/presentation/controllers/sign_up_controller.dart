@@ -18,6 +18,7 @@ class SignUpController extends Notifier<AsyncValue<SignUpResult>> {
     required String password,
     String? fullName,
     String? businessName,
+    bool demoMode = false,
   }) async {
     state = const AsyncValue.loading();
     final (result, failure) = await ref.read(signUpUseCaseProvider).call(
@@ -25,6 +26,7 @@ class SignUpController extends Notifier<AsyncValue<SignUpResult>> {
           password: password,
           fullName: fullName,
           businessName: businessName,
+          demoMode: demoMode,
         );
 
     if (failure != null) {

@@ -16,6 +16,7 @@ class AuthRemoteDataSource {
     required String password,
     String? fullName,
     String? businessName,
+    bool demoMode = false,
   }) async {
     final res = await _client.auth.signUp(
       email: email,
@@ -23,6 +24,7 @@ class AuthRemoteDataSource {
       data: {
         if (fullName != null) 'full_name': fullName,
         if (businessName != null) 'business_name': businessName,
+        if (demoMode) 'demo_mode': 'true',
       },
     );
     final needsConfirmation = res.session == null;
@@ -161,16 +163,6 @@ class AuthRemoteDataSource {
       'entity_id': entityId,
       'new_values': newValues,
     });
-  }
-
-  Future<Map<String, dynamic>?> incrementFailedLogin(String email) async {
-    final res =
-        await _client.rpc('increment_failed_login', params: {'p_email': email});
-    return res as Map<String, dynamic>?;
-  }
-
-  Future<void> resetFailedLogin(String email) async {
-    await _client.rpc('reset_failed_login', params: {'p_email': email});
   }
 
   Future<void> registerDevice({

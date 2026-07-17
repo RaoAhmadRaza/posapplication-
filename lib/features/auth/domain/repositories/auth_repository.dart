@@ -28,6 +28,7 @@ abstract class AuthRepository {
     required String password,
     String? fullName,
     String? businessName,
+    bool demoMode,
   });
 
   Future<(SignInResult, AuthFailure?)> signIn({

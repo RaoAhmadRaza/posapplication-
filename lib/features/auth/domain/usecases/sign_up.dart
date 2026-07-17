@@ -12,12 +12,14 @@ class SignUp {
     required String password,
     String? fullName,
     String? businessName,
+    bool demoMode = false,
   }) async {
     return _repo.signUp(
       email: email,
       password: password,
       fullName: fullName,
       businessName: businessName,
+      demoMode: demoMode,
     );
   }
 }

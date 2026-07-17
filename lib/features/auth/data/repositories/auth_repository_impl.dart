@@ -60,6 +60,7 @@ class AuthRepositoryImpl implements AuthRepository {
     required String password,
     String? fullName,
     String? businessName,
+    bool demoMode = false,
   }) async {
     try {
       final (_, needsConfirmation) = await _ds.signUp(
@@ -67,6 +68,7 @@ class AuthRepositoryImpl implements AuthRepository {
         password: password,
         fullName: fullName,
         businessName: businessName,
+        demoMode: demoMode,
       );
       if (needsConfirmation) {
         return (SignUpResult.needsConfirmation(email), null);
