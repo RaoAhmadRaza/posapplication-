@@ -162,6 +162,25 @@ class _ProfileTab extends ConsumerWidget {
             ],
           ),
         ),
+        if (employee.userId == null)
+          PermissionGate(
+            module: 'users',
+            action: 'create',
+            child: Padding(
+              padding: const EdgeInsets.only(top: AppSpacing.sm),
+              child: AppButton(
+                label: 'Create login',
+                icon: Icons.person_add_alt,
+                variant: AppButtonVariant.tinted,
+                fullWidth: true,
+                onPressed: () => context.push('/staff/invite', extra: {
+                  'employeeId': employee.id,
+                  'name': employee.name,
+                  'email': employee.email,
+                }),
+              ),
+            ),
+          ),
         const SizedBox(height: AppSpacing.xxl),
       ],
     );
