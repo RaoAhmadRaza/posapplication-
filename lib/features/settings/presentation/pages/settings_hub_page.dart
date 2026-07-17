@@ -41,6 +41,24 @@ class SettingsHubPage extends StatelessWidget {
                   ),
                 ]),
                 const SizedBox(height: AppSpacing.lg),
+                _Label('Team'),
+                const SizedBox(height: AppSpacing.sm),
+                _Group(children: [
+                  SettingsNavTile(
+                    icon: Icons.badge_outlined,
+                    title: 'Staff',
+                    subtitle: 'Invite staff and manage logins.',
+                    showDivider: false,
+                    onTap: () => context.push('/staff'),
+                  ),
+                  SettingsNavTile(
+                    icon: Icons.shield_outlined,
+                    title: 'Roles & permissions',
+                    subtitle: 'Define roles and who has them.',
+                    onTap: () => context.push('/settings/roles'),
+                  ),
+                ]),
+                const SizedBox(height: AppSpacing.lg),
                 _Label('Business'),
                 const SizedBox(height: AppSpacing.sm),
                 _Group(children: [
