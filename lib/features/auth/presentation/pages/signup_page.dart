@@ -40,16 +40,48 @@ class _SignupPageState extends ConsumerState<SignupPage> {
     final fullName = _fullNameController.text.trim();
     final email = _emailController.text.trim();
     final password = _passwordController.text.trim();
-    if (email.isEmpty || password.isEmpty) return;
+    if (email.isEmpty || password.isEmpty) {
+      setState(() => _errorMessage = 'Email and password are required.');
+      return;
+    }
+    // Business name is required: a blank one used to drop the user into the shared
+    // Demo Store. Joining a real team goes through the invite QR, not this form.
+    if (businessName.isEmpty) {
+      setState(() => _errorMessage =
+          'Business name is required. Joining an existing team? Use "Scan invite QR" on the login screen.');
+      return;
+    }
 
     final needsConfirmationEmail =
         await ref.read(signUpControllerProvider.notifier).signUp(
               email: email,
               password: password,
               fullName: fullName.isNotEmpty ? fullName : null,
-              businessName: businessName.isNotEmpty ? businessName : null,
+              businessName: businessName,
             );
+    _afterSignUp(needsConfirmationEmail);
+  }
 
+  Future<void> _submitDemo() async {
+    setState(() => _errorMessage = null);
+    final email = _emailController.text.trim();
+    final password = _passwordController.text.trim();
+    if (email.isEmpty || password.isEmpty) {
+      setState(() => _errorMessage = 'Enter an email and password to try the demo.');
+      return;
+    }
+    final fullName = _fullNameController.text.trim();
+    final needsConfirmationEmail =
+        await ref.read(signUpControllerProvider.notifier).signUp(
+              email: email,
+              password: password,
+              fullName: fullName.isNotEmpty ? fullName : null,
+              demoMode: true,
+            );
+    _afterSignUp(needsConfirmationEmail);
+  }
+
+  void _afterSignUp(String? needsConfirmationEmail) {
     if (needsConfirmationEmail != null && mounted) {
       context.go('/otp', extra: {
         'email': needsConfirmationEmail,
@@ -108,7 +140,7 @@ class _SignupPageState extends ConsumerState<SignupPage> {
           Padding(
             padding: const EdgeInsets.only(left: 4),
             child: Text(
-              'This sets up your store.',
+              'Required — this creates your store. Joining a team? Use "Scan invite QR" on the login screen.',
               style: AppTypography.caption.copyWith(
                 color: AppColors.textHint,
               ),
@@ -153,6 +185,12 @@ class _SignupPageState extends ConsumerState<SignupPage> {
             label: 'Create account',
             loading: isLoading,
             onPressed: _submit,
+          ),
+          const SizedBox(height: AppSpacing.sm),
+          AppButton(
+            label: 'Try the demo instead',
+            variant: AppButtonVariant.plain,
+            onPressed: isLoading ? null : _submitDemo,
           ),
         ],
       ),
