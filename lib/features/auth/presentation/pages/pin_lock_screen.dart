@@ -48,7 +48,14 @@ class _PinLockScreenState extends State<PinLockScreen> {
       if (ok) {
         PinLockState.instance.unlock();
       }
-    } catch (_) {}
+    } on PlatformException catch (e) {
+      // Surface native failures instead of swallowing them — e.g. a
+      // misconfigured Activity, no enrolled biometric, or a locked-out sensor.
+      // The user can still fall back to the PIN pad below.
+      if (!mounted) return;
+      setState(() => _errorMessage =
+          e.message ?? 'Biometric unlock unavailable. Enter your PIN.');
+    }
   }
 
   Future<void> _onComplete(String pin) async {
