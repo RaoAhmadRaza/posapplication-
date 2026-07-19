@@ -80,6 +80,15 @@ notifications (+prefs, trg_low_stock_notify, hub bell badge); bulk CSV import (b
 ## Known Issues
 - Profile loaded once (no pull-to-refresh); IMEI section not yet in product edit form (SERIALIZED)
 - ✓ FIXED (DECISIONS): number_series landmine (D1); cron reproducibility (D5). BUILD: macOS+Android OK; file_picker pinned 12.0.0-beta.7 (D4), withData/bytes→readAsBytes() still pending.
+- Auth test diagnosis (docs/AUTH_TEST_DIAGNOSIS.md, 2026-07-19): 11 clusters from a 59-case manual test pass
+  verified against source. Confirmed real bugs, no fixes applied yet: `sessions` table never written (dead
+  write path); `audit_logs` insert omits tenant_id → every row RLS-invisible; Android biometric fails silently
+  (`MainActivity` needs `FlutterFragmentActivity`); no branch-create UI anywhere + branch-select unreachable for
+  single-branch tenants; signup doesn't detect duplicate email (routes to OTP instead of erroring); login
+  silently no-ops on empty fields (signup does show an error); password-strength meter is length-only.
+  Two "screens are missing" reports (MFA, and much of Settings/security) turned out to be `settings:read`
+  permission-gating the seeded CASHIER role out of those screens entirely, not missing features — and
+  `update_role_permissions` (role-editing) is fully built server-side but has zero client call sites.
 
 ## Tenant Provisioning — COMPLETE (creation-time, gate-proven; full detail in DECISIONS.md)
 `provision_tenant()` seeds the golden set (20 CoA / 10 number_series / 4 tax / OPEN fiscal / 3+3 templates /
