@@ -80,15 +80,21 @@ notifications (+prefs, trg_low_stock_notify, hub bell badge); bulk CSV import (b
 ## Known Issues
 - Profile loaded once (no pull-to-refresh); IMEI section not yet in product edit form (SERIALIZED)
 - ✓ FIXED (DECISIONS): number_series landmine (D1); cron reproducibility (D5). BUILD: macOS+Android OK; file_picker pinned 12.0.0-beta.7 (D4), withData/bytes→readAsBytes() still pending.
-- Auth test diagnosis (docs/AUTH_TEST_DIAGNOSIS.md, 2026-07-19): 11 clusters from a 59-case manual test pass
-  verified against source. Confirmed real bugs, no fixes applied yet: `sessions` table never written (dead
-  write path); `audit_logs` insert omits tenant_id → every row RLS-invisible; Android biometric fails silently
-  (`MainActivity` needs `FlutterFragmentActivity`); no branch-create UI anywhere + branch-select unreachable for
-  single-branch tenants; signup doesn't detect duplicate email (routes to OTP instead of erroring); login
-  silently no-ops on empty fields (signup does show an error); password-strength meter is length-only.
-  Two "screens are missing" reports (MFA, and much of Settings/security) turned out to be `settings:read`
-  permission-gating the seeded CASHIER role out of those screens entirely, not missing features — and
-  `update_role_permissions` (role-editing) is fully built server-side but has zero client call sites.
+- Auth test-diagnosis fixes (docs/AUTH_TEST_DIAGNOSIS.md; branch fix/auth-runbook-v1, DB migrations pushed to
+  prod). 11 clusters verified against source, then fixed across 9 phases. Client (Cluster E/D1/D2/C): login
+  empty-field error; real password-strength scorer (length + char-class + sequential/repeat); WeakPasswordFailure
+  mapping + signup surfaces AuthFailure.message; duplicate-email signup detected via empty `identities`. Native
+  (G): MainActivity → FlutterFragmentActivity + biometric errors surfaced. DB migrations (pushed): audit_logs
+  tenant_id stamped by BEFORE-INSERT trigger + tightened insert policy (was RLS-invisible); public.sessions now
+  mirrored from auth.sessions via guarded trigger (was dead write path) + added tenant_id/last_active_at columns
+  the read path assumed; supabase_realtime publication + REPLICA IDENTITY FULL on devices/sessions/audit_logs/
+  permissions; create_branch RPC (tenant-scoped, settings:create, assigns creator, I8-safe). Client realtime
+  subscribe-reload on those 4 controllers + permissionMatrix refetch on permissions change (no relogin). Settings
+  hub ungated so CASHIER reaches self-service MFA/PIN (admin groups still settings:read). Role-permission editing
+  UI (dual-mode role form + tappable non-system cards). Branch create FAB + Switch-branch entry. Cluster A
+  (recovery) REFUTED in code — no fix, device retest owed. Cluster B (recovery-any-email) left as likely-intended
+  anti-enumeration. Device/runtime gate-proves still owed (manual TC-AUTH, hardware biometric, 2-device sessions,
+  realtime propagation, guard-through-UI); RUNBOOK 0.9 publication/isolation re-check owed.
 
 ## Tenant Provisioning — COMPLETE (creation-time, gate-proven; full detail in DECISIONS.md)
 `provision_tenant()` seeds the golden set (20 CoA / 10 number_series / 4 tax / OPEN fiscal / 3+3 templates /
