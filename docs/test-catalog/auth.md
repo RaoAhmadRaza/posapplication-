@@ -324,10 +324,10 @@
 **TC-AUTH-FORGOT-002**
 - **Precondition:** User account NOT registered; user on ForgotPasswordPage
 - **Steps:** 1. Enter non-existent email 2. Tap Send code
-- **Expected:** Error banner displays "Email not found" or "No user with that email" or similar; button re-enabled
-- **Fails-as-passes if:** Error shows but button disabled, cannot retry with different email. Seed: verify button state after error.
-- **Risk:** P0-MONEY
-- **Why it matters:** Cannot retry = user stuck, cannot recover account
+- **Expected:** Flow advances to /otp exactly as for a registered email — NO error revealing that the account does not exist. This is intentional anti-enumeration: `resetPasswordForEmail` succeeds unconditionally and no code is actually delivered for a non-existent account. Copy is neutral ("If an account exists … we've sent a code"). (Cluster B / Gate G4 Option A, 2026-07-19 — corrected from the old "Email not found" expectation, which would have required leaking account existence.)
+- **Fails-as-passes if:** UI reveals account (non-)existence in any way (distinct error, different navigation, different timing/copy). Seed: confirm identical UX for registered vs non-existent email.
+- **Risk:** P1-SECURITY (enumeration)
+- **Why it matters:** An existence-revealing error is an account-enumeration vulnerability; the neutral flow is the correct behaviour, not a bug.
 
 **TC-AUTH-FORGOT-003**
 - **Precondition:** User on ForgotPasswordPage

@@ -89,7 +89,11 @@ class _OtpPageState extends ConsumerState<OtpPage> {
 
     if (next.resendSucceeded) {
       setState(() {
-        _successMessage = 'A new code has been sent to $_maskedEmail.';
+        // Recovery must not reveal whether an account exists (anti-enumeration);
+        // signup just created the account, so a definite message is fine there.
+        _successMessage = widget.isRecovery
+            ? 'If an account exists for $_maskedEmail, a new code has been sent.'
+            : 'A new code has been sent to $_maskedEmail.';
         _errorMessage = null;
       });
     }
@@ -112,7 +116,9 @@ class _OtpPageState extends ConsumerState<OtpPage> {
 
     return ResponsiveFormScaffold(
       title: 'Check your email',
-      subtitle: 'We sent a code to $_maskedEmail',
+      subtitle: widget.isRecovery
+          ? 'If an account exists for $_maskedEmail, we\'ve sent a code.'
+          : 'We sent a code to $_maskedEmail',
       footer: AppButton(
         label: 'Back',
         variant: AppButtonVariant.plain,

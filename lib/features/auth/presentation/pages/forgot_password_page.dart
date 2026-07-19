@@ -91,7 +91,8 @@ class _ForgotPasswordPageState extends ConsumerState<ForgotPasswordPage> {
 
     return ResponsiveFormScaffold(
       title: 'Reset password',
-      subtitle: "Enter your email and we'll send you a recovery code.",
+      subtitle:
+          "Enter your email. If an account exists, we'll send a recovery code.",
       footer: AppButton(
         label: 'Back to log in',
         variant: AppButtonVariant.plain,
