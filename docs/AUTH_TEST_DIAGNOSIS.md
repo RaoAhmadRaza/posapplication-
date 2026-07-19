@@ -49,6 +49,20 @@ If LOGIN-005/OTP-002/RESET-001-003/FORGOT-001 actually failed as described, the 
 written — worth re-running these specific cases to confirm they still reproduce, since the described symptom has no
 matching mechanism in source.
 
+**Gate G1 (Phase 1, 2026-07-19) — static re-verification, device re-run still required.** Full flow re-traced at
+`fix/auth-runbook-v1` HEAD end-to-end: the typed-6-digit recovery path is airtight — `verifyOTP(type:
+OtpType.recovery)` success sets `RecoveryState.codeVerified` (`otp_controller.dart:80-82`), and `_redirect`'s
+`codeVerified` branch (`router.dart:180-181`) is the FIRST branch, forcing `/reset` before the `loggedIn` check can
+route to home. The session `verifyOTP` establishes cannot win that race. The app has NO deep-link/magic-link handler
+at all (no `app_links`/`uni_links`/`PASSWORD_RECOVERY` event handling — grep-confirmed), so there is no alternate
+recovery entry that bypasses the gate. Conclusion: at HEAD there is no code mechanism that produces the reported
+symptom. Cannot stamp pass/fail without a manual device run (TC-AUTH is a manual suite). Escalation ranking if it
+still reproduces on a FRESH HEAD build: (1) stale test build — the `codeVerified` gate is a recent integration, a
+pre-gate APK reproduces the symptom exactly [most likely]; (2) Supabase "Reset Password" email-template config
+(dashboard-only, out-of-repo) — the typed-code flow only works if the template emits `{{ .Token }}`, not the default
+`{{ .ConfirmationURL }}` link; (3) emailRedirectTo — irrelevant to the typed-code flow. None of these is a
+client-logic fix. **Do not modify the recovery code to satisfy these tests.**
+
 ### Cluster B — Recovery proceeds for any email — CONFIRMED
 `forgot_password_page.dart:55-73` advances to `/otp` purely on `resetPasswordForEmail` not throwing —
 `auth_repository_impl.dart:124-131` returns no failure as long as the SDK call succeeds, which Supabase does
