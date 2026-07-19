@@ -1,4 +1,5 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import '../../../../core/realtime/subscribe_reload.dart';
 import '../../domain/usecases/load_audit_logs.dart';
 
 final securityLogsControllerProvider =
@@ -8,7 +9,12 @@ final securityLogsControllerProvider =
 
 class SecurityLogsController extends Notifier<AsyncValue<List<Map<String, dynamic>>>> {
   @override
-  AsyncValue<List<Map<String, dynamic>>> build() => const AsyncValue.loading();
+  AsyncValue<List<Map<String, dynamic>>> build() {
+    // Live-append new audit rows (insert-only; update/delete are revoked).
+    // RLS scopes the stream to this tenant.
+    subscribeReload(ref, 'audit_logs', load);
+    return const AsyncValue.loading();
+  }
 
   Future<void> load() async {
     state = const AsyncValue.loading();

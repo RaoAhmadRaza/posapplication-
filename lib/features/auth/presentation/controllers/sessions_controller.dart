@@ -1,4 +1,5 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import '../../../../core/realtime/subscribe_reload.dart';
 import '../../domain/usecases/list_sessions.dart';
 import '../../domain/usecases/revoke_session.dart';
 
@@ -9,7 +10,13 @@ final sessionsControllerProvider =
 
 class SessionsController extends Notifier<AsyncValue<List<Map<String, dynamic>>>> {
   @override
-  AsyncValue<List<Map<String, dynamic>>> build() => const AsyncValue.loading();
+  AsyncValue<List<Map<String, dynamic>>> build() {
+    // RLS on sessions is self-only, so this signals on the current user's own
+    // session changes (e.g. a second device signing in / this device being
+    // revoked); load() refetches the full tenant list via the edge function.
+    subscribeReload(ref, 'sessions', load);
+    return const AsyncValue.loading();
+  }
 
   Future<void> load() async {
     state = const AsyncValue.loading();

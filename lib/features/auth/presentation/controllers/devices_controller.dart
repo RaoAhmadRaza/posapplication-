@@ -1,4 +1,5 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import '../../../../core/realtime/subscribe_reload.dart';
 import '../../../../core/services/audit_service.dart';
 import '../../../../core/supabase.dart';
 import '../../domain/entities/device.dart';
@@ -13,7 +14,13 @@ final devicesProvider =
 
 class DevicesController extends Notifier<AsyncValue<List<Device>>> {
   @override
-  AsyncValue<List<Device>> build() => const AsyncValue.loading();
+  AsyncValue<List<Device>> build() {
+    // Live-refresh when a device row changes (another session approves/revokes).
+    // RLS scopes the stream to this tenant. Initial load is triggered by the
+    // screen's initState.
+    subscribeReload(ref, 'devices', load);
+    return const AsyncValue.loading();
+  }
 
   Future<void> load() async {
     state = const AsyncValue.loading();
