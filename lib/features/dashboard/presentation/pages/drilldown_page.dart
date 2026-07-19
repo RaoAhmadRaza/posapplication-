@@ -5,6 +5,7 @@ import '../../../../core/design/app_colors.dart';
 import '../../../../core/design/app_radius.dart';
 import '../../../../core/design/app_spacing.dart';
 import '../../../../core/design/app_typography.dart';
+import '../../../../core/design/widgets/app_button.dart';
 import '../../../../core/design/widgets/app_inline_banner.dart';
 import '../../domain/entities/drilldown.dart';
 import '../controllers/drilldown_controller.dart';
@@ -30,9 +31,20 @@ class DrilldownPage extends ConsumerWidget {
           loading: () => const Center(child: CircularProgressIndicator()),
           error: (_, _) => Padding(
             padding: const EdgeInsets.all(AppSpacing.screenPadding),
-            child: AppInlineBanner(
-              message: 'Could not load details.',
-              type: BannerType.error,
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                AppInlineBanner(
+                  message: 'Could not load details.',
+                  type: BannerType.error,
+                ),
+                const SizedBox(height: AppSpacing.md),
+                AppButton(
+                  label: 'Retry',
+                  onPressed: () => ref.invalidate(drilldownProvider(args)),
+                  variant: AppButtonVariant.plain,
+                ),
+              ],
             ),
           ),
           data: (rows) {
