@@ -31,7 +31,14 @@ class InvoiceDetailPage extends ConsumerWidget {
 
   Widget _buildGated(BuildContext context, WidgetRef ref) {
     final invoices = ref.watch(invoicesProvider).value ?? [];
-    final invoice = invoices.where((i) => i.id == invoiceId).firstOrNull;
+    // Route param may arrive as either the UUID id (sales history, repair) or
+    // the human invoice_number (dashboard recent-sale, sales/receivables/product
+    // drilldowns). Both resolve against the same RLS-scoped list, so a match can
+    // never cross tenants; invoice_number is unique within scope and never
+    // collides with a UUID.
+    final invoice = invoices
+        .where((i) => i.id == invoiceId || i.invoiceNumber == invoiceId)
+        .firstOrNull;
     final customers = ref.watch(customersProvider).value ?? <Customer>[];
 
     return Scaffold(
@@ -48,7 +55,7 @@ class InvoiceDetailPage extends ConsumerWidget {
       body: invoice == null
           ? const Center(child: CircularProgressIndicator())
           : FutureBuilder<Map<String, dynamic>?>(
-              future: ref.read(invoicesProvider.notifier).loadDetail(invoiceId),
+              future: ref.read(invoicesProvider.notifier).loadDetail(invoice.id),
               builder: (context, snapshot) {
                 final detail = snapshot.data;
                 if (detail == null) {
