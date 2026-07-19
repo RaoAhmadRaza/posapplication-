@@ -8,6 +8,7 @@ import '../../../../core/design/widgets/app_button.dart';
 import '../../../../core/design/widgets/app_inline_banner.dart';
 import '../../../../core/design/widgets/app_text_field.dart';
 import '../../../../core/design/widgets/responsive_form_scaffold.dart';
+import '../../../../core/error/auth_failure.dart';
 import '../../domain/repositories/auth_repository.dart';
 import '../controllers/sign_up_controller.dart';
 
@@ -93,7 +94,10 @@ class _SignupPageState extends ConsumerState<SignupPage> {
   void _onStateChange(
       AsyncValue<SignUpResult>? prev, AsyncValue<SignUpResult> next) {
     if (next.hasError && mounted) {
-      setState(() => _errorMessage = next.error.toString());
+      final msg = next.error is AuthFailure
+          ? (next.error as AuthFailure).message
+          : next.error.toString();
+      setState(() => _errorMessage = msg);
       ref.read(signUpControllerProvider.notifier).clear();
     }
   }
@@ -211,18 +215,19 @@ class _PasswordStrengthHint extends StatelessWidget {
     Color color;
     double fraction;
 
-    if (password.length < 6) {
-      label = 'Weak';
-      color = AppColors.destructive;
-      fraction = 0.33;
-    } else if (password.length < 8) {
-      label = 'Medium';
-      color = AppColors.warning;
-      fraction = 0.66;
-    } else {
-      label = 'Strong';
-      color = AppColors.success;
-      fraction = 1.0;
+    switch (_scorePassword(password)) {
+      case _PwStrength.weak:
+        label = 'Weak';
+        color = AppColors.destructive;
+        fraction = 0.33;
+      case _PwStrength.medium:
+        label = 'Medium';
+        color = AppColors.warning;
+        fraction = 0.66;
+      case _PwStrength.strong:
+        label = 'Strong';
+        color = AppColors.success;
+        fraction = 1.0;
     }
 
     return Column(
@@ -245,4 +250,40 @@ class _PasswordStrengthHint extends StatelessWidget {
       ],
     );
   }
+}
+
+enum _PwStrength { weak, medium, strong }
+
+/// Client-side password strength — scores length AND character-class variety,
+/// and refuses to call a low-variety or purely sequential/repeated string strong
+/// (e.g. "12345678", "aaaaaaaa"). Not a security control; the server enforces the
+/// real minimum. Under 8 chars is never better than Weak.
+_PwStrength _scorePassword(String password) {
+  if (password.length < 8) return _PwStrength.weak;
+
+  final hasLower = password.contains(RegExp(r'[a-z]'));
+  final hasUpper = password.contains(RegExp(r'[A-Z]'));
+  final hasDigit = password.contains(RegExp(r'\d'));
+  final hasSymbol = password.contains(RegExp(r'[^A-Za-z0-9]'));
+  final variety = [hasLower, hasUpper, hasDigit, hasSymbol]
+      .where((present) => present)
+      .length;
+
+  if (_isSequentialOrRepeated(password) || variety < 2) return _PwStrength.weak;
+  if (variety >= 3 && password.length >= 8) return _PwStrength.strong;
+  return _PwStrength.medium;
+}
+
+/// True when every adjacent character steps by a constant ±1 (ascending or
+/// descending runs like "12345678"/"abcd") or the string is a single repeated
+/// character ("aaaaaaaa") — the classic "looks long, is trivially guessable" case.
+bool _isSequentialOrRepeated(String password) {
+  if (password.length < 2) return false;
+  final units = password.codeUnits;
+  final firstStep = units[1] - units[0];
+  if (firstStep.abs() > 1) return false;
+  for (var i = 1; i < units.length; i++) {
+    if (units[i] - units[i - 1] != firstStep) return false;
+  }
+  return true;
 }
