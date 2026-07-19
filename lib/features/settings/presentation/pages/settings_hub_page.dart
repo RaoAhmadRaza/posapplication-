@@ -8,8 +8,11 @@ import '../../../../core/widgets/permission_gate.dart';
 import '../widgets/settings_nav_tile.dart';
 
 /// The Settings tab: a hub linking to every configuration surface.
-/// The whole hub is gated settings:read; individual write actions on the
-/// sub-pages are gated settings:update.
+/// Self-service groups (Profile & Security, App) are visible to every
+/// authenticated user — a CASHIER must be able to reach own-account security
+/// (PIN, biometric, MFA enrolment) without an admin-tier permission. The
+/// tenant-admin groups (Team, Business, Money) are gated settings:read; write
+/// actions on the sub-pages are further gated settings:update.
 class SettingsHubPage extends StatelessWidget {
   const SettingsHubPage({super.key});
 
@@ -18,32 +21,29 @@ class SettingsHubPage extends StatelessWidget {
     return Scaffold(
       backgroundColor: AppColors.background,
       body: SafeArea(
-        child: PermissionGate(
-          module: 'settings',
-          action: 'read',
-          fallback: const _NoAccess(),
-          child: SingleChildScrollView(
-            padding:
-                const EdgeInsets.symmetric(horizontal: AppSpacing.screenPadding),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.stretch,
-              children: [
-                const SizedBox(height: AppSpacing.xl),
-                Text('Settings', style: AppTypography.largeTitle),
-                const SizedBox(height: AppSpacing.xxl),
-                _Group(children: [
-                  SettingsNavTile(
-                    icon: Icons.person_outline,
-                    title: 'Profile & Security',
-                    subtitle: 'Your profile, PIN, and biometric login.',
-                    showDivider: false,
-                    onTap: () => context.push('/settings/profile'),
-                  ),
-                ]),
-                const SizedBox(height: AppSpacing.lg),
-                _Label('Team'),
-                const SizedBox(height: AppSpacing.sm),
-                _Group(children: [
+        child: SingleChildScrollView(
+          padding:
+              const EdgeInsets.symmetric(horizontal: AppSpacing.screenPadding),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              const SizedBox(height: AppSpacing.xl),
+              Text('Settings', style: AppTypography.largeTitle),
+              const SizedBox(height: AppSpacing.xxl),
+              // Self-service — always visible.
+              _Group(children: [
+                SettingsNavTile(
+                  icon: Icons.person_outline,
+                  title: 'Profile & Security',
+                  subtitle: 'Your profile, PIN, biometric, and authenticator.',
+                  showDivider: false,
+                  onTap: () => context.push('/settings/profile'),
+                ),
+              ]),
+              // Tenant-admin groups — gated settings:read (hidden for CASHIER).
+              _AdminGroup(
+                label: 'Team',
+                tiles: [
                   SettingsNavTile(
                     icon: Icons.badge_outlined,
                     title: 'Staff',
@@ -57,11 +57,11 @@ class SettingsHubPage extends StatelessWidget {
                     subtitle: 'Define roles and who has them.',
                     onTap: () => context.push('/settings/roles'),
                   ),
-                ]),
-                const SizedBox(height: AppSpacing.lg),
-                _Label('Business'),
-                const SizedBox(height: AppSpacing.sm),
-                _Group(children: [
+                ],
+              ),
+              _AdminGroup(
+                label: 'Business',
+                tiles: [
                   SettingsNavTile(
                     icon: Icons.store_outlined,
                     title: 'Business settings',
@@ -75,11 +75,11 @@ class SettingsHubPage extends StatelessWidget {
                     subtitle: 'Name, city, currency, timezone, active.',
                     onTap: () => context.push('/settings/branches'),
                   ),
-                ]),
-                const SizedBox(height: AppSpacing.lg),
-                _Label('Money'),
-                const SizedBox(height: AppSpacing.sm),
-                _Group(children: [
+                ],
+              ),
+              _AdminGroup(
+                label: 'Money',
+                tiles: [
                   SettingsNavTile(
                     icon: Icons.payments_outlined,
                     title: 'Payment methods',
@@ -99,30 +99,57 @@ class SettingsHubPage extends StatelessWidget {
                     subtitle: 'Document prefixes and next numbers.',
                     onTap: () => context.push('/settings/number-series'),
                   ),
-                ]),
-                const SizedBox(height: AppSpacing.lg),
-                _Label('App'),
-                const SizedBox(height: AppSpacing.sm),
-                _Group(children: [
-                  SettingsNavTile(
-                    icon: Icons.tune,
-                    title: 'Preferences',
-                    subtitle: 'Theme, language, default branch.',
-                    showDivider: false,
-                    onTap: () => context.push('/settings/preferences'),
-                  ),
-                  SettingsNavTile(
-                    icon: Icons.notifications_outlined,
-                    title: 'Notifications',
-                    subtitle: 'Which events reach you, and how.',
-                    onTap: () => context.push('/notifications/settings'),
-                  ),
-                ]),
-                const SizedBox(height: AppSpacing.xxl),
-              ],
-            ),
+                ],
+              ),
+              // Self-service — always visible.
+              const SizedBox(height: AppSpacing.lg),
+              _Label('App'),
+              const SizedBox(height: AppSpacing.sm),
+              _Group(children: [
+                SettingsNavTile(
+                  icon: Icons.tune,
+                  title: 'Preferences',
+                  subtitle: 'Theme, language, default branch.',
+                  showDivider: false,
+                  onTap: () => context.push('/settings/preferences'),
+                ),
+                SettingsNavTile(
+                  icon: Icons.notifications_outlined,
+                  title: 'Notifications',
+                  subtitle: 'Which events reach you, and how.',
+                  onTap: () => context.push('/notifications/settings'),
+                ),
+              ]),
+              const SizedBox(height: AppSpacing.xxl),
+            ],
           ),
         ),
+      ),
+    );
+  }
+}
+
+/// A labelled settings group visible only to users with settings:read. The whole
+/// block (top spacer, label, and tiles) collapses together when hidden, so no
+/// stray spacing is left for a CASHIER.
+class _AdminGroup extends StatelessWidget {
+  const _AdminGroup({required this.label, required this.tiles});
+  final String label;
+  final List<Widget> tiles;
+
+  @override
+  Widget build(BuildContext context) {
+    return PermissionGate(
+      module: 'settings',
+      action: 'read',
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          const SizedBox(height: AppSpacing.lg),
+          _Label(label),
+          const SizedBox(height: AppSpacing.sm),
+          _Group(children: tiles),
+        ],
       ),
     );
   }
@@ -143,14 +170,5 @@ class _Label extends StatelessWidget {
   Widget build(BuildContext context) => Padding(
         padding: const EdgeInsets.only(left: AppSpacing.sm),
         child: Text(text.toUpperCase(), style: AppTypography.subtitleMuted),
-      );
-}
-
-class _NoAccess extends StatelessWidget {
-  const _NoAccess();
-  @override
-  Widget build(BuildContext context) => Center(
-        child: Text('No access to settings.',
-            style: AppTypography.subtitleMuted),
       );
 }
