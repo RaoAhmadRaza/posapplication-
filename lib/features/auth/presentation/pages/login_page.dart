@@ -39,7 +39,10 @@ class _LoginPageState extends ConsumerState<LoginPage> {
     setState(() => _errorMessage = null);
     final email = _emailController.text.trim();
     final password = _passwordController.text.trim();
-    if (email.isEmpty || password.isEmpty) return;
+    if (email.isEmpty || password.isEmpty) {
+      setState(() => _errorMessage = 'Email and password are required.');
+      return;
+    }
 
     final (canAttempt, remaining) = await LoginThrottleService.instance.canAttempt(email);
     if (!canAttempt) {
