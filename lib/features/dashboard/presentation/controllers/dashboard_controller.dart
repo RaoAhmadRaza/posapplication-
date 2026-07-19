@@ -18,5 +18,8 @@ class DashboardController extends AsyncNotifier<DashboardSummary> {
     return summary;
   }
 
-  void refresh() => ref.invalidateSelf();
+  Future<void> refresh() async {
+    ref.invalidateSelf();
+    await future;
+  }
 }

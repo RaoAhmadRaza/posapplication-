@@ -123,8 +123,9 @@ class DashboardPage extends ConsumerWidget {
         ],
       ),
       body: RefreshIndicator(
-        onRefresh: () async => ref.read(dashboardProvider.notifier).refresh(),
+        onRefresh: () => ref.read(dashboardProvider.notifier).refresh(),
         child: ListView(
+          physics: const AlwaysScrollableScrollPhysics(),
           padding: const EdgeInsets.symmetric(horizontal: AppSpacing.screenPadding),
           children: [
             const SizedBox(height: AppSpacing.xs),
