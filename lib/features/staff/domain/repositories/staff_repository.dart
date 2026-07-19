@@ -43,6 +43,8 @@ abstract class StaffRepository {
   });
   Future<StaffFailure?> updateRolePermissions(
       String roleId, List<PermissionGrant> permissions);
+  Future<(List<PermissionGrant>, StaffFailure?)> loadRolePermissions(
+      String roleId);
 
   // Users
   Future<(List<TenantUser>, StaffFailure?)> listUsers();

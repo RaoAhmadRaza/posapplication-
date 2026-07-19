@@ -687,6 +687,11 @@ final appRouter = GoRouter(
       builder: (context, state) => const RoleFormPage(),
     ),
     GoRoute(
+      path: '/settings/roles/:id',
+      builder: (context, state) =>
+          RoleFormPage(role: state.extra as TenantRole?),
+    ),
+    GoRoute(
       path: '/settings/users/:id/role',
       builder: (context, state) =>
           UserRolePage(userId: state.pathParameters['id']!),

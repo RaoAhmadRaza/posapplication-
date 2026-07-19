@@ -91,6 +91,17 @@ class StaffRemoteDataSource {
         params: {'p_role_id': roleId, 'p_permissions': permissions});
   }
 
+  // Current granted permissions for a role, to prefill the edit form. Plain
+  // RLS-scoped read (perm tenant read) — no RPC needed.
+  Future<List<Map<String, dynamic>>> loadRolePermissions(String roleId) async {
+    final res = await _client
+        .from('permissions')
+        .select('module, action, branch_scope')
+        .eq('role_id', roleId)
+        .eq('granted', true);
+    return (res as List).cast<Map<String, dynamic>>();
+  }
+
   Future<List<Map<String, dynamic>>> listUsers() async {
     final res = await _client.rpc('list_tenant_users');
     return (res as List).cast<Map<String, dynamic>>();

@@ -63,6 +63,11 @@ class _RolesTab extends ConsumerWidget {
               Padding(
                 padding: const EdgeInsets.only(bottom: AppSpacing.sm),
                 child: AppCard(
+                  // Only custom roles are editable; system/admin roles are
+                  // immutable (update_role_permissions rejects them), so no tap.
+                  onTap: r.isSystemRole
+                      ? null
+                      : () => context.push('/settings/roles/${r.id}', extra: r),
                   child: Row(
                     children: [
                       Expanded(
@@ -82,7 +87,10 @@ class _RolesTab extends ConsumerWidget {
                       if (r.isSystemRole)
                         Text('System',
                             style: AppTypography.caption
-                                .copyWith(color: AppColors.textMuted)),
+                                .copyWith(color: AppColors.textMuted))
+                      else
+                        const Icon(Icons.chevron_right,
+                            color: AppColors.textMuted, size: 20),
                     ],
                   ),
                 ),

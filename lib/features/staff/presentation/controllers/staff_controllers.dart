@@ -159,6 +159,23 @@ class StaffActions {
     }
     return f;
   }
+
+  Future<StaffFailure?> updateRolePermissions(
+      String roleId, List<PermissionGrant> permissions) async {
+    final f = await _repo.updateRolePermissions(roleId, permissions);
+    if (f == null) _ref.invalidate(rolesControllerProvider);
+    return f;
+  }
 }
 
 final staffActionsProvider = Provider<StaffActions>((ref) => StaffActions(ref));
+
+// Current granted permissions for a role, keyed by roleId, to prefill the edit
+// form. autoDispose so each edit session re-fetches fresh.
+final rolePermissionsProvider = FutureProvider.autoDispose
+    .family<List<PermissionGrant>, String>((ref, roleId) async {
+  final (grants, failure) =
+      await ref.read(staffRepositoryProvider).loadRolePermissions(roleId);
+  if (failure != null) throw failure;
+  return grants;
+});

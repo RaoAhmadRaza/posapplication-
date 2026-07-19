@@ -179,6 +179,24 @@ class StaffRepositoryImpl implements StaffRepository {
   }
 
   @override
+  Future<(List<PermissionGrant>, StaffFailure?)> loadRolePermissions(
+      String roleId) async {
+    try {
+      final rows = await _ds.loadRolePermissions(roleId);
+      final grants = rows
+          .map((r) => PermissionGrant(
+                module: r['module'] as String,
+                action: r['action'] as String,
+                branchScope: (r['branch_scope'] as String?) ?? 'OWN_BRANCH',
+              ))
+          .toList();
+      return (grants, null);
+    } catch (e) {
+      return (<PermissionGrant>[], _mapError(e));
+    }
+  }
+
+  @override
   Future<(List<TenantUser>, StaffFailure?)> listUsers() async {
     try {
       final rows = await _ds.listUsers();
