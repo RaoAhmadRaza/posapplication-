@@ -27,6 +27,14 @@ class AuthRemoteDataSource {
         if (demoMode) 'demo_mode': 'true',
       },
     );
+    // Confirm-email ON: a duplicate-email signup returns HTTP 200 with a user
+    // whose `identities` list is empty (Supabase anti-enumeration) and no error.
+    // Without this check it is indistinguishable from a genuine new signup and
+    // would advance to the OTP screen. Raise so _mapError → EmailAlreadyInUse.
+    final identities = res.user?.identities;
+    if (identities != null && identities.isEmpty) {
+      throw const AuthException('User already registered');
+    }
     final needsConfirmation = res.session == null;
     final data = <String, dynamic>{};
     if (res.user != null) {
