@@ -179,3 +179,43 @@ below is a hypothesis." That caveat turned out to matter in specific, non-obviou
 
 No fixes were made or proposed in this pass. This document is the diagnosis update; next step (if any) is a separate
 decision.
+
+---
+
+## Phase 11 — Regression & full re-run (2026-07-19)
+
+Static regression pass on `fix/auth-runbook-v1` (12 commits). Runtime/device re-runs
+are enumerated as OWED — they need a physical device or DB creds, neither available
+headless this session.
+
+**Static exit criteria — all PASS:**
+- Compile regression: `flutter analyze` = 13 issues, 0 errors — identical to the Phase 0
+  baseline, none in changed files. No phase broke a neighbour's compilation.
+- **R9 (public.users policy):** grep of all 4 new migrations — NO `public.users` policy,
+  table, or the "users update own" WITH CHECK is touched. R9 not triggered (as planned).
+  P8 used Option A (no seed/trigger change), so R1/R8/4.7 also not triggered.
+- CRITICAL self-role-escalation fix (`"users update own"` WITH CHECK, Phase 1) present and
+  untouched on branch HEAD.
+- **Guard symmetry (Appendix A):** both assignment doors (update_user_role,
+  update_role_permissions) enforce the same Guards 1–5 (FORBIDDEN, unheld-grant subset,
+  hierarchy, tenant-scope, self/own-role protection). P7 added no guard logic — reused the
+  RPC — so S10/S10b/S16/S18/S19 fire through the same guarded path the UI now calls.
+- Tenant isolation never weakened: P4 stamps tenant_id write-side (read policy untouched),
+  P5/P6 streams are RLS-scoped, P9 RPC inserts with the caller's auth_tenant_id(). No read
+  policy relaxed anywhere.
+- Backups preserved: RUNBOOK 0.2 dump untouched; P0 dated snapshot is separate.
+- Every one of 36 changed files traces to a phase (diff reviewed).
+
+**Blast radius (for the OWED 0.9 re-run):** P4 audit_logs (trigger+insert policy); P5
+auth.sessions trigger → public.sessions; P6 supabase_realtime publication +REPLICA IDENTITY
+FULL on devices/sessions/audit_logs/permissions; P9 public.branches + user_branch_assignments.
+
+**OWED — runtime/device (cannot run headless):**
+- Full 59-case TC-AUTH manual re-run vs Phase 0 baseline (targeted cases flip green, nothing
+  new red).
+- R2 login / R7 sessions+permissions intact (after P5) · R4 MFA challenge (after P8) ·
+  R10 sales/inventory/POS smoke (after P6/P9 touched shared tables/publication).
+- Guard-matrix runtime probes S10/S10b/S16/S18/S19 via rolled-back impersonation (DB creds).
+- RUNBOOK 0.9 publication/isolation re-check: confirm ONLY the 4 intended tables stream and
+  no cross-tenant row reaches a subscriber (DB creds).
+- Cluster A recovery device retest; Cluster G hardware biometric.
