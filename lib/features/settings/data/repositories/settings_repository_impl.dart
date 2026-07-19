@@ -96,6 +96,28 @@ class SettingsRepositoryImpl implements SettingsRepository {
   }
 
   @override
+  Future<SettingsFailure?> createBranch({
+    required String name,
+    String? city,
+    String? country,
+    String? currency,
+    String? timezone,
+  }) async {
+    try {
+      await _ds.createBranch(
+        name: name,
+        city: city,
+        country: country,
+        currency: currency,
+        timezone: timezone,
+      );
+      return null;
+    } catch (e) {
+      return _mapError(e);
+    }
+  }
+
+  @override
   Future<(List<PaymentMethodConfig>, SettingsFailure?)>
       loadPaymentMethods() async {
     try {

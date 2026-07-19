@@ -32,6 +32,25 @@ class LoadBranches {
   Future<(List<BranchConfig>, SettingsFailure?)> call() => _r.loadBranches();
 }
 
+class CreateBranch {
+  final SettingsRepository _r;
+  CreateBranch(this._r);
+  Future<SettingsFailure?> call({
+    required String name,
+    String? city,
+    String? country,
+    String? currency,
+    String? timezone,
+  }) =>
+      _r.createBranch(
+        name: name,
+        city: city,
+        country: country,
+        currency: currency,
+        timezone: timezone,
+      );
+}
+
 class UpdateBranchSettings {
   final SettingsRepository _r;
   UpdateBranchSettings(this._r);
@@ -152,6 +171,8 @@ final updateTenantSettingsUseCaseProvider =
     Provider((ref) => UpdateTenantSettings(_repo(ref)));
 final loadBranchesUseCaseProvider =
     Provider((ref) => LoadBranches(_repo(ref)));
+final createBranchUseCaseProvider =
+    Provider((ref) => CreateBranch(_repo(ref)));
 final updateBranchSettingsUseCaseProvider =
     Provider((ref) => UpdateBranchSettings(_repo(ref)));
 final loadPaymentMethodsUseCaseProvider =

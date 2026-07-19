@@ -62,6 +62,16 @@ class BranchRouterState extends ChangeNotifier {
     _autoSelected = true;
     notifyListeners();
   }
+
+  /// Manual "Switch branch": re-arm selection so the router's needsSelection
+  /// redirect sends the user to /branch-select again. Only meaningful with more
+  /// than one branch (nothing to switch between otherwise).
+  void reopenSelection() {
+    if (_count > 1 && _autoSelected) {
+      _autoSelected = false;
+      notifyListeners();
+    }
+  }
 }
 
 class UserBranchesController extends Notifier<AsyncValue<List<Branch>>> {

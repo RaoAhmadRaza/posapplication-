@@ -7,6 +7,7 @@ import '../../../../core/design/widgets/app_button.dart';
 import '../../../../core/design/widgets/app_card.dart';
 import '../../../../core/design/widgets/app_inline_banner.dart';
 import '../../../../core/design/widgets/app_text_field.dart';
+import '../../../auth/presentation/controllers/branch_controller.dart';
 import '../../../auth/presentation/controllers/permission_controller.dart';
 import '../../domain/entities/branch_config.dart';
 import '../../domain/failures/settings_failure.dart';
@@ -132,12 +133,121 @@ class BranchesPage extends ConsumerWidget {
     timezone.dispose();
   }
 
+  Future<void> _openCreate(BuildContext context, WidgetRef ref) async {
+    final name = TextEditingController();
+    final city = TextEditingController();
+    final country = TextEditingController(text: 'Pakistan');
+    final currency = TextEditingController(text: 'PKR');
+    final timezone = TextEditingController(text: 'Asia/Karachi');
+    var saving = false;
+    String? error;
+
+    await showModalBottomSheet<void>(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: AppColors.background,
+      builder: (sheetContext) => Padding(
+        padding: EdgeInsets.only(
+          left: AppSpacing.screenPadding,
+          right: AppSpacing.screenPadding,
+          top: AppSpacing.lg,
+          bottom: MediaQuery.of(sheetContext).viewInsets.bottom + AppSpacing.lg,
+        ),
+        child: StatefulBuilder(
+          builder: (builderContext, setSheetState) => Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              Text('New branch', style: AppTypography.title2),
+              const SizedBox(height: AppSpacing.lg),
+              AppTextField(
+                controller: name,
+                label: 'Name',
+                prefixIcon: Icons.store_outlined,
+              ),
+              const SizedBox(height: AppSpacing.md),
+              AppTextField(
+                controller: city,
+                label: 'City',
+                prefixIcon: Icons.location_city_outlined,
+              ),
+              const SizedBox(height: AppSpacing.md),
+              AppTextField(
+                controller: country,
+                label: 'Country',
+                prefixIcon: Icons.public_outlined,
+              ),
+              const SizedBox(height: AppSpacing.md),
+              AppTextField(
+                controller: currency,
+                label: 'Currency',
+                prefixIcon: Icons.payments_outlined,
+              ),
+              const SizedBox(height: AppSpacing.md),
+              AppTextField(
+                controller: timezone,
+                label: 'Timezone',
+                prefixIcon: Icons.schedule_outlined,
+              ),
+              if (error != null) ...[
+                const SizedBox(height: AppSpacing.md),
+                AppInlineBanner(message: error!, type: BannerType.error),
+              ],
+              const SizedBox(height: AppSpacing.lg),
+              AppButton(
+                label: 'Create branch',
+                loading: saving,
+                fullWidth: true,
+                onPressed: saving
+                    ? null
+                    : () async {
+                        if (name.text.trim().isEmpty) {
+                          setSheetState(() => error = 'Name is required.');
+                          return;
+                        }
+                        setSheetState(() {
+                          saving = true;
+                          error = null;
+                        });
+                        final failure = await ref
+                            .read(branchesProvider.notifier)
+                            .createBranch(
+                              name: name.text.trim(),
+                              city: city.text.trim(),
+                              country: country.text.trim(),
+                              currency: currency.text.trim(),
+                              timezone: timezone.text.trim(),
+                            );
+                        if (!builderContext.mounted) return;
+                        setSheetState(() => saving = false);
+                        if (failure == null) {
+                          Navigator.of(builderContext).pop();
+                        } else {
+                          setSheetState(() => error = failure.message);
+                        }
+                      },
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+
+    name.dispose();
+    city.dispose();
+    country.dispose();
+    currency.dispose();
+    timezone.dispose();
+  }
+
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final state = ref.watch(branchesProvider);
-    final canEdit =
-        ref.watch(permissionMatrixProvider).value?.contains('settings:update') ??
-            false;
+    final matrix = ref.watch(permissionMatrixProvider).value;
+    final canEdit = matrix?.contains('settings:update') ?? false;
+    final canCreate = matrix?.contains('settings:create') ?? false;
+    final branchCount =
+        ref.watch(userBranchesProvider).value?.length ?? 0;
 
     return Scaffold(
       backgroundColor: AppColors.background,
@@ -145,7 +255,27 @@ class BranchesPage extends ConsumerWidget {
         backgroundColor: AppColors.background,
         surfaceTintColor: AppColors.background,
         title: Text('Branches', style: AppTypography.headline),
+        actions: [
+          // Manual entry to the branch selector (only meaningful with >1 branch;
+          // re-arms the router's needsSelection redirect to /branch-select).
+          if (branchCount > 1)
+            IconButton(
+              icon: const Icon(Icons.swap_horiz, color: AppColors.accent),
+              tooltip: 'Switch branch',
+              onPressed: () =>
+                  BranchRouterState.instance.reopenSelection(),
+            ),
+        ],
       ),
+      floatingActionButton: canCreate
+          ? FloatingActionButton.extended(
+              onPressed: () => _openCreate(context, ref),
+              backgroundColor: AppColors.accent,
+              icon: const Icon(Icons.add, color: Colors.white),
+              label: const Text('New branch',
+                  style: TextStyle(color: Colors.white)),
+            )
+          : null,
       body: SafeArea(
         child: state.when(
           loading: () => const Center(child: CircularProgressIndicator()),

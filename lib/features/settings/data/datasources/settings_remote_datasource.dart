@@ -71,6 +71,22 @@ class SettingsRemoteDataSource {
     }) as Map<String, dynamic>;
   }
 
+  Future<Map<String, dynamic>> createBranch({
+    required String name,
+    String? city,
+    String? country,
+    String? currency,
+    String? timezone,
+  }) async {
+    return await _client.rpc('create_branch', params: {
+      'p_name': name,
+      'p_city': city,
+      'p_country': country,
+      'p_currency': currency,
+      'p_timezone': timezone,
+    }) as Map<String, dynamic>;
+  }
+
   // ---- payment methods (direct CRUD, RLS settings:update) ----
   static const _pmCols =
       'id, code, name, is_active, is_system, requires_reference, sort_order, bank_account_id';

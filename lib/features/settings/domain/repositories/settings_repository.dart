@@ -22,6 +22,13 @@ abstract class SettingsRepository {
     String? timezone,
     bool? isActive,
   });
+  Future<SettingsFailure?> createBranch({
+    required String name,
+    String? city,
+    String? country,
+    String? currency,
+    String? timezone,
+  });
 
   /// Payment methods, each with its resolved GL account code populated.
   Future<(List<PaymentMethodConfig>, SettingsFailure?)> loadPaymentMethods();
