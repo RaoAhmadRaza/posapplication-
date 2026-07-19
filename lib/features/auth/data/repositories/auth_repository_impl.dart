@@ -49,6 +49,13 @@ class AuthRepositoryImpl implements AuthRepository {
       if (msg.contains('expired') || msg.contains('session')) {
         return SessionExpiredFailure();
       }
+      if (msg.contains('weak_password') ||
+          msg.contains('password should be at least') ||
+          msg.contains('password should contain') ||
+          msg.contains('password is too short') ||
+          msg.contains('at least 6 characters')) {
+        return WeakPasswordFailure();
+      }
       return UnknownFailure(e.message);
     }
     return UnknownFailure(e.toString());
