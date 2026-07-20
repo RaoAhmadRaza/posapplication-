@@ -7,6 +7,7 @@ import '../../../../core/design/widgets/app_inline_banner.dart';
 import '../../../../core/design/widgets/responsive_form_scaffold.dart';
 import '../../../../core/services/pin_service.dart';
 import '../../../../core/state/app_flow_state.dart';
+import '../../../../core/supabase.dart';
 import '../../../../core/widgets/pin_pad.dart';
 
 class PinLockScreen extends StatefulWidget {
@@ -17,6 +18,8 @@ class PinLockScreen extends StatefulWidget {
 }
 
 class _PinLockScreenState extends State<PinLockScreen> {
+  static const _maxAttempts = 3;
+
   final _localAuth = LocalAuthentication();
   String? _errorMessage;
   int _attempts = 0;
@@ -69,18 +72,46 @@ class _PinLockScreenState extends State<PinLockScreen> {
     if (!mounted) return;
 
     if (ok) {
+      _attempts = 0;
       PinLockState.instance.unlock();
     } else {
       _attempts++;
+      if (_attempts >= _maxAttempts) {
+        HapticFeedback.heavyImpact();
+        await _lockOut();
+        return;
+      }
       setState(() {
         _verifying = false;
-        _errorMessage = 'Incorrect PIN. ${3 - _attempts} attempts remaining.';
+        _errorMessage =
+            'Incorrect PIN. ${_maxAttempts - _attempts} attempts remaining.';
       });
-      if (_attempts >= 3) {
-        HapticFeedback.heavyImpact();
-        PinService.instance.clearPin();
-        PinLockState.instance.unlock();
-      }
+    }
+  }
+
+  /// Too many wrong PINs. A wrong PIN must NEVER grant app access — sign the
+  /// user out and force a full re-login (email + password). We do NOT call
+  /// PinLockState.unlock(): that would drop the guesser straight into the
+  /// dashboard on the victim's live session (brute-force bypass).
+  Future<void> _lockOut() async {
+    setState(() {
+      _verifying = true;
+      _errorMessage = null;
+    });
+    try {
+      // SIGNED_OUT fires -> router resetUserScopedState() clears the lock and
+      // the redirect sends the now-logged-out user to /login. signOut() clears
+      // the local session even if the server revoke can't be reached.
+      await supabase.auth.signOut();
+    } on Object catch (_) {
+      // Never fall through to access. Keep the screen locked and let the user
+      // retry the sign-out rather than reaching the app.
+      if (!mounted) return;
+      setState(() {
+        _verifying = false;
+        _attempts = 0;
+        _errorMessage = 'Too many attempts. Please sign in again.';
+      });
     }
   }
 
