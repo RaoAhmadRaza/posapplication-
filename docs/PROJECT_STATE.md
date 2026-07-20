@@ -61,6 +61,30 @@ scratchpad — reference only, NOT importable). Frontend-only; backend/routing/c
   0 new across all 17 screens + shared widgets. VERIFY OWED: on-device visual eyeball of the post-auth
   screens (agent env can't screenshot; Login already eyeballed OK on iOS sim).
 
+## Auth UX pass — Phases 1–4 DONE (2026-07-20)
+Interaction/UX depth pass on top of the LUMINA reskin (plan: friction→feedback→flow→a11y; delight
+Phase 5 deferred). Frontend + minimal flow/routing (user-approved exception to UI-only guardrail).
+- **P1 friction:** AppTextField gained autofocus/autofillHints/enabled; AppOtpField gained autofocus
+  (default) + controller/focusNode. Every auth form autofocuses + wires OS autofill (username/email/
+  password/newPassword/oneTimeCode). Login: email-format validation, **removed dead "Remember me"**.
+  Signup: double-submit guard + email validation. OTP + MFA-challenge: wrong code auto-clears + refocus.
+  MFA-enroll: copy-secret button + unified on AppOtpField.
+- **P2 feedback:** new AppHaptics, AppToast (showAppToast), AppConfirmDialog (showAppConfirm), animated
+  AppInlineBanner; AppButton fires a selection haptic. Destructive actions now **confirm** (device
+  revoke, session sign-out, account log-out); success **toasts** on reset / pin-setup / mfa-enroll.
+- **P3 flow:** sign-out escape ("Not you? Sign out") on branch-select / workspace-init / mfa-challenge
+  (were no-escape dead-ends); removed dead "Use PIN instead" on login; MFA "another method" now signs
+  out (was self-loop); branch-select Retry + neutral empty + per-tile spinner; mfa-challenge verify
+  spinner + start-failure Retry; workspace-init wrapped in AuthHeroScaffold (desktop hero continuity)
+  + removed PII debugPrint; /otp extra-cast guarded; mfa-challenge route now cross-fades; raw
+  error.toString() fallbacks → generic message.
+- **P4 a11y:** Semantics on AppButton / AppCheckbox / PinPad keys / settings rows; AppInlineBanner is a
+  liveRegion; password eye-toggle is a 44×44 target; **ThemeController now persists** (shared_preferences)
+  so dark mode survives cold start.
+- New design-system files: app_haptics.dart, widgets/app_toast.dart, widgets/app_confirm_dialog.dart.
+  GATE: full flutter analyze = 13 pre-existing infos, 0 new; macOS boots clean.
+- **Phase 5 (delight) deferred:** hero aurora motion, success checkmark, list skeletons.
+
 ## Auth — COMPLETE
 All flows end-to-end. 33+ routes, auth redirect, StatefulShellRoute bottom nav. RBAC, branch selection, PIN lock +
 biometric, TOTP MFA (clean-arch, typed AuthFailure — retry banner not lockout), device/session/security management.
