@@ -41,6 +41,11 @@ Recovery-flow fix (2026-07-20, TC-AUTH-OTP-002/RESET-001): recovery OTP verify s
 verifyOTP(recovery) creates a session whose onAuthStateChange ran resetUserScopedState() → RecoveryState.reset(),
 clobbering codeVerified. Fix: router uid-change handler skips the reset while RecoveryState.isRecovering; reset success
 now signOut()s the transient recovery session → lands on /login. Device re-run owed. Detail in DECISIONS.
+PIN brute-force fix (2026-07-20, TC-AUTH-PIN-002, P0 SECURITY): two bypasses closed. (1) 3 wrong PINs called
+PinLockState.unlock() → wrong PIN dropped the guesser into /dashboard on the victim's live session; now _lockOut()
+signOut()s → /login (never unlock). (2) PinLockState.locked is in-memory + only armed on resume, so a force-quit +
+relaunch skipped /pin-lock entirely; main.dart now arms the lock synchronously on cold start when a restored session
+has a local PIN hash. Device re-run owed. Detail in DECISIONS.
 
 ## Staff-onboarding (QR) — Phases 1–9 DONE, feature COMPLETE (2026-07-18; detail in DECISIONS)
 Runbook v3. Phase 1 (security, ships alone): closed CRITICAL self-role-escalation — "users update own" RLS now has a
