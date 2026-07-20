@@ -3,7 +3,6 @@ import '../app_colors.dart';
 import '../app_motion.dart';
 import '../app_radius.dart';
 import '../app_typography.dart';
-import '../clay.dart';
 
 class AppTextField extends StatefulWidget {
   final TextEditingController controller;
@@ -80,7 +79,12 @@ class _AppTextFieldState extends State<AppTextField> {
             cursorColor: lum.accent,
             decoration: InputDecoration(
               isCollapsed: true,
+              // Theme sets filled:true/fillColor:surface2 — kill it here or the
+              // TextField paints its own grey pill inside our well (nested box).
+              filled: false,
               border: InputBorder.none,
+              enabledBorder: InputBorder.none,
+              focusedBorder: InputBorder.none,
               hintText: widget.hint,
               hintStyle:
                   AppTypography.fieldHint.copyWith(color: lum.textTertiary),
@@ -110,42 +114,36 @@ class _AppTextFieldState extends State<AppTextField> {
       ],
     );
 
-    // Focused / error → filled surface + coloured ring + halo.
-    // Rest → clay inset well.
-    final Widget well;
-    if (focused || hasError) {
-      final ring = hasError ? lum.danger : lum.accent;
-      well = AnimatedContainer(
-        duration: AppMotion.fast,
-        height: 50,
-        padding: const EdgeInsets.symmetric(horizontal: 14),
-        decoration: BoxDecoration(
-          color: lum.surface,
-          borderRadius: BorderRadius.circular(AppRadius.md),
-          border: Border.all(color: ring, width: 1.5),
-          boxShadow: focused
-              ? [
-                  BoxShadow(
-                    color: lum.accent.withValues(alpha: lum.isDark ? 0.35 : 0.18),
-                    blurRadius: 6,
-                    spreadRadius: 1,
-                  ),
-                ]
-              : null,
+    // ONE stable container — never swap widget type on focus, or the TextField
+    // gets reparented and remounted, dropping the first tap (double-click bug).
+    // Rest → flat grey fill, no border. Focused/error → white + coloured ring
+    // + halo. Border width stays constant (transparent when at rest) so the
+    // content never shifts.
+    final active = focused || hasError;
+    final ring = hasError ? lum.danger : lum.accent;
+    final well = AnimatedContainer(
+      duration: AppMotion.fast,
+      height: 50,
+      padding: const EdgeInsets.symmetric(horizontal: 14),
+      decoration: BoxDecoration(
+        color: active ? lum.surface : lum.surface2,
+        borderRadius: BorderRadius.circular(AppRadius.md),
+        border: Border.all(
+          color: active ? ring : Colors.transparent,
+          width: 1.5,
         ),
-        child: row,
-      );
-    } else {
-      well = ClayContainer(
-        variant: ClayVariant.inset,
-        color: lum.surface2,
-        borderRadius: AppRadius.md,
-        isDark: lum.isDark,
-        height: 50,
-        padding: const EdgeInsets.symmetric(horizontal: 14),
-        child: row,
-      );
-    }
+        boxShadow: focused
+            ? [
+                BoxShadow(
+                  color: lum.accent.withValues(alpha: lum.isDark ? 0.35 : 0.18),
+                  blurRadius: 6,
+                  spreadRadius: 1,
+                ),
+              ]
+            : null,
+      ),
+      child: row,
+    );
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
