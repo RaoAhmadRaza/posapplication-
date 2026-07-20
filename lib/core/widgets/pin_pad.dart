@@ -4,6 +4,7 @@ import '../design/app_colors.dart';
 import '../design/app_radius.dart';
 import '../design/app_spacing.dart';
 import '../design/app_typography.dart';
+import '../design/clay.dart';
 
 class PinPad extends StatelessWidget {
   const PinPad({
@@ -92,16 +93,25 @@ class _DotRow extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final lum = context.lum;
     return Row(
       mainAxisSize: MainAxisSize.min,
       children: List.generate(length, (i) {
         return Container(
-          width: 16,
-          height: 16,
+          width: 14,
+          height: 14,
           margin: const EdgeInsets.symmetric(horizontal: AppSpacing.sm),
           decoration: BoxDecoration(
             shape: BoxShape.circle,
-            color: i < filled ? AppColors.accent : AppColors.separator,
+            color: i < filled ? lum.accent : lum.surface2,
+            boxShadow: i < filled
+                ? [
+                    BoxShadow(
+                      color: lum.accent.withValues(alpha: 0.4),
+                      blurRadius: 6,
+                    ),
+                  ]
+                : null,
           ),
         );
       }),
@@ -137,29 +147,35 @@ class _KeyButton extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final lum = context.lum;
     final isEmpty = label.isEmpty;
     final isDelete = label == '<';
 
+    final child = Center(
+      child: isDelete
+          ? Icon(Icons.backspace_outlined, color: lum.textPrimary, size: 24)
+          : Text(
+              label,
+              style: AppTypography.title2.copyWith(color: lum.textPrimary),
+            ),
+    );
+
+    if (isEmpty) {
+      return const SizedBox(width: 72 + AppSpacing.xs * 2, height: 56);
+    }
+
     return GestureDetector(
-      onTap: isEmpty ? null : onTap,
+      onTap: onTap,
       child: Container(
-        width: 72,
-        height: 56,
         margin: const EdgeInsets.symmetric(horizontal: AppSpacing.xs),
-        decoration: BoxDecoration(
-          color: isEmpty ? Colors.transparent : AppColors.fieldFill,
-          borderRadius: BorderRadius.circular(AppRadius.button),
-        ),
-        child: Center(
-          child: isDelete
-              ? Icon(Icons.backspace_outlined,
-                  color: AppColors.textPrimary, size: 24)
-              : Text(
-                  label,
-                  style: AppTypography.title2.copyWith(
-                    color: isEmpty ? Colors.transparent : AppColors.textPrimary,
-                  ),
-                ),
+        child: ClayContainer(
+          variant: ClayVariant.soft,
+          color: lum.surface,
+          borderRadius: AppRadius.md,
+          isDark: lum.isDark,
+          width: 72,
+          height: 56,
+          child: child,
         ),
       ),
     );
