@@ -185,6 +185,12 @@ String? _redirect(BuildContext context, GoRouterState state) {
   final loggedIn = supabase.auth.currentSession != null;
   final recovery = RecoveryState.instance.stage;
 
+  // Brand splash on cold start — hold on /splash until it has shown once, then
+  // fall through to the normal gates. A live recovery deep-link skips it.
+  if (!SplashState.instance.shown && recovery == RecoveryStage.none) {
+    return loc == '/splash' ? null : '/splash';
+  }
+
   if (recovery == RecoveryStage.codeVerified) {
     return loc == '/reset' ? null : '/reset';
   }
@@ -233,6 +239,7 @@ final appRouter = GoRouter(
     _GoRouterRefreshStream(),
     RecoveryState.instance,
     BranchRouterState.instance,
+    SplashState.instance,
     EnvCheckState.instance,
     WorkspaceInitState.instance,
     PinLockState.instance,

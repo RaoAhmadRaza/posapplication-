@@ -19,6 +19,23 @@ class EnvCheckState extends ChangeNotifier {
   }
 }
 
+/// Cold-start brand splash. Held on `/splash` until [shown] flips true (the
+/// splash page sets it after a brief display), then the router proceeds to the
+/// env-check gate. Lives for the app's lifetime — shown once per launch.
+class SplashState extends ChangeNotifier {
+  static final instance = SplashState();
+
+  bool _shown = false;
+  bool get shown => _shown;
+
+  set shown(bool v) {
+    if (_shown != v) {
+      _shown = v;
+      notifyListeners();
+    }
+  }
+}
+
 class WorkspaceInitState extends ChangeNotifier {
   static final instance = WorkspaceInitState();
 
