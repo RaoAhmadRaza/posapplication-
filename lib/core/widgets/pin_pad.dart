@@ -164,7 +164,10 @@ class _KeyButton extends StatelessWidget {
       return const SizedBox(width: 72 + AppSpacing.xs * 2, height: 56);
     }
 
-    return GestureDetector(
+    return Semantics(
+      button: true,
+      label: isDelete ? 'Delete' : label,
+      child: GestureDetector(
       onTap: onTap,
       child: Container(
         margin: const EdgeInsets.symmetric(horizontal: AppSpacing.xs),
@@ -178,6 +181,7 @@ class _KeyButton extends StatelessWidget {
           child: child,
         ),
       ),
+    ),
     );
   }
 }

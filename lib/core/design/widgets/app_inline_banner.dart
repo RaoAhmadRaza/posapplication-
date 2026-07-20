@@ -34,7 +34,7 @@ class AppInlineBanner extends StatelessWidget {
       BannerType.info => (lum.accentSoft, lum.accent, Icons.info_outline),
     };
 
-    return Container(
+    final banner = Container(
       padding: const EdgeInsets.symmetric(
         horizontal: AppSpacing.md,
         vertical: 10,
@@ -55,6 +55,27 @@ class AppInlineBanner extends StatelessWidget {
             ),
           ),
         ],
+      ),
+    );
+
+    // Fade + slide-in on appearance so errors/success don't pop abruptly.
+    // liveRegion so screen readers announce the message when it appears.
+    return Semantics(
+      liveRegion: true,
+      container: true,
+      child: TweenAnimationBuilder<double>(
+        key: ValueKey(message),
+        duration: const Duration(milliseconds: 220),
+        curve: Curves.easeOutCubic,
+        tween: Tween(begin: 0, end: 1),
+        builder: (context, t, child) => Opacity(
+          opacity: t,
+          child: Transform.translate(
+            offset: Offset(0, (1 - t) * -6),
+            child: child,
+          ),
+        ),
+        child: banner,
       ),
     );
   }

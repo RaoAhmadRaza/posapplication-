@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import '../app_colors.dart';
+import '../app_haptics.dart';
 import '../app_motion.dart';
 import '../app_radius.dart';
 import '../app_typography.dart';
@@ -107,19 +108,29 @@ class _AppButtonState extends State<AppButton> {
       );
     }
 
-    return GestureDetector(
-      onTapDown: _enabled ? (_) => setState(() => _pressed = true) : null,
-      onTapUp: _enabled ? (_) => setState(() => _pressed = false) : null,
-      onTapCancel: _enabled ? () => setState(() => _pressed = false) : null,
-      onTap: _enabled ? widget.onPressed : null,
-      child: AnimatedScale(
-        scale: _pressed ? 0.97 : 1.0,
-        duration: AppMotion.fast,
-        curve: AppMotion.curve,
-        child: AnimatedOpacity(
-          opacity: _enabled ? 1.0 : 0.5,
+    return Semantics(
+      button: true,
+      enabled: _enabled,
+      label: widget.loading ? '${widget.label}, loading' : widget.label,
+      child: GestureDetector(
+        onTapDown: _enabled ? (_) => setState(() => _pressed = true) : null,
+        onTapUp: _enabled ? (_) => setState(() => _pressed = false) : null,
+        onTapCancel: _enabled ? () => setState(() => _pressed = false) : null,
+        onTap: _enabled
+            ? () {
+                AppHaptics.selection();
+                widget.onPressed!();
+              }
+            : null,
+        child: AnimatedScale(
+          scale: _pressed ? 0.97 : 1.0,
           duration: AppMotion.fast,
-          child: surface,
+          curve: AppMotion.curve,
+          child: AnimatedOpacity(
+            opacity: _enabled ? 1.0 : 0.5,
+            duration: AppMotion.fast,
+            child: surface,
+          ),
         ),
       ),
     );

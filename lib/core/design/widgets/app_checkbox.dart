@@ -20,7 +20,10 @@ class AppCheckbox extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final lum = context.lum;
-    return GestureDetector(
+    return Semantics(
+      checked: value,
+      label: label,
+      child: GestureDetector(
       behavior: HitTestBehavior.opaque,
       onTap: () => onChanged(!value),
       child: Row(
@@ -61,6 +64,7 @@ class AppCheckbox extends StatelessWidget {
           ],
         ],
       ),
+    ),
     );
   }
 }
