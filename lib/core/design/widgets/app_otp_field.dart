@@ -19,45 +19,31 @@ class AppOtpField extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final defaultPinTheme = PinTheme(
-      width: 48,
-      height: 56,
-      textStyle: AppTypography.headline,
-      decoration: BoxDecoration(
-        color: AppColors.fieldFill,
-        borderRadius: BorderRadius.circular(AppRadius.field),
-        border: Border.all(color: AppColors.separator, width: 0.5),
-      ),
+    final lum = context.lum;
+    final textStyle = AppTypography.monoLarge.copyWith(
+      fontSize: 22,
+      color: lum.textPrimary,
     );
 
-    final focusedPinTheme = PinTheme(
-      width: 48,
-      height: 56,
-      textStyle: AppTypography.headline,
-      decoration: BoxDecoration(
-        color: AppColors.fieldFill,
-        borderRadius: BorderRadius.circular(AppRadius.field),
-        border: Border.all(color: AppColors.accent, width: 1.5),
-      ),
-    );
+    PinTheme cell({required Color border, double width = 1}) => PinTheme(
+          width: 48,
+          height: 56,
+          textStyle: textStyle,
+          decoration: BoxDecoration(
+            color: lum.surface2,
+            borderRadius: BorderRadius.circular(AppRadius.md),
+            border: Border.all(color: border, width: width),
+          ),
+        );
 
     return Pinput(
       length: length,
       onCompleted: onCompleted,
       onChanged: onChanged,
-      defaultPinTheme: defaultPinTheme,
-      focusedPinTheme: focusedPinTheme,
-      submittedPinTheme: defaultPinTheme,
-      errorPinTheme: PinTheme(
-        width: 48,
-        height: 56,
-        textStyle: AppTypography.headline,
-        decoration: BoxDecoration(
-          color: AppColors.fieldFill,
-          borderRadius: BorderRadius.circular(AppRadius.field),
-          border: Border.all(color: AppColors.destructive, width: 1.5),
-        ),
-      ),
+      defaultPinTheme: cell(border: lum.hairline),
+      focusedPinTheme: cell(border: lum.accent, width: 1.5),
+      submittedPinTheme: cell(border: lum.hairline),
+      errorPinTheme: cell(border: lum.danger, width: 1.5),
       separatorBuilder: (_) => const SizedBox(width: AppSpacing.sm),
       keyboardType: TextInputType.number,
       mainAxisAlignment: MainAxisAlignment.center,
