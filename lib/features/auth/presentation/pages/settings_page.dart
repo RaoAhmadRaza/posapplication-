@@ -9,6 +9,7 @@ import '../../../../core/design/app_typography.dart';
 import '../../../../core/design/widgets/app_button.dart';
 import '../../../../core/design/widgets/app_card.dart';
 import '../../../../core/design/widgets/app_inline_banner.dart';
+import '../../../../core/state/theme_controller.dart';
 import '../../domain/usecases/get_enrolled_factor_id.dart';
 import '../../../../core/services/pin_service.dart';
 import '../../../../core/widgets/permission_gate.dart';
@@ -20,8 +21,9 @@ class SettingsPage extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
+    final lum = context.lum;
     return Scaffold(
-      backgroundColor: AppColors.background,
+      backgroundColor: lum.paper,
       body: SafeArea(
         child: SingleChildScrollView(
           padding: const EdgeInsets.symmetric(
@@ -31,9 +33,16 @@ class SettingsPage extends ConsumerWidget {
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
               const SizedBox(height: AppSpacing.xl),
-              Text('Settings', style: AppTypography.largeTitle),
+              Text(
+                'Settings',
+                style: AppTypography.largeTitle.copyWith(color: lum.textPrimary),
+              ),
               const SizedBox(height: AppSpacing.xxl),
               const _ProfileSection(),
+              const SizedBox(height: AppSpacing.lg),
+              _SectionLabel('Appearance'),
+              const SizedBox(height: AppSpacing.sm),
+              const _AppearanceSection(),
               const SizedBox(height: AppSpacing.lg),
               _SectionLabel('Security'),
               const SizedBox(height: AppSpacing.sm),
@@ -74,8 +83,8 @@ class _SectionLabel extends StatelessWidget {
       padding: const EdgeInsets.only(bottom: AppSpacing.xs),
       child: Text(
         title.toUpperCase(),
-        style: AppTypography.footnote.copyWith(
-          color: AppColors.textMuted,
+        style: AppTypography.caption.copyWith(
+          color: context.lum.textTertiary,
           fontWeight: FontWeight.w600,
           letterSpacing: 0.5,
         ),
@@ -89,6 +98,7 @@ class _ProfileSection extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
+    final lum = context.lum;
     final profileState = ref.watch(profileControllerProvider);
 
     if (profileState.isLoading) {
@@ -118,7 +128,7 @@ class _ProfileSection extends ConsumerWidget {
                 width: 56,
                 height: 56,
                 decoration: BoxDecoration(
-                  color: AppColors.accent.withValues(alpha: 0.1),
+                  color: lum.accentSoft,
                   borderRadius: BorderRadius.circular(AppRadius.chip),
                 ),
                 child: Center(
@@ -126,7 +136,7 @@ class _ProfileSection extends ConsumerWidget {
                     profile.fullName.isNotEmpty
                         ? profile.fullName[0].toUpperCase()
                         : '?',
-                    style: AppTypography.title2.copyWith(color: AppColors.accent),
+                    style: AppTypography.title2.copyWith(color: lum.accent),
                   ),
                 ),
               ),
@@ -135,10 +145,15 @@ class _ProfileSection extends ConsumerWidget {
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Text(profile.fullName, style: AppTypography.headline),
+                    Text(
+                      profile.fullName,
+                      style: AppTypography.headline
+                          .copyWith(color: lum.textPrimary),
+                    ),
                     Text(
                       profile.email,
-                      style: AppTypography.footnote.copyWith(color: AppColors.textMuted),
+                      style: AppTypography.footnote
+                          .copyWith(color: lum.textSecondary),
                     ),
                   ],
                 ),
@@ -147,7 +162,7 @@ class _ProfileSection extends ConsumerWidget {
           ),
           if (profile.roleName != null || profile.tenantName != null) ...[
             const SizedBox(height: AppSpacing.base),
-            const Divider(color: AppColors.separator, height: 1),
+            Divider(color: lum.hairline, height: 1),
             const SizedBox(height: AppSpacing.base),
             if (profile.roleName != null)
               _ProfileDetail(icon: Icons.badge_outlined, label: 'Role', value: profile.roleName!),
@@ -170,16 +185,46 @@ class _ProfileDetail extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final lum = context.lum;
     return Row(
       children: [
-        Icon(icon, size: 18, color: AppColors.textMuted),
+        Icon(icon, size: 18, color: lum.textSecondary),
         const SizedBox(width: AppSpacing.sm),
         Text(
           '$label: ',
-          style: AppTypography.subhead.copyWith(color: AppColors.textMuted),
+          style: AppTypography.subhead.copyWith(color: lum.textSecondary),
         ),
-        Text(value, style: AppTypography.subhead),
+        Text(
+          value,
+          style: AppTypography.subhead.copyWith(color: lum.textPrimary),
+        ),
       ],
+    );
+  }
+}
+
+/// Light/dark ("Counter mode") toggle wired to [ThemeController].
+class _AppearanceSection extends StatelessWidget {
+  const _AppearanceSection();
+
+  @override
+  Widget build(BuildContext context) {
+    final lum = context.lum;
+    return AppCard(
+      child: _SettingsRow(
+        icon: Icons.dark_mode_outlined,
+        title: 'Dark mode',
+        subtitle: 'Switch to the Counter (dark) theme.',
+        trailing: ValueListenableBuilder<ThemeMode>(
+          valueListenable: ThemeController.mode,
+          builder: (context, mode, _) => Switch(
+            value: mode == ThemeMode.dark,
+            activeTrackColor: lum.accent,
+            onChanged: (on) =>
+                ThemeController.set(on ? ThemeMode.dark : ThemeMode.light),
+          ),
+        ),
+      ),
     );
   }
 }
@@ -229,6 +274,7 @@ class _SecuritySectionState extends ConsumerState<_SecuritySection> {
 
   @override
   Widget build(BuildContext context) {
+    final lum = context.lum;
     if (!_checked) {
       return AppCard(
         child: const Padding(
@@ -245,7 +291,7 @@ class _SecuritySectionState extends ConsumerState<_SecuritySection> {
             icon: Icons.lock_outline,
             title: _hasPin ? 'Change PIN' : 'Set PIN',
             subtitle: _hasPin ? 'Update your quick-login PIN.' : 'Add a 4-digit PIN for quick login.',
-            trailing: const Icon(Icons.chevron_right, color: AppColors.textMuted),
+            trailing: Icon(Icons.chevron_right, color: lum.textTertiary),
             onTap: () => context.push('/pin-setup'),
           ),
           _SettingsRow(
@@ -258,7 +304,7 @@ class _SecuritySectionState extends ConsumerState<_SecuritySection> {
                     : 'Set a PIN first.',
             trailing: Switch(
               value: _biometricsOn,
-              activeTrackColor: AppColors.accent,
+              activeTrackColor: lum.accent,
               onChanged: _showBiometrics ? _toggleBiometrics : null,
             ),
           ),
@@ -266,7 +312,7 @@ class _SecuritySectionState extends ConsumerState<_SecuritySection> {
             icon: _hasMfa ? Icons.phone_android : Icons.security_outlined,
             title: _hasMfa ? 'Authenticator app' : 'Set up authenticator',
             subtitle: _hasMfa ? 'Two-factor authentication is active.' : 'Add extra security to your account.',
-            trailing: const Icon(Icons.chevron_right, color: AppColors.textMuted),
+            trailing: Icon(Icons.chevron_right, color: lum.textTertiary),
             onTap: () => context.push('/mfa-enroll'),
           ),
         ],
@@ -280,6 +326,7 @@ class _AdminSection extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final lum = context.lum;
     return AppCard(
       child: Column(
         children: [
@@ -290,7 +337,7 @@ class _AdminSection extends StatelessWidget {
               icon: Icons.devices,
               title: 'Trusted devices',
               subtitle: 'Manage registered devices.',
-              trailing: const Icon(Icons.chevron_right, color: AppColors.textMuted),
+              trailing: Icon(Icons.chevron_right, color: lum.textTertiary),
               onTap: () => context.push('/devices'),
             ),
           ),
@@ -303,14 +350,14 @@ class _AdminSection extends StatelessWidget {
                   icon: Icons.people_outline,
                   title: 'Active sessions',
                   subtitle: 'View and manage user sessions.',
-                  trailing: const Icon(Icons.chevron_right, color: AppColors.textMuted),
+                  trailing: Icon(Icons.chevron_right, color: lum.textTertiary),
                   onTap: () => context.push('/sessions'),
                 ),
                 _SettingsRow(
                   icon: Icons.history,
                   title: 'Security activity log',
                   subtitle: 'Recent account and device activity.',
-                  trailing: const Icon(Icons.chevron_right, color: AppColors.textMuted),
+                  trailing: Icon(Icons.chevron_right, color: lum.textTertiary),
                   onTap: () => context.push('/security-logs'),
                 ),
               ],
@@ -327,6 +374,7 @@ class _ConfigurationSection extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final lum = context.lum;
     return AppCard(
       child: PermissionGate(
         module: 'accounting',
@@ -335,8 +383,7 @@ class _ConfigurationSection extends StatelessWidget {
           icon: Icons.percent,
           title: 'Tax rules',
           subtitle: 'Rates applied as defaults on products and sales.',
-          trailing:
-              const Icon(Icons.chevron_right, color: AppColors.textMuted),
+          trailing: Icon(Icons.chevron_right, color: lum.textTertiary),
           onTap: () => context.push('/accounting/tax-rules'),
         ),
       ),
@@ -361,9 +408,10 @@ class _SettingsRow extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final lum = context.lum;
     return Column(
       children: [
-        Divider(color: AppColors.separator, height: 1),
+        Divider(color: lum.hairline, height: 1),
         GestureDetector(
           onTap: onTap,
           behavior: HitTestBehavior.opaque,
@@ -375,21 +423,26 @@ class _SettingsRow extends StatelessWidget {
                   width: 40,
                   height: 40,
                   decoration: BoxDecoration(
-                    color: AppColors.accent.withValues(alpha: 0.1),
-                    borderRadius: BorderRadius.circular(10),
+                    color: lum.accentSoft,
+                    borderRadius: BorderRadius.circular(AppRadius.sm),
                   ),
-                  child: Center(child: Icon(icon, color: AppColors.accent, size: 22)),
+                  child: Center(child: Icon(icon, color: lum.accent, size: 22)),
                 ),
                 const SizedBox(width: AppSpacing.md),
                 Expanded(
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      Text(title, style: AppTypography.headline),
+                      Text(
+                        title,
+                        style: AppTypography.headline
+                            .copyWith(color: lum.textPrimary),
+                      ),
                       const SizedBox(height: 2),
                       Text(
                         subtitle,
-                        style: AppTypography.footnote.copyWith(color: AppColors.textMuted),
+                        style: AppTypography.footnote
+                            .copyWith(color: lum.textSecondary),
                       ),
                     ],
                   ),
