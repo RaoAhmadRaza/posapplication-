@@ -5,7 +5,7 @@ import '../../../../core/design/app_spacing.dart';
 import '../../../../core/design/widgets/app_button.dart';
 import '../../../../core/design/widgets/app_inline_banner.dart';
 import '../../../../core/design/widgets/app_otp_field.dart';
-import '../../../../core/design/widgets/responsive_form_scaffold.dart';
+import '../../../../core/design/widgets/auth_hero_scaffold.dart';
 import '../../../../core/error/auth_failure.dart';
 import '../controllers/otp_controller.dart';
 
@@ -114,18 +114,18 @@ class _OtpPageState extends ConsumerState<OtpPage> {
     final otpState = ref.watch(otpControllerProvider);
     final disabled = otpState.isLoading || otpState.verifySucceeded;
 
-    return ResponsiveFormScaffold(
-      title: 'Check your email',
-      subtitle: widget.isRecovery
-          ? 'If an account exists for $_maskedEmail, we\'ve sent a code.'
-          : 'We sent a code to $_maskedEmail',
-      footer: AppButton(
-        label: 'Back',
-        variant: AppButtonVariant.plain,
-        onPressed: widget.isRecovery ? _back : () => context.go('/login'),
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.stretch,
+    return AuthHeroScaffold(
+      child: AuthFormCard(
+        title: 'Check your email',
+        subtitle: widget.isRecovery
+            ? 'If an account exists for $_maskedEmail, we\'ve sent a code.'
+            : 'We sent a code to $_maskedEmail',
+        footer: AppButton(
+          label: 'Back',
+          variant: AppButtonVariant.plain,
+          onPressed: widget.isRecovery ? _back : () => context.go('/login'),
+          fullWidth: true,
+        ),
         children: [
           if (_successMessage != null) ...[
             AppInlineBanner(message: _successMessage!, type: BannerType.success),
@@ -146,6 +146,7 @@ class _OtpPageState extends ConsumerState<OtpPage> {
             label: 'Verify',
             loading: otpState.isLoading,
             onPressed: disabled ? null : _verify,
+            fullWidth: true,
           ),
           const SizedBox(height: AppSpacing.md),
           AppButton(
@@ -156,6 +157,7 @@ class _OtpPageState extends ConsumerState<OtpPage> {
             onPressed: otpState.cooldownSeconds > 0 || otpState.isLoading
                 ? null
                 : _resend,
+            fullWidth: true,
           ),
         ],
       ),
