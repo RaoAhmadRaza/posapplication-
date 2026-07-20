@@ -1,10 +1,12 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import '../../../../core/design/app_colors.dart';
+import '../../../../core/design/app_radius.dart';
 import '../../../../core/design/app_spacing.dart';
 import '../../../../core/design/app_typography.dart';
+import '../../../../core/design/clay.dart';
 import '../../../../core/design/widgets/app_inline_banner.dart';
 import '../../../../core/services/pin_service.dart';
-import '../../../../core/widgets/pin_pad.dart';
 
 class PinSetupScreen extends StatefulWidget {
   const PinSetupScreen({super.key});
@@ -44,51 +46,236 @@ class _PinSetupScreenState extends State<PinSetupScreen> {
 
   @override
   Widget build(BuildContext context) {
+    final lum = context.lum;
+
     return Scaffold(
-      backgroundColor: AppColors.background,
+      backgroundColor: lum.paper,
       appBar: AppBar(
-        backgroundColor: AppColors.background,
-        surfaceTintColor: AppColors.background,
+        backgroundColor: lum.paper,
+        surfaceTintColor: lum.paper,
+        elevation: 0,
         leading: IconButton(
-          icon: const Icon(Icons.arrow_back_ios, color: AppColors.accent, size: 20),
+          icon: Icon(Icons.arrow_back_ios, color: lum.accent, size: 20),
           onPressed: () => Navigator.of(context).pop(),
         ),
-        title: Text('Set PIN', style: AppTypography.headline),
+        title: Text(
+          'Set PIN',
+          style: AppTypography.title3.copyWith(color: lum.textPrimary),
+        ),
       ),
       body: SafeArea(
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.stretch,
-          children: [
-            const SizedBox(height: AppSpacing.lg),
-            Padding(
-              padding: const EdgeInsets.symmetric(horizontal: AppSpacing.screenPadding),
-              child: Text(
-                _firstPin == null
-                    ? 'Choose a 4-digit PIN for quick login.'
-                    : 'Confirm your PIN.',
-                style: AppTypography.subhead.copyWith(color: AppColors.textMuted),
-              ),
-            ),
-            if (_errorMessage != null) ...[
-              const SizedBox(height: AppSpacing.base),
-              Padding(
-                padding: const EdgeInsets.symmetric(horizontal: AppSpacing.screenPadding),
-                child: AppInlineBanner(message: _errorMessage!),
-              ),
-            ],
-            Expanded(
-              child: _loading
-                  ? const Center(child: CircularProgressIndicator())
-                  : Center(
-                      child: PinPad(
-                        length: 4,
-                        onCompleted: _firstPin == null
-                            ? _onFirstComplete
-                            : _onConfirmComplete,
-                      ),
+        child: Center(
+          child: SingleChildScrollView(
+            padding: const EdgeInsets.all(AppSpacing.screenPadding),
+            child: ConstrainedBox(
+              constraints: const BoxConstraints(maxWidth: 400),
+              child: ClayContainer(
+                variant: ClayVariant.raised,
+                color: lum.surface,
+                borderRadius: AppRadius.xl,
+                isDark: lum.isDark,
+                padding: const EdgeInsets.all(28),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Text(
+                      _firstPin == null
+                          ? 'Choose a 4-digit PIN for quick login.'
+                          : 'Confirm your PIN.',
+                      textAlign: TextAlign.center,
+                      style: AppTypography.subhead
+                          .copyWith(color: lum.textSecondary),
                     ),
+                    if (_errorMessage != null) ...[
+                      const SizedBox(height: AppSpacing.base),
+                      AppInlineBanner(message: _errorMessage!),
+                    ],
+                    const SizedBox(height: AppSpacing.xl),
+                    _loading
+                        ? Padding(
+                            padding: const EdgeInsets.symmetric(vertical: 40),
+                            child: Center(
+                              child: CircularProgressIndicator(
+                                color: lum.accent,
+                              ),
+                            ),
+                          )
+                        : _ClayPinPad(
+                            length: 4,
+                            onCompleted: _firstPin == null
+                                ? _onFirstComplete
+                                : _onConfirmComplete,
+                          ),
+                  ],
+                ),
+              ),
             ),
-          ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+/// Themed clay PIN pad — inset dot wells + raised clay keys, reading colours
+/// from [LumColors] so dark ("Counter") mode renders correctly. Mirrors the
+/// core [PinPad] accumulation logic (add / delete / fire on full).
+class _ClayPinPad extends StatefulWidget {
+  const _ClayPinPad({required this.length, required this.onCompleted});
+
+  final int length;
+  final ValueChanged<String> onCompleted;
+
+  @override
+  State<_ClayPinPad> createState() => _ClayPinPadState();
+}
+
+class _ClayPinPadState extends State<_ClayPinPad> {
+  String _pin = '';
+
+  void _add(String digit) {
+    if (_pin.length >= widget.length) return;
+    HapticFeedback.selectionClick();
+    setState(() => _pin += digit);
+    if (_pin.length == widget.length) {
+      widget.onCompleted(_pin);
+    }
+  }
+
+  void _delete() {
+    if (_pin.isEmpty) return;
+    HapticFeedback.selectionClick();
+    setState(() => _pin = _pin.substring(0, _pin.length - 1));
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Column(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        _DotRow(length: widget.length, filled: _pin.length),
+        const SizedBox(height: AppSpacing.xl),
+        _KeyRow(keys: const ['1', '2', '3'], onTap: _add),
+        _KeyRow(keys: const ['4', '5', '6'], onTap: _add),
+        _KeyRow(keys: const ['7', '8', '9'], onTap: _add),
+        _KeyRow(
+          keys: const ['', '0', '<'],
+          onTap: (v) {
+            if (v.isEmpty) return;
+            if (v == '<') {
+              _delete();
+            } else {
+              _add(v);
+            }
+          },
+        ),
+      ],
+    );
+  }
+}
+
+class _DotRow extends StatelessWidget {
+  const _DotRow({required this.length, required this.filled});
+
+  final int length;
+  final int filled;
+
+  @override
+  Widget build(BuildContext context) {
+    final lum = context.lum;
+    return Row(
+      mainAxisAlignment: MainAxisAlignment.center,
+      children: List.generate(length, (i) {
+        final isFilled = i < filled;
+        return Container(
+          margin: const EdgeInsets.symmetric(horizontal: AppSpacing.sm),
+          child: isFilled
+              ? Container(
+                  width: 16,
+                  height: 16,
+                  decoration: BoxDecoration(
+                    shape: BoxShape.circle,
+                    color: lum.accent,
+                  ),
+                )
+              : ClayContainer(
+                  variant: ClayVariant.inset,
+                  color: lum.surface2,
+                  borderRadius: 8,
+                  isDark: lum.isDark,
+                  width: 16,
+                  height: 16,
+                  child: const SizedBox.shrink(),
+                ),
+        );
+      }),
+    );
+  }
+}
+
+class _KeyRow extends StatelessWidget {
+  const _KeyRow({required this.keys, required this.onTap});
+
+  final List<String> keys;
+  final ValueChanged<String> onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: AppSpacing.sm),
+      child: Row(
+        mainAxisAlignment: MainAxisAlignment.center,
+        children: keys
+            .map((key) => _KeyButton(label: key, onTap: () => onTap(key)))
+            .toList(),
+      ),
+    );
+  }
+}
+
+class _KeyButton extends StatelessWidget {
+  const _KeyButton({required this.label, required this.onTap});
+
+  final String label;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    final lum = context.lum;
+    final isEmpty = label.isEmpty;
+    final isDelete = label == '<';
+
+    if (isEmpty) {
+      return const SizedBox(
+        width: 72 + AppSpacing.sm * 2,
+        height: 56,
+      );
+    }
+
+    return GestureDetector(
+      onTap: onTap,
+      child: Container(
+        margin: const EdgeInsets.symmetric(horizontal: AppSpacing.sm),
+        child: ClayContainer(
+          variant: ClayVariant.soft,
+          color: lum.surface,
+          borderRadius: AppRadius.md,
+          isDark: lum.isDark,
+          width: 72,
+          height: 56,
+          child: Center(
+            child: isDelete
+                ? Icon(Icons.backspace_outlined,
+                    color: lum.textTertiary, size: 22)
+                : Text(
+                    label,
+                    style: AppTypography.monoLarge.copyWith(
+                      fontSize: 24,
+                      color: lum.textPrimary,
+                    ),
+                  ),
+          ),
         ),
       ),
     );
