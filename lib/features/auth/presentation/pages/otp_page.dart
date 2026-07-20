@@ -20,10 +20,19 @@ class OtpPage extends ConsumerStatefulWidget {
 }
 
 class _OtpPageState extends ConsumerState<OtpPage> {
+  final _otpController = TextEditingController();
+  final _otpFocus = FocusNode();
   String _code = '';
   bool _autoSubmitted = false;
   String? _errorMessage;
   String? _successMessage;
+
+  @override
+  void dispose() {
+    _otpController.dispose();
+    _otpFocus.dispose();
+    super.dispose();
+  }
 
   void _onOtpChanged(String code) {
     _code = code;
@@ -81,6 +90,9 @@ class _OtpPageState extends ConsumerState<OtpPage> {
 
     if (next.error != null) {
       _autoSubmitted = false;
+      _code = '';
+      _otpController.clear();
+      _otpFocus.requestFocus();
       setState(() {
         _errorMessage = next.error!.message;
         _successMessage = null;
@@ -138,6 +150,8 @@ class _OtpPageState extends ConsumerState<OtpPage> {
           const SizedBox(height: AppSpacing.sm),
           AppOtpField(
             length: 6,
+            controller: _otpController,
+            focusNode: _otpFocus,
             onChanged: _onOtpChanged,
             onCompleted: _onOtpCompleted,
           ),
