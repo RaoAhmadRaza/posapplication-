@@ -969,6 +969,19 @@ final appRouter = GoRouter(
       builder: (context, state) =>
           PurchaseReturnDetailPage(returnId: state.pathParameters['id']!),
     ),
+    // Leaf detail page reached from several branches (sales history, dashboard
+    // recent-sale + drilldown, repair). Kept top-level, NOT inside the shell:
+    // go_router cannot `push` a StatefulShellRoute descendant from a page above
+    // the shell (e.g. the drilldown) without duplicating the shell page key
+    // ('!keyReservation.contains(key)' assertion). A root page pushes cleanly
+    // from anywhere and pops back to its origin.
+    GoRoute(
+      path: '/sales/invoice/:invoiceId',
+      builder: (context, state) {
+        final id = state.pathParameters['invoiceId']!;
+        return InvoiceDetailPage(invoiceId: id);
+      },
+    ),
     StatefulShellRoute.indexedStack(
       builder: (context, state, navigationShell) =>
           BottomNavShell(navigationShell: navigationShell),
@@ -1039,13 +1052,6 @@ final appRouter = GoRouter(
             GoRoute(
               path: '/sales/history',
               builder: (context, state) => const SalesHistoryPage(),
-            ),
-            GoRoute(
-              path: '/sales/invoice/:invoiceId',
-              builder: (context, state) {
-                final id = state.pathParameters['invoiceId']!;
-                return InvoiceDetailPage(invoiceId: id);
-              },
             ),
             GoRoute(
               path: '/sales/return',
