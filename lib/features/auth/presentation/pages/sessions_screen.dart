@@ -8,6 +8,7 @@ import '../../../../core/design/widgets/app_button.dart';
 import '../../../../core/design/widgets/app_card.dart';
 import '../../../../core/design/widgets/app_confirm_dialog.dart';
 import '../../../../core/design/widgets/app_inline_banner.dart';
+import '../../../../core/design/widgets/app_list_skeleton.dart';
 import '../../../../core/design/widgets/app_toast.dart';
 import '../../../../core/widgets/permission_gate.dart';
 import '../controllers/sessions_controller.dart';
@@ -97,9 +98,7 @@ class _SessionsContentState extends ConsumerState<_SessionsContent> {
         ),
       ),
       body: state.when(
-        loading: () => Center(
-          child: CircularProgressIndicator(color: lum.accent),
-        ),
+        loading: () => const AppListSkeleton(),
         error: (e, _) => Center(
           child: Padding(
             padding: const EdgeInsets.symmetric(

@@ -184,35 +184,55 @@ class _ThemeToggle extends StatelessWidget {
   }
 }
 
-/// Ink hero panel — aurora glow, faint prism rays, gradient headline.
-class _PrismHero extends StatelessWidget {
+/// Ink hero panel — breathing aurora glow, faint prism rays, gradient headline.
+class _PrismHero extends StatefulWidget {
   const _PrismHero();
 
   @override
+  State<_PrismHero> createState() => _PrismHeroState();
+}
+
+class _PrismHeroState extends State<_PrismHero>
+    with SingleTickerProviderStateMixin {
+  late final AnimationController _breath = AnimationController(
+    vsync: this,
+    duration: const Duration(seconds: 6),
+  )..repeat(reverse: true);
+
+  @override
+  void dispose() {
+    _breath.dispose();
+    super.dispose();
+  }
+
+  @override
   Widget build(BuildContext context) {
+    final reduce = MediaQuery.of(context).disableAnimations;
     return Stack(
       fit: StackFit.expand,
       children: [
         const ColoredBox(color: Color(0xFF10131C)),
         // Blue aurora glow drifting in from the top-right.
-        Positioned(
+        _AuroraGlow(
+          anim: _breath,
+          reduce: reduce,
           top: -160,
           right: -140,
-          child: _Glow(
-            size: 620,
-            color: const Color(0xFF2C6BFF),
-            opacity: 0.28,
-          ),
+          size: 620,
+          color: const Color(0xFF2C6BFF),
+          baseOpacity: 0.28,
+          invert: false,
         ),
-        // Faint warm beam glow, bottom-left.
-        Positioned(
+        // Faint warm beam glow, bottom-left (breathes opposite phase).
+        _AuroraGlow(
+          anim: _breath,
+          reduce: reduce,
           bottom: -180,
           left: -160,
-          child: _Glow(
-            size: 560,
-            color: const Color(0xFFFF9F45),
-            opacity: 0.14,
-          ),
+          size: 560,
+          color: const Color(0xFFFF9F45),
+          baseOpacity: 0.14,
+          invert: true,
         ),
         CustomPaint(painter: _RaysPainter(), size: Size.infinite),
         Padding(
@@ -271,6 +291,57 @@ class _PrismHero extends StatelessWidget {
           ),
         ),
       ],
+    );
+  }
+}
+
+/// Positions a [_Glow] and breathes its opacity + scale off [anim]. When
+/// [reduce] (OS reduce-motion) it renders the static glow at [baseOpacity].
+class _AuroraGlow extends StatelessWidget {
+  const _AuroraGlow({
+    required this.anim,
+    required this.reduce,
+    required this.size,
+    required this.color,
+    required this.baseOpacity,
+    required this.invert,
+    this.top,
+    this.bottom,
+    this.left,
+    this.right,
+  });
+
+  final Animation<double> anim;
+  final bool reduce;
+  final double size;
+  final Color color;
+  final double baseOpacity;
+  final bool invert;
+  final double? top, bottom, left, right;
+
+  @override
+  Widget build(BuildContext context) {
+    return Positioned(
+      top: top,
+      bottom: bottom,
+      left: left,
+      right: right,
+      child: reduce
+          ? _Glow(size: size, color: color, opacity: baseOpacity)
+          : AnimatedBuilder(
+              animation: anim,
+              builder: (context, child) {
+                final t = invert ? 1 - anim.value : anim.value;
+                return Transform.scale(
+                  scale: 0.92 + 0.08 * t,
+                  child: _Glow(
+                    size: size,
+                    color: color,
+                    opacity: baseOpacity * (0.7 + 0.3 * t),
+                  ),
+                );
+              },
+            ),
     );
   }
 }

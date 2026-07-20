@@ -4,6 +4,7 @@ import '../app_haptics.dart';
 import '../app_radius.dart';
 import '../app_typography.dart';
 import 'app_inline_banner.dart';
+import 'app_success_check.dart';
 
 /// Floating toast built on ScaffoldMessenger, styled with the [BannerType]
 /// palette. Use for transient success/error acknowledgements (e.g. "Password
@@ -50,7 +51,10 @@ void showAppToast(
         content: Row(
           mainAxisSize: MainAxisSize.min,
           children: [
-            Icon(icon, color: fg, size: 18),
+            if (type == BannerType.success)
+              AppSuccessCheck(color: fg, size: 18)
+            else
+              Icon(icon, color: fg, size: 18),
             const SizedBox(width: 10),
             Flexible(
               child: Text(

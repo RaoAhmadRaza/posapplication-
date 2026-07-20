@@ -83,7 +83,13 @@ Phase 5 deferred). Frontend + minimal flow/routing (user-approved exception to U
   so dark mode survives cold start.
 - New design-system files: app_haptics.dart, widgets/app_toast.dart, widgets/app_confirm_dialog.dart.
   GATE: full flutter analyze = 13 pre-existing infos, 0 new; macOS boots clean.
-- **Phase 5 (delight) deferred:** hero aurora motion, success checkmark, list skeletons.
+- **P5 delight — DONE (2026-07-20):** hero `_PrismHero` glows now breathe (6s repeating controller,
+  opacity+scale, warm glow opposite phase); success toast icon pops in (elastic `AppSuccessCheck`) —
+  reused by reset/pin-setup/mfa-enroll since all three success-toast; 3 list screens (devices/sessions/
+  security-logs) swapped bare spinner → shimmer `AppListSkeleton` (one gradient-sweep controller). All
+  three respect OS reduce-motion (static fallback). No shimmer package — hand-rolled (CLAUDE.md lesson).
+  New files: widgets/app_success_check.dart, widgets/app_list_skeleton.dart. GATE: analyze 13 pre-existing
+  infos/0 new; macOS builds clean. Optional (clay-pressed AppButton + PIN dots) deferred (YAGNI).
 
 ## Auth — COMPLETE
 All flows end-to-end. 33+ routes, auth redirect, StatefulShellRoute bottom nav. RBAC, branch selection, PIN lock +
