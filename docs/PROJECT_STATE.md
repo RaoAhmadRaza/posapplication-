@@ -207,6 +207,10 @@ editor + charges + live totals, edit DRAFT-only, accepts reorder seed), PO detai
 invoices), GrnReceive (per-line qty/reject/batch/expiry + IMEI for SERIALIZED), InvoiceMatch (3-way variance), invoices
 list+detail (Record Payment), SupplierPayment (blocks overpayment), ReorderSuggestions (≤reorder_point → seeds PO).
 Routes /purchasing/* + 5th "Purchase" bottom-nav branch gated purchase:read. DB lifecycle verified rolled-back. analyze clean.
+PO-form validation fix (2026-07-20): a line with qty/cost but no product looked complete (showed a line total) yet was
+silently dropped by _save; if it was the only line the generic "add at least one line" error confused users. Now every
+line is validated individually (product required, qty>0, cost≥0) with a precise message, and the product selector is a
+proper required field that highlights red ("Product required") on save when unset. Device re-run owed.
 
 ### Suppliers CRM (Flutter) — COMPLETE
 `lib/features/suppliers/` full clean-arch: Supplier/SupplierStatus + SupplierLedger/PayablesAging entities; sealed
