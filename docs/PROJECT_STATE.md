@@ -127,6 +127,14 @@ recent sales, quick-launch. 10-KPI grid (6 orig + payables/cash/bank/pl) CONFIGU
 SERVER-SIDE per user via ui_preferences.dashboard_layout_json / upsert_ui_preferences (clean-arch, read on load / write
 on change; first run migrates any legacy shared_preferences layout up once, then server-authoritative). Each KPI taps a DrilldownPage
 over drilldown_* RPCs; rows deep-link (invoice→/sales/invoice, product→/inventory/stock, journal→/accounting/journal).
+DASHBOARD-RUNBOOK-v1 (branch fix/dashboard-runbook-v1, static-verified): A pull-to-refresh now awaits reload
+(refresh() returns Future + ListView AlwaysScrollableScrollPhysics); G drilldown error state gained a Retry
+(invalidates drilldownProvider, mirrors dashboard page's Retry); B+E invoice-detail lookup now resolves by id OR
+invoice_number (recent-sale + sales/receivables/product drilldowns pushed invoice_number into an id-only lookup →
+silent infinite spinner; loadDetail fed resolved invoice.id). Both match arms stay inside the RLS-scoped invoices
+list — no RLS loosened. C (POS gate) + D (edit toggle) verified NOT code defects (gate correct, reorder persists
+server-side + restart-safe) — left untouched; re-test only. OWED runtime: 16-TC click-through, restricted-acct
+TC-007, toggle+restart TC-008/009/010, throttled DRILL-003.
 
 ## M08 Reporting — backend LIVE (DB layer), all gate-proven rolled-back
 - MVs (reporting_materialized_views): 6 matviews (daily_sales [fan-out FIXED], inventory_valuation [canonical], account_balances, cust/supp_aging, product_performance) refreshed CONCURRENTLY; raw select revoked (definer RPCs).
