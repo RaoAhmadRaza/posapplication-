@@ -5,7 +5,7 @@ import '../../../../core/design/app_spacing.dart';
 import '../../../../core/design/widgets/app_button.dart';
 import '../../../../core/design/widgets/app_inline_banner.dart';
 import '../../../../core/design/widgets/app_text_field.dart';
-import '../../../../core/design/widgets/responsive_form_scaffold.dart';
+import '../../../../core/design/widgets/auth_hero_scaffold.dart';
 import '../../../../core/error/auth_failure.dart';
 import '../controllers/forgot_controller.dart';
 
@@ -89,17 +89,17 @@ class _ForgotPasswordPageState extends ConsumerState<ForgotPasswordPage> {
     final isLoading = ref.watch(forgotControllerProvider).isLoading;
     final disabled = isLoading || _submitted;
 
-    return ResponsiveFormScaffold(
-      title: 'Reset password',
-      subtitle:
-          "Enter your email. If an account exists, we'll send a recovery code.",
-      footer: AppButton(
-        label: 'Back to log in',
-        variant: AppButtonVariant.plain,
-        onPressed: () => context.go('/login'),
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.stretch,
+    return AuthHeroScaffold(
+      child: AuthFormCard(
+        title: 'Reset password',
+        subtitle:
+            "Enter your email. If an account exists, we'll send a recovery code.",
+        footer: AppButton(
+          label: 'Back to log in',
+          variant: AppButtonVariant.plain,
+          onPressed: () => context.go('/login'),
+          fullWidth: true,
+        ),
         children: [
           if (_errorMessage != null) ...[
             AppInlineBanner(message: _errorMessage!),
@@ -108,10 +108,10 @@ class _ForgotPasswordPageState extends ConsumerState<ForgotPasswordPage> {
           AppTextField(
             controller: _emailController,
             label: 'Email',
-            hint: 'you@example.com',
+            hint: 'you@company.com',
             keyboardType: TextInputType.emailAddress,
             textInputAction: TextInputAction.done,
-            prefixIcon: Icons.email_outlined,
+            prefixIcon: Icons.mail_outline,
             onSubmitted: (_) => disabled ? null : _submit(),
           ),
           const SizedBox(height: AppSpacing.xxl),
@@ -119,6 +119,7 @@ class _ForgotPasswordPageState extends ConsumerState<ForgotPasswordPage> {
             label: 'Send code',
             loading: isLoading,
             onPressed: disabled ? null : _submit,
+            fullWidth: true,
           ),
         ],
       ),

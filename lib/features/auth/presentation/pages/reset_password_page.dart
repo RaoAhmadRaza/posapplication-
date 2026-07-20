@@ -5,7 +5,7 @@ import '../../../../core/design/app_spacing.dart';
 import '../../../../core/design/widgets/app_button.dart';
 import '../../../../core/design/widgets/app_inline_banner.dart';
 import '../../../../core/design/widgets/app_text_field.dart';
-import '../../../../core/design/widgets/responsive_form_scaffold.dart';
+import '../../../../core/design/widgets/auth_hero_scaffold.dart';
 import '../../../../core/error/auth_failure.dart';
 import '../controllers/reset_controller.dart';
 
@@ -91,11 +91,10 @@ class _ResetPasswordPageState extends ConsumerState<ResetPasswordPage> {
     final isExpired = _errorMessage != null &&
         _errorMessage!.contains('reset session expired');
 
-    return ResponsiveFormScaffold(
-      title: 'Set a new password',
-      subtitle: 'Choose a strong password for your account.',
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.stretch,
+    return AuthHeroScaffold(
+      child: AuthFormCard(
+        title: 'Set a new password',
+        subtitle: 'Choose a strong password for your account.',
         children: [
           if (_errorMessage != null) ...[
             AppInlineBanner(message: _errorMessage!),
@@ -106,6 +105,7 @@ class _ResetPasswordPageState extends ConsumerState<ResetPasswordPage> {
               label: 'Start over',
               variant: AppButtonVariant.plain,
               onPressed: _restartForgot,
+              fullWidth: true,
             ),
             const SizedBox(height: AppSpacing.base),
           ],
@@ -133,6 +133,7 @@ class _ResetPasswordPageState extends ConsumerState<ResetPasswordPage> {
             label: 'Update password',
             loading: isLoading,
             onPressed: disabled ? null : _submit,
+            fullWidth: true,
           ),
         ],
       ),
