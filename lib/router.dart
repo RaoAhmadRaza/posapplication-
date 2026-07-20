@@ -160,10 +160,18 @@ class _GoRouterRefreshStream extends ChangeNotifier {
       final newUid = event.session?.user.id;
       final eventName = event.event.name;
       if (newUid != _lastUid || eventName == 'SIGNED_OUT') {
-        debugPrint('[AUTH-LIFECYCLE] user changed: $_lastUid -> $newUid ($eventName), resetting state');
+        debugPrint('[AUTH-LIFECYCLE] user changed: $_lastUid -> $newUid ($eventName)');
         _lastUid = newUid;
-        BranchRouterState.instance.reset();
-        resetUserScopedState();
+        // A password-recovery OTP verification signs the user in transiently —
+        // that session is a legitimate step of the recovery flow, NOT a
+        // cross-user login. Resetting user-scoped state here would wipe
+        // RecoveryState.codeVerified and drop the user onto /dashboard instead
+        // of /reset. Skip the reset while a recovery is in progress.
+        if (!RecoveryState.instance.isRecovering) {
+          debugPrint('[AUTH-LIFECYCLE] resetting user-scoped state');
+          BranchRouterState.instance.reset();
+          resetUserScopedState();
+        }
         Future.microtask(() => notifyListeners());
       } else {
         notifyListeners();
