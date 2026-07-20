@@ -233,6 +233,24 @@ String? _redirect(BuildContext context, GoRouterState state) {
   return null;
 }
 
+/// Cross-fade page for the auth hero screens. Every hero screen draws the same
+/// left branding panel, so fading (instead of the default slide) makes that
+/// panel read as static while only the right-hand form cross-fades.
+CustomTransitionPage<void> _authFadePage(GoRouterState state, Widget child) {
+  return CustomTransitionPage<void>(
+    key: state.pageKey,
+    transitionDuration: const Duration(milliseconds: 300),
+    reverseTransitionDuration: const Duration(milliseconds: 220),
+    transitionsBuilder: (context, animation, secondaryAnimation, child) {
+      return FadeTransition(
+        opacity: CurvedAnimation(parent: animation, curve: Curves.easeOutCubic),
+        child: child,
+      );
+    },
+    child: child,
+  );
+}
+
 final appRouter = GoRouter(
   initialLocation: '/splash',
   refreshListenable: Listenable.merge([
@@ -253,45 +271,60 @@ final appRouter = GoRouter(
     ),
     GoRoute(
       path: '/env-check',
-      builder: (context, state) => const EnvironmentCheckScreen(),
+      pageBuilder: (context, state) =>
+          _authFadePage(state, const EnvironmentCheckScreen()),
     ),
     GoRoute(
       path: '/login',
-      builder: (context, state) => const LoginPage(),
+      pageBuilder: (context, state) => _authFadePage(state, const LoginPage()),
     ),
     GoRoute(
       path: '/signup',
-      builder: (context, state) => const SignupPage(),
+      pageBuilder: (context, state) =>
+          _authFadePage(state, const SignupPage()),
     ),
     GoRoute(
       path: '/otp',
-      builder: (context, state) {
-        final extra = state.extra as Map<String, dynamic>;
-        return OtpPage(
-          email: extra['email'] as String,
-          isRecovery: extra['isRecovery'] as bool,
+      pageBuilder: (context, state) {
+        // Degrade gracefully if reached without the expected payload
+        // (deep-link / malformed push) instead of throwing on the cast.
+        final extra = state.extra;
+        if (extra is! Map || extra['email'] is! String) {
+          return _authFadePage(state, const LoginPage());
+        }
+        return _authFadePage(
+          state,
+          OtpPage(
+            email: extra['email'] as String,
+            isRecovery: extra['isRecovery'] as bool? ?? false,
+          ),
         );
       },
     ),
     GoRoute(
       path: '/forgot',
-      builder: (context, state) => const ForgotPasswordPage(),
+      pageBuilder: (context, state) =>
+          _authFadePage(state, const ForgotPasswordPage()),
     ),
     GoRoute(
       path: '/reset',
-      builder: (context, state) => const ResetPasswordPage(),
+      pageBuilder: (context, state) =>
+          _authFadePage(state, const ResetPasswordPage()),
     ),
     GoRoute(
       path: '/branch-select',
-      builder: (context, state) => const BranchSelectPage(),
+      pageBuilder: (context, state) =>
+          _authFadePage(state, const BranchSelectPage()),
     ),
     GoRoute(
       path: '/workspace-init',
-      builder: (context, state) => const WorkspaceInitScreen(),
+      pageBuilder: (context, state) =>
+          _authFadePage(state, const WorkspaceInitScreen()),
     ),
     GoRoute(
       path: '/pin-lock',
-      builder: (context, state) => const PinLockScreen(),
+      pageBuilder: (context, state) =>
+          _authFadePage(state, const PinLockScreen()),
     ),
     GoRoute(
       path: '/pin-setup',
@@ -311,7 +344,8 @@ final appRouter = GoRouter(
     ),
     GoRoute(
       path: '/mfa-challenge',
-      builder: (context, state) => const MfaChallengeScreen(),
+      pageBuilder: (context, state) =>
+          _authFadePage(state, const MfaChallengeScreen()),
     ),
     GoRoute(
       path: '/mfa-enroll',
