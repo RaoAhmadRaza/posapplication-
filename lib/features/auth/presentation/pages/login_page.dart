@@ -3,12 +3,14 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import '../../../../core/design/app_colors.dart';
-import '../../../../core/design/app_spacing.dart';
+import '../../../../core/design/app_radius.dart';
 import '../../../../core/design/app_typography.dart';
+import '../../../../core/design/clay.dart';
 import '../../../../core/design/widgets/app_button.dart';
+import '../../../../core/design/widgets/app_checkbox.dart';
 import '../../../../core/design/widgets/app_inline_banner.dart';
 import '../../../../core/design/widgets/app_text_field.dart';
-import '../../../../core/design/widgets/responsive_form_scaffold.dart';
+import '../../../../core/design/widgets/auth_hero_scaffold.dart';
 import '../../../../core/error/auth_failure.dart';
 import '../../../../core/services/login_throttle_service.dart';
 import '../controllers/sign_in_controller.dart';
@@ -27,6 +29,7 @@ class _LoginPageState extends ConsumerState<LoginPage> {
   int _cooldownSeconds = 0;
   Timer? _cooldownTimer;
   String? _cooldownEmail;
+  bool _remember = true; // decorative — Supabase persists the session by default
 
   @override
   void dispose() {
@@ -45,9 +48,11 @@ class _LoginPageState extends ConsumerState<LoginPage> {
       return;
     }
 
-    final (canAttempt, remaining) = await LoginThrottleService.instance.canAttempt(email);
+    final (canAttempt, remaining) =
+        await LoginThrottleService.instance.canAttempt(email);
     if (!canAttempt) {
-      setState(() => _errorMessage = 'Too many attempts. Try again in ${_formatSeconds(remaining)}.');
+      setState(() => _errorMessage =
+          'Too many attempts. Try again in ${_formatSeconds(remaining)}.');
       _startCooldownCheck(email);
       return;
     }
@@ -103,7 +108,8 @@ class _LoginPageState extends ConsumerState<LoginPage> {
       if (mounted) setState(() => _cooldownSeconds = 0);
       return;
     }
-    final (canAttempt, remaining) = await LoginThrottleService.instance.canAttempt(email);
+    final (canAttempt, remaining) =
+        await LoginThrottleService.instance.canAttempt(email);
     if (!mounted) return;
     setState(() => _cooldownSeconds = canAttempt ? 0 : remaining);
     if (canAttempt) _cooldownTimer?.cancel();
@@ -121,77 +127,203 @@ class _LoginPageState extends ConsumerState<LoginPage> {
     ref.listen(signInControllerProvider, _onStateChange);
     final isLoading = ref.watch(signInControllerProvider).isLoading;
     final disabled = isLoading || _cooldownSeconds > 0;
+    final lum = context.lum;
 
-    return ResponsiveFormScaffold(
-      title: 'Welcome back',
-      subtitle: 'Sign in to your account',
-      footer: Column(
-        children: [
-          Text(
-            "Don't have an account?",
-            style: AppTypography.footnote.copyWith(
-              color: AppColors.textMuted,
+    return AuthHeroScaffold(
+      child: ClayContainer(
+        variant: ClayVariant.raised,
+        color: lum.surface,
+        borderRadius: AppRadius.xl,
+        isDark: lum.isDark,
+        padding: const EdgeInsets.all(28),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Text(
+              'Welcome back',
+              style: AppTypography.largeTitle.copyWith(color: lum.textPrimary),
             ),
-          ),
-          const SizedBox(height: AppSpacing.sm),
-          AppButton(
-            label: 'Create account',
-            variant: AppButtonVariant.tinted,
-            onPressed: () => context.go('/signup'),
-            fullWidth: true,
-          ),
-          const SizedBox(height: AppSpacing.sm),
-          AppButton(
-            label: 'Joining a team? Scan your invite QR',
-            variant: AppButtonVariant.plain,
-            onPressed: () => context.push('/join/scan'),
-            fullWidth: true,
-          ),
-        ],
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.stretch,
-        children: [
-          if (_errorMessage != null) ...[
-            AppInlineBanner(message: _errorMessage!),
-            const SizedBox(height: AppSpacing.base),
+            const SizedBox(height: 24),
+            if (_errorMessage != null) ...[
+              AppInlineBanner(message: _errorMessage!),
+              const SizedBox(height: 16),
+            ],
+            AppTextField(
+              controller: _emailController,
+              label: 'Email',
+              hint: 'you@company.com',
+              keyboardType: TextInputType.emailAddress,
+              textInputAction: TextInputAction.next,
+              prefixIcon: Icons.mail_outline,
+            ),
+            const SizedBox(height: 16),
+            AppTextField(
+              controller: _passwordController,
+              label: 'Password',
+              hint: 'Your password',
+              obscure: true,
+              textInputAction: TextInputAction.done,
+              prefixIcon: Icons.lock_outline,
+              onSubmitted: (_) => _submit(),
+            ),
+            const SizedBox(height: 18),
+            Align(
+              alignment: Alignment.centerLeft,
+              child: AppCheckbox(
+                value: _remember,
+                onChanged: (v) => setState(() => _remember = v),
+                label: 'Remember me',
+              ),
+            ),
+            const SizedBox(height: 20),
+            AppButton(
+              label: _cooldownSeconds > 0
+                  ? 'Try again in ${_formatSeconds(_cooldownSeconds)}'
+                  : 'Sign in',
+              loading: isLoading,
+              onPressed: disabled ? null : _submit,
+              fullWidth: true,
+            ),
+            const SizedBox(height: 10),
+            AppButton(
+              label: 'Use PIN instead',
+              variant: AppButtonVariant.plain,
+              onPressed: () => context.go('/pin-lock'),
+              fullWidth: true,
+            ),
+            Center(
+              child: TextButton(
+                onPressed: () => context.go('/forgot'),
+                child: Text(
+                  'Forgot password?',
+                  style: AppTypography.footnote
+                      .copyWith(color: lum.textTertiary),
+                ),
+              ),
+            ),
+            const SizedBox(height: 6),
+            _QrJoinButton(onTap: () => context.push('/join/scan')),
+            const SizedBox(height: 18),
+            Divider(color: lum.hairline, height: 1),
+            const SizedBox(height: 16),
+            Center(
+              child: Text.rich(
+                TextSpan(
+                  text: 'New to LUMINA? ',
+                  style: AppTypography.footnote
+                      .copyWith(color: lum.textSecondary, fontSize: 14),
+                  children: [
+                    WidgetSpan(
+                      alignment: PlaceholderAlignment.middle,
+                      child: GestureDetector(
+                        onTap: () => context.go('/signup'),
+                        child: Text(
+                          'Create an account',
+                          style: AppTypography.label.copyWith(
+                            color: lum.accent,
+                            fontSize: 14,
+                          ),
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ),
           ],
-          AppTextField(
-            controller: _emailController,
-            label: 'Email',
-            hint: 'you@example.com',
-            keyboardType: TextInputType.emailAddress,
-            textInputAction: TextInputAction.next,
-            prefixIcon: Icons.email_outlined,
-          ),
-          const SizedBox(height: AppSpacing.fieldGap),
-          AppTextField(
-            controller: _passwordController,
-            label: 'Password',
-            hint: 'Enter your password',
-            obscure: true,
-            textInputAction: TextInputAction.done,
-            prefixIcon: Icons.lock_outline,
-            onSubmitted: (_) => _submit(),
-          ),
-          const SizedBox(height: AppSpacing.xxl),
-          AppButton(
-            label: _cooldownSeconds > 0
-                ? 'Try again in ${_formatSeconds(_cooldownSeconds)}'
-                : 'Log in',
-            loading: isLoading,
-            onPressed: disabled ? null : _submit,
-            fullWidth: true,
-          ),
-          const SizedBox(height: AppSpacing.md),
-          AppButton(
-            label: 'Forgot password?',
-            variant: AppButtonVariant.plain,
-            onPressed: () => context.go('/forgot'),
-            fullWidth: true,
-          ),
-        ],
+        ),
       ),
     );
   }
+}
+
+/// Dashed "scan invite QR" affordance from the mock.
+class _QrJoinButton extends StatelessWidget {
+  const _QrJoinButton({required this.onTap});
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    final lum = context.lum;
+    return GestureDetector(
+      onTap: onTap,
+      child: DottedBorderBox(
+        color: lum.g300,
+        radius: AppRadius.md,
+        child: Container(
+          height: 46,
+          alignment: Alignment.center,
+          child: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Icon(Icons.qr_code_2, size: 18, color: lum.accent),
+              const SizedBox(width: 9),
+              Text(
+                'Joining a team? Scan your invite QR',
+                style: AppTypography.label.copyWith(color: lum.g700),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+/// Minimal dashed-border wrapper (Flutter has no native dashed border).
+class DottedBorderBox extends StatelessWidget {
+  const DottedBorderBox({
+    super.key,
+    required this.child,
+    required this.color,
+    this.radius = 12,
+  });
+
+  final Widget child;
+  final Color color;
+  final double radius;
+
+  @override
+  Widget build(BuildContext context) {
+    return CustomPaint(
+      painter: _DashedPainter(color: color, radius: radius),
+      child: child,
+    );
+  }
+}
+
+class _DashedPainter extends CustomPainter {
+  _DashedPainter({required this.color, required this.radius});
+  final Color color;
+  final double radius;
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    final rrect = RRect.fromRectAndRadius(
+      Offset.zero & size,
+      Radius.circular(radius),
+    );
+    final path = Path()..addRRect(rrect);
+    final paint = Paint()
+      ..color = color
+      ..style = PaintingStyle.stroke
+      ..strokeWidth = 1;
+    const dash = 5.0;
+    const gap = 4.0;
+    for (final metric in path.computeMetrics()) {
+      var d = 0.0;
+      while (d < metric.length) {
+        canvas.drawPath(
+          metric.extractPath(d, d + dash),
+          paint,
+        );
+        d += dash + gap;
+      }
+    }
+  }
+
+  @override
+  bool shouldRepaint(_DashedPainter old) =>
+      old.color != color || old.radius != radius;
 }
