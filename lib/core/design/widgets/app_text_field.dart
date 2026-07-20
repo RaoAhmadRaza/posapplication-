@@ -16,6 +16,9 @@ class AppTextField extends StatefulWidget {
   final String? errorText;
   final ValueChanged<String>? onSubmitted;
   final ValueChanged<String>? onChanged;
+  final bool autofocus;
+  final Iterable<String>? autofillHints;
+  final bool enabled;
   const AppTextField({
     super.key,
     required this.controller,
@@ -28,6 +31,9 @@ class AppTextField extends StatefulWidget {
     this.errorText,
     this.onSubmitted,
     this.onChanged,
+    this.autofocus = false,
+    this.autofillHints,
+    this.enabled = true,
   });
 
   @override
@@ -63,6 +69,9 @@ class _AppTextFieldState extends State<AppTextField> {
             controller: widget.controller,
             focusNode: _focus,
             obscureText: _hidden,
+            enabled: widget.enabled,
+            autofocus: widget.autofocus,
+            autofillHints: widget.autofillHints,
             keyboardType: widget.keyboardType,
             textInputAction: widget.textInputAction,
             onSubmitted: widget.onSubmitted,
@@ -79,12 +88,23 @@ class _AppTextFieldState extends State<AppTextField> {
           ),
         ),
         if (widget.obscure)
-          GestureDetector(
-            onTap: () => setState(() => _hidden = !_hidden),
-            child: Icon(
-              _hidden ? Icons.visibility_off_outlined : Icons.visibility_outlined,
-              color: lum.g400,
-              size: 20,
+          Semantics(
+            button: true,
+            label: _hidden ? 'Show password' : 'Hide password',
+            child: GestureDetector(
+              behavior: HitTestBehavior.opaque,
+              onTap: () => setState(() => _hidden = !_hidden),
+              child: SizedBox(
+                width: 44,
+                height: 44,
+                child: Icon(
+                  _hidden
+                      ? Icons.visibility_off_outlined
+                      : Icons.visibility_outlined,
+                  color: lum.g400,
+                  size: 20,
+                ),
+              ),
             ),
           ),
       ],

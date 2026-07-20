@@ -11,11 +11,22 @@ class AppOtpField extends StatelessWidget {
     this.length = 6,
     required this.onCompleted,
     this.onChanged,
+    this.autofocus = true,
+    this.controller,
+    this.focusNode,
   });
 
   final int length;
   final ValueChanged<String> onCompleted;
   final ValueChanged<String>? onChanged;
+
+  /// Opens the keyboard on mount so the code screen is ready to type.
+  final bool autofocus;
+
+  /// Optional external controller/focus so callers can clear + refocus the
+  /// field after a wrong code.
+  final TextEditingController? controller;
+  final FocusNode? focusNode;
 
   @override
   Widget build(BuildContext context) {
@@ -38,8 +49,11 @@ class AppOtpField extends StatelessWidget {
 
     return Pinput(
       length: length,
+      controller: controller,
+      focusNode: focusNode,
       onCompleted: onCompleted,
       onChanged: onChanged,
+      autofocus: autofocus,
       defaultPinTheme: cell(border: lum.hairline),
       focusedPinTheme: cell(border: lum.accent, width: 1.5),
       submittedPinTheme: cell(border: lum.hairline),
