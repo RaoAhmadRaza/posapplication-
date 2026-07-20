@@ -4,7 +4,7 @@ import '../app_radius.dart';
 import '../app_spacing.dart';
 import '../app_typography.dart';
 
-enum BannerType { error, success, info }
+enum BannerType { error, success, info, warning }
 
 class AppInlineBanner extends StatelessWidget {
   const AppInlineBanner({
@@ -16,48 +16,42 @@ class AppInlineBanner extends StatelessWidget {
   final String message;
   final BannerType type;
 
-  Color get _fgColor {
-    switch (type) {
-      case BannerType.error:
-        return AppColors.destructive;
-      case BannerType.success:
-        return AppColors.success;
-      case BannerType.info:
-        return AppColors.accent;
-    }
-  }
-
-  IconData get _icon {
-    switch (type) {
-      case BannerType.error:
-        return Icons.error_outline;
-      case BannerType.success:
-        return Icons.check_circle_outline;
-      case BannerType.info:
-        return Icons.info_outline;
-    }
-  }
-
   @override
   Widget build(BuildContext context) {
+    final lum = context.lum;
+    final (Color bg, Color fg, IconData icon) = switch (type) {
+      BannerType.error => (lum.dangerSoft, lum.dangerText, Icons.error_outline),
+      BannerType.success => (
+          lum.successSoft,
+          lum.successText,
+          Icons.check_circle_outline,
+        ),
+      BannerType.warning => (
+          lum.warningSoft,
+          lum.warningText,
+          Icons.cloud_off_outlined,
+        ),
+      BannerType.info => (lum.accentSoft, lum.accent, Icons.info_outline),
+    };
+
     return Container(
       padding: const EdgeInsets.symmetric(
-        horizontal: AppSpacing.base,
-        vertical: AppSpacing.md,
+        horizontal: AppSpacing.md,
+        vertical: 10,
       ),
       decoration: BoxDecoration(
-        color: _fgColor.withValues(alpha: 0.1),
-        borderRadius: BorderRadius.circular(AppRadius.field),
+        color: bg,
+        borderRadius: BorderRadius.circular(AppRadius.sm),
       ),
       child: Row(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Icon(_icon, color: _fgColor, size: 18),
+          Icon(icon, color: fg, size: 16),
           const SizedBox(width: AppSpacing.sm),
           Expanded(
             child: Text(
               message,
-              style: AppTypography.callout.copyWith(color: _fgColor),
+              style: AppTypography.footnote.copyWith(color: fg),
             ),
           ),
         ],
