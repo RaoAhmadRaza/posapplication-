@@ -6,7 +6,9 @@ import '../../../../core/design/app_spacing.dart';
 import '../../../../core/design/app_typography.dart';
 import '../../../../core/design/widgets/app_button.dart';
 import '../../../../core/design/widgets/app_card.dart';
+import '../../../../core/design/widgets/app_confirm_dialog.dart';
 import '../../../../core/design/widgets/app_inline_banner.dart';
+import '../../../../core/design/widgets/app_toast.dart';
 import '../../../../core/widgets/permission_gate.dart';
 import '../controllers/sessions_controller.dart';
 
@@ -42,9 +44,21 @@ class _SessionsContentState extends ConsumerState<_SessionsContent> {
   }
 
   Future<void> _revoke(String userId) async {
+    final ok = await showAppConfirm(
+      context,
+      title: 'Sign out this session?',
+      message: 'The device on this session will need to sign in again.',
+      confirmLabel: 'Sign out',
+      destructive: true,
+    );
+    if (!ok) return;
+    if (!mounted) return;
+
     setState(() => _revokingId = userId);
     await ref.read(sessionsControllerProvider.notifier).revoke(userId);
-    if (mounted) setState(() => _revokingId = null);
+    if (!mounted) return;
+    setState(() => _revokingId = null);
+    showAppToast(context, 'Session signed out', type: BannerType.success);
   }
 
   String _relativeTime(String? iso) {

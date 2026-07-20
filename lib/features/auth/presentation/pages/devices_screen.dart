@@ -6,7 +6,9 @@ import '../../../../core/design/app_spacing.dart';
 import '../../../../core/design/app_typography.dart';
 import '../../../../core/design/widgets/app_button.dart';
 import '../../../../core/design/widgets/app_card.dart';
+import '../../../../core/design/widgets/app_confirm_dialog.dart';
 import '../../../../core/design/widgets/app_inline_banner.dart';
+import '../../../../core/design/widgets/app_toast.dart';
 import '../../../../core/widgets/permission_gate.dart';
 import '../../domain/entities/device.dart';
 import '../controllers/devices_controller.dart';
@@ -203,8 +205,24 @@ class _DeviceCard extends ConsumerWidget {
               AppButton(
                 label: 'Revoke',
                 variant: AppButtonVariant.destructive,
-                onPressed: () =>
-                    ref.read(devicesProvider.notifier).revoke(device.id),
+                onPressed: () async {
+                  final ok = await showAppConfirm(
+                    context,
+                    title: 'Revoke this device?',
+                    message: 'It will be signed out and must be re-authorized '
+                        'to access this account.',
+                    confirmLabel: 'Revoke',
+                    destructive: true,
+                  );
+                  if (!ok) return;
+                  await ref.read(devicesProvider.notifier).revoke(device.id);
+                  if (!context.mounted) return;
+                  showAppToast(
+                    context,
+                    'Device revoked',
+                    type: BannerType.success,
+                  );
+                },
               ),
             ],
           ),

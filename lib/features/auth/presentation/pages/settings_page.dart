@@ -8,6 +8,7 @@ import '../../../../core/design/app_spacing.dart';
 import '../../../../core/design/app_typography.dart';
 import '../../../../core/design/widgets/app_button.dart';
 import '../../../../core/design/widgets/app_card.dart';
+import '../../../../core/design/widgets/app_confirm_dialog.dart';
 import '../../../../core/design/widgets/app_inline_banner.dart';
 import '../../../../core/state/theme_controller.dart';
 import '../../domain/usecases/get_enrolled_factor_id.dart';
@@ -60,7 +61,16 @@ class SettingsPage extends ConsumerWidget {
                 label: 'Log out',
                 variant: AppButtonVariant.destructive,
                 icon: Icons.logout,
-                onPressed: () {
+                onPressed: () async {
+                  final ok = await showAppConfirm(
+                    context,
+                    title: 'Log out?',
+                    message:
+                        'You\'ll need to sign in again to access your account.',
+                    confirmLabel: 'Log out',
+                    destructive: true,
+                  );
+                  if (!ok) return;
                   ref.read(authControllerProvider.notifier).signOut();
                 },
               ),
@@ -412,7 +422,10 @@ class _SettingsRow extends StatelessWidget {
     return Column(
       children: [
         Divider(color: lum.hairline, height: 1),
-        GestureDetector(
+        Semantics(
+          button: onTap != null,
+          label: title,
+          child: GestureDetector(
           onTap: onTap,
           behavior: HitTestBehavior.opaque,
           child: Padding(
@@ -452,6 +465,7 @@ class _SettingsRow extends StatelessWidget {
               ],
             ),
           ),
+        ),
         ),
       ],
     );
