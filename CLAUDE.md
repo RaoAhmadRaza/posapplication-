@@ -141,6 +141,15 @@ supabase/
 - Additive — avoid DROP / RENAME / new NOT NULL on live columns; write a forward migration instead.
 - Ship the table's indexes + RLS policies in the same migration. RLS via auth.uid()/helpers.
 
+## Frontend/UI-only tasks — hard boundary
+- On any task scoped to frontend or UI redesign, touch ONLY the presentation layer:
+  lib/features/*/presentation/ (pages, widgets) and lib/core/design/ (tokens, theme, shared widgets).
+- DO NOT touch backend, database, routing, auth, or data flow: no edits to controllers'
+  business logic, use cases, repositories, datasources, models, domain, router.dart redirect/routes,
+  supabase/ (migrations, functions, config), env, or providers' wiring.
+- Reskin the widget tree only; keep every controller/provider/route binding identical. If a UI
+  change appears to need a backend/routing change, STOP and ask first — do not change it silently.
+
 ## Design system — clean iOS, light mode only
 - Use lib/core/design tokens (AppColors / AppTypography / AppSpacing / AppRadius / AppShadows).
   No hardcoded colors, sizes, or radii in widgets.
