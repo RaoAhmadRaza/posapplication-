@@ -2,6 +2,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../../../core/error/auth_failure.dart';
 import '../../../../core/services/audit_service.dart';
 import '../../domain/usecases/set_new_password.dart';
+import '../../domain/usecases/sign_out.dart';
 
 final resetControllerProvider =
     NotifierProvider<ResetController, AsyncValue<void>>(
@@ -25,6 +26,11 @@ class ResetController extends Notifier<AsyncValue<void>> {
       state = AsyncValue.error(failure, StackTrace.current);
     } else {
       AuditService.instance.log(action: 'PASSWORD_RESET', entity: 'auth');
+      // Drop the transient recovery session so the user must sign in with the
+      // new password. signOut FIRST (stage still codeVerified keeps redirect on
+      // /reset — no /dashboard flash), THEN clear RecoveryState → redirect to
+      // /login (loggedIn=false, recovery=none, /reset not an auth route).
+      await ref.read(signOutUseCaseProvider).call();
       RecoveryState.instance.reset();
       state = const AsyncValue.data(null);
     }
