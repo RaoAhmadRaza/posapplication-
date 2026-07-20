@@ -1,8 +1,8 @@
 import 'package:flutter/material.dart';
 import '../app_colors.dart';
 import '../app_radius.dart';
-import '../app_shadows.dart';
 import '../app_spacing.dart';
+import '../clay.dart';
 
 class AppCard extends StatelessWidget {
   const AppCard({
@@ -10,6 +10,7 @@ class AppCard extends StatelessWidget {
     required this.child,
     this.padding,
     this.onTap,
+    this.raised = false,
   });
 
   final Widget child;
@@ -18,17 +19,19 @@ class AppCard extends StatelessWidget {
   /// When set, the card becomes tappable with a ripple clipped to its radius.
   final VoidCallback? onTap;
 
+  /// Raised clay (stronger drop) vs the default soft clay.
+  final bool raised;
+
   @override
   Widget build(BuildContext context) {
-    final radius = BorderRadius.circular(AppRadius.card);
-    final content = Container(
+    final lum = context.lum;
+    final radius = BorderRadius.circular(AppRadius.lg);
+    final content = ClayContainer(
+      variant: raised ? ClayVariant.raised : ClayVariant.soft,
+      color: lum.surface,
+      borderRadius: AppRadius.lg,
+      isDark: lum.isDark,
       padding: padding ?? const EdgeInsets.all(AppSpacing.xl),
-      decoration: BoxDecoration(
-        color: AppColors.background,
-        borderRadius: radius,
-        border: Border.all(color: AppColors.separator, width: 0.5),
-        boxShadow: AppShadows.card,
-      ),
       child: child,
     );
     if (onTap == null) return content;
