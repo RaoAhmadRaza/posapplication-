@@ -5,9 +5,11 @@ import '../../../../core/design/app_colors.dart';
 import '../../../../core/design/app_radius.dart';
 import '../../../../core/design/app_spacing.dart';
 import '../../../../core/design/app_typography.dart';
+import '../../../../core/design/clay.dart';
 import '../../../../core/design/widgets/app_button.dart';
 import '../../../../core/design/widgets/app_inline_banner.dart';
 import '../../../../core/design/widgets/app_text_field.dart';
+import '../../../../core/design/widgets/auth_hero_scaffold.dart';
 import '../../domain/usecases/challenge_mfa.dart';
 import '../../domain/usecases/enroll_mfa.dart';
 import '../../domain/usecases/verify_mfa.dart';
@@ -109,93 +111,94 @@ class _MfaEnrollScreenState extends ConsumerState<MfaEnrollScreen> {
 
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
-      backgroundColor: AppColors.background,
-      appBar: AppBar(
-        backgroundColor: AppColors.background,
-        surfaceTintColor: AppColors.background,
-        leading: IconButton(
-          icon: const Icon(Icons.arrow_back_ios, color: AppColors.accent, size: 20),
+    final lum = context.lum;
+    return AuthHeroScaffold(
+      child: AuthFormCard(
+        title: 'Set up authenticator',
+        subtitle: 'Scan the QR with your authenticator app to secure sign-in.',
+        footer: AppButton(
+          label: 'Back',
+          variant: AppButtonVariant.plain,
           onPressed: () => Navigator.of(context).pop(),
+          fullWidth: true,
         ),
-        title: Text('Set up authenticator', style: AppTypography.headline),
-      ),
-      body: SafeArea(
-        child: SingleChildScrollView(
-          padding: const EdgeInsets.symmetric(
-            horizontal: AppSpacing.screenPadding,
-          ),
-          child: _loading
-              ? const SizedBox(
-                  height: 300,
-                  child: Center(child: CircularProgressIndicator()),
-                )
-              : Column(
-                  crossAxisAlignment: CrossAxisAlignment.stretch,
-                  children: [
-                    if (_errorMessage != null) ...[
-                      AppInlineBanner(message: _errorMessage!),
-                      const SizedBox(height: AppSpacing.base),
-                    ],
-                    if (_qrCodeUri != null) ...[
-                      Center(
-                        child: Container(
-                          padding: const EdgeInsets.all(AppSpacing.md),
-                          decoration: BoxDecoration(
-                            color: Colors.white,
-                            borderRadius: BorderRadius.circular(AppRadius.card),
-                            border: Border.all(color: AppColors.separator, width: 0.5),
-                          ),
-                          child: QrImageView(
-                            data: _qrCodeUri!,
-                            version: QrVersions.auto,
-                            size: 200,
-                          ),
-                        ),
-                      ),
-                      const SizedBox(height: AppSpacing.lg),
-                      Center(
-                        child: Text(
-                          'Or enter this secret:',
-                          style: AppTypography.footnote.copyWith(
-                            color: AppColors.textMuted,
-                          ),
-                        ),
-                      ),
-                      const SizedBox(height: AppSpacing.xs),
-                      Center(
-                        child: Text(
-                          _formatSecret(_secret ?? ''),
-                          style: AppTypography.headline.copyWith(letterSpacing: 2),
-                        ),
-                      ),
-                      const SizedBox(height: AppSpacing.xxl),
-                      Text(
-                        'Enter the 6-digit code from your authenticator app to verify.',
-                        style: AppTypography.subhead.copyWith(
-                          color: AppColors.textMuted,
-                        ),
-                      ),
-                      const SizedBox(height: AppSpacing.md),
-                      AppTextField(
-                        controller: _codeController,
-                        label: 'Verification code',
-                        prefixIcon: Icons.lock_outline,
-                        hint: '000000',
-                        keyboardType: TextInputType.number,
-                        textInputAction: TextInputAction.done,
-                        onSubmitted: (_) => _verifying ? null : _verify(),
-                      ),
-                      const SizedBox(height: AppSpacing.xxl),
-                      AppButton(
-                        label: 'Verify',
-                        loading: _verifying,
-                        onPressed: _verifying ? null : _verify,
-                      ),
-                    ],
-                  ],
+        children: [
+          if (_loading)
+            const Padding(
+              padding: EdgeInsets.symmetric(vertical: AppSpacing.xxxl),
+              child: Center(child: CircularProgressIndicator()),
+            )
+          else ...[
+            if (_errorMessage != null) ...[
+              AppInlineBanner(message: _errorMessage!),
+              const SizedBox(height: AppSpacing.base),
+            ],
+            if (_qrCodeUri != null) ...[
+              Center(
+                // QR stays on a fixed white surface for scannability in dark mode.
+                child: ClayContainer(
+                  variant: ClayVariant.inset,
+                  color: Colors.white,
+                  borderRadius: AppRadius.lg,
+                  padding: const EdgeInsets.all(AppSpacing.base),
+                  child: QrImageView(
+                    data: _qrCodeUri!,
+                    version: QrVersions.auto,
+                    size: 200,
+                  ),
                 ),
-        ),
+              ),
+              const SizedBox(height: AppSpacing.lg),
+              Text(
+                'Or enter this secret:',
+                textAlign: TextAlign.center,
+                style: AppTypography.footnote.copyWith(color: lum.textSecondary),
+              ),
+              const SizedBox(height: AppSpacing.sm),
+              ClayContainer(
+                variant: ClayVariant.inset,
+                color: lum.surface2,
+                borderRadius: AppRadius.md,
+                isDark: lum.isDark,
+                padding: const EdgeInsets.symmetric(
+                  vertical: AppSpacing.md,
+                  horizontal: AppSpacing.base,
+                ),
+                child: Text(
+                  _formatSecret(_secret ?? ''),
+                  textAlign: TextAlign.center,
+                  style: AppTypography.monoValue.copyWith(
+                    fontSize: 18,
+                    letterSpacing: 2,
+                    color: lum.textPrimary,
+                  ),
+                ),
+              ),
+              const SizedBox(height: AppSpacing.xl),
+              Text(
+                'Enter the 6-digit code from your authenticator app to verify.',
+                style: AppTypography.subhead.copyWith(color: lum.textSecondary),
+              ),
+              const SizedBox(height: AppSpacing.md),
+              AppTextField(
+                controller: _codeController,
+                label: 'Verification code',
+                prefixIcon: Icons.lock_outline,
+                hint: '000000',
+                keyboardType: TextInputType.number,
+                textInputAction: TextInputAction.done,
+                onSubmitted: (_) => _verifying ? null : _verify(),
+              ),
+              const SizedBox(height: AppSpacing.xl),
+              AppButton(
+                label: 'Verify',
+                loading: _verifying,
+                onPressed: _verifying ? null : _verify,
+                fullWidth: true,
+              ),
+            ],
+          ],
+        ],
       ),
     );
   }

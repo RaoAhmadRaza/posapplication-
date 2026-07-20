@@ -4,7 +4,7 @@ import '../../../../core/design/app_spacing.dart';
 import '../../../../core/design/widgets/app_button.dart';
 import '../../../../core/design/widgets/app_inline_banner.dart';
 import '../../../../core/design/widgets/app_otp_field.dart';
-import '../../../../core/design/widgets/responsive_form_scaffold.dart';
+import '../../../../core/design/widgets/auth_hero_scaffold.dart';
 import '../../../../core/state/app_flow_state.dart';
 import '../../domain/usecases/challenge_mfa.dart';
 import '../../domain/usecases/get_enrolled_factor_id.dart';
@@ -93,33 +93,39 @@ class _MfaChallengeScreenState extends ConsumerState<MfaChallengeScreen> {
 
   @override
   Widget build(BuildContext context) {
-    return ResponsiveFormScaffold(
-      title: 'Two-factor authentication',
-      subtitle: 'Enter the code from your authenticator app.',
-      child: _loading
-          ? const Center(child: CircularProgressIndicator())
-          : Column(
-              crossAxisAlignment: CrossAxisAlignment.stretch,
-              children: [
+    return AuthHeroScaffold(
+      child: AuthFormCard(
+        title: 'Two-factor authentication',
+        subtitle: 'Enter the code from your authenticator app.',
+        footer: _loading
+            ? null
+            : AppButton(
+                label: 'Use another method',
+                variant: AppButtonVariant.plain,
+                onPressed: () {
+                  MfaState.instance.clear();
+                },
+                fullWidth: true,
+              ),
+        children: _loading
+            ? const [
+                Padding(
+                  padding: EdgeInsets.symmetric(vertical: AppSpacing.xxl),
+                  child: Center(child: CircularProgressIndicator()),
+                ),
+              ]
+            : [
                 if (_errorMessage != null) ...[
                   AppInlineBanner(message: _errorMessage!),
                   const SizedBox(height: AppSpacing.base),
                 ],
-                const SizedBox(height: AppSpacing.md),
+                const SizedBox(height: AppSpacing.sm),
                 AppOtpField(
                   length: 6,
                   onCompleted: _verifying ? (_) {} : _verify,
                 ),
-                const SizedBox(height: AppSpacing.xl),
-                AppButton(
-                  label: 'Use another method',
-                  variant: AppButtonVariant.plain,
-                  onPressed: () {
-                    MfaState.instance.clear();
-                  },
-                ),
               ],
-            ),
+      ),
     );
   }
 }
