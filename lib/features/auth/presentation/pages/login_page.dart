@@ -26,6 +26,7 @@ class _LoginPageState extends ConsumerState<LoginPage> {
   String? _errorMessage;
   int _cooldownSeconds = 0;
   Timer? _cooldownTimer;
+  String? _cooldownEmail;
 
   @override
   void dispose() {
@@ -47,6 +48,7 @@ class _LoginPageState extends ConsumerState<LoginPage> {
     final (canAttempt, remaining) = await LoginThrottleService.instance.canAttempt(email);
     if (!canAttempt) {
       setState(() => _errorMessage = 'Too many attempts. Try again in ${_formatSeconds(remaining)}.');
+      _startCooldownCheck(email);
       return;
     }
 
@@ -69,7 +71,7 @@ class _LoginPageState extends ConsumerState<LoginPage> {
     if (next.error is AccountLockedFailure) {
       final failure = next.error as AccountLockedFailure;
       setState(() => _errorMessage = failure.message);
-      _startCooldownCheck();
+      _startCooldownCheck(_emailController.text.trim());
       ref.read(signInControllerProvider.notifier).clear();
       return;
     }
@@ -79,23 +81,26 @@ class _LoginPageState extends ConsumerState<LoginPage> {
         : next.error.toString();
 
     if (next.error is InvalidCredentialsFailure) {
-      _startCooldownCheck();
+      _startCooldownCheck(_emailController.text.trim());
     }
 
     setState(() => _errorMessage = msg);
     ref.read(signInControllerProvider.notifier).clear();
   }
 
-  void _startCooldownCheck() {
+  void _startCooldownCheck(String email) {
+    _cooldownEmail = email;
     _cooldownTimer?.cancel();
     _tick();
     _cooldownTimer = Timer.periodic(const Duration(seconds: 1), (_) => _tick());
   }
 
   Future<void> _tick() async {
-    final email = _emailController.text.trim();
-    if (email.isEmpty) {
-      setState(() => _cooldownSeconds = 0);
+    // Use the email captured when the cooldown started, not the live field —
+    // editing the email box mid-cooldown must not cancel the lockout.
+    final email = _cooldownEmail;
+    if (email == null || email.isEmpty) {
+      if (mounted) setState(() => _cooldownSeconds = 0);
       return;
     }
     final (canAttempt, remaining) = await LoginThrottleService.instance.canAttempt(email);
