@@ -42,28 +42,37 @@ class _DevicesContentState extends ConsumerState<_DevicesContent> {
 
   @override
   Widget build(BuildContext context) {
+    final lum = context.lum;
     final state = ref.watch(devicesProvider);
 
     return Scaffold(
-      backgroundColor: AppColors.background,
+      backgroundColor: lum.paper,
       appBar: AppBar(
-        backgroundColor: AppColors.background,
-        surfaceTintColor: AppColors.background,
+        backgroundColor: lum.paper,
+        surfaceTintColor: lum.paper,
+        elevation: 0,
         leading: IconButton(
-          icon: const Icon(Icons.arrow_back_ios, color: AppColors.accent, size: 20),
+          icon: Icon(Icons.arrow_back_ios_new,
+              color: lum.textPrimary, size: 20),
           onPressed: () => Navigator.of(context).pop(),
         ),
-        title: Text('Devices', style: AppTypography.headline),
+        title: Text(
+          'Devices',
+          style: AppTypography.title3.copyWith(color: lum.textPrimary),
+        ),
       ),
       body: state.when(
-        loading: () => const Center(child: CircularProgressIndicator()),
+        loading: () => Center(
+          child: CircularProgressIndicator(color: lum.accent),
+        ),
         error: (e, _) => Center(
           child: Padding(
-            padding: const EdgeInsets.symmetric(horizontal: AppSpacing.screenPadding),
+            padding:
+                const EdgeInsets.symmetric(horizontal: AppSpacing.screenPadding),
             child: Column(
               mainAxisSize: MainAxisSize.min,
               children: [
-                AppInlineBanner(
+                const AppInlineBanner(
                   message: 'Could not load devices.',
                   type: BannerType.error,
                 ),
@@ -80,15 +89,17 @@ class _DevicesContentState extends ConsumerState<_DevicesContent> {
           if (devices.isEmpty) {
             return Center(
               child: Padding(
-                padding: const EdgeInsets.symmetric(horizontal: AppSpacing.screenPadding),
+                padding: const EdgeInsets.symmetric(
+                    horizontal: AppSpacing.screenPadding),
                 child: Column(
                   mainAxisSize: MainAxisSize.min,
                   children: [
-                    Icon(Icons.devices, size: 48, color: AppColors.textHint),
+                    Icon(Icons.devices, size: 48, color: lum.textTertiary),
                     const SizedBox(height: AppSpacing.md),
                     Text(
                       'No devices registered.',
-                      style: AppTypography.subhead.copyWith(color: AppColors.textMuted),
+                      style: AppTypography.subhead
+                          .copyWith(color: lum.textSecondary),
                     ),
                   ],
                 ),
@@ -120,6 +131,7 @@ class _DeviceCard extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
+    final lum = context.lum;
     return AppCard(
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -130,11 +142,11 @@ class _DeviceCard extends ConsumerWidget {
                 width: 40,
                 height: 40,
                 decoration: BoxDecoration(
-                  color: AppColors.accent.withValues(alpha: 0.1),
-                  borderRadius: BorderRadius.circular(10),
+                  color: lum.accentSoft,
+                  borderRadius: BorderRadius.circular(AppRadius.sm),
                 ),
                 child: Center(
-                  child: Icon(_deviceIcon, color: AppColors.accent, size: 20),
+                  child: Icon(_deviceIcon, color: lum.accent, size: 20),
                 ),
               ),
               const SizedBox(width: AppSpacing.md),
@@ -142,10 +154,15 @@ class _DeviceCard extends ConsumerWidget {
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Text(device.deviceName, style: AppTypography.headline),
+                    Text(
+                      device.deviceName,
+                      style:
+                          AppTypography.headline.copyWith(color: lum.textPrimary),
+                    ),
                     Text(
                       '${device.osInfo} · ${device.deviceModel}',
-                      style: AppTypography.footnote.copyWith(color: AppColors.textMuted),
+                      style: AppTypography.footnote
+                          .copyWith(color: lum.textSecondary),
                     ),
                   ],
                 ),
@@ -155,12 +172,23 @@ class _DeviceCard extends ConsumerWidget {
           ),
           if (device.lastSeenAt != null) ...[
             const SizedBox(height: AppSpacing.sm),
-            Text(
-              'Last seen: ${_formatDate(device.lastSeenAt)}',
-              style: AppTypography.caption.copyWith(color: AppColors.textMuted),
+            Row(
+              children: [
+                Text(
+                  'Last seen',
+                  style:
+                      AppTypography.caption.copyWith(color: lum.textTertiary),
+                ),
+                const SizedBox(width: AppSpacing.sm),
+                Text(
+                  _formatDate(device.lastSeenAt),
+                  style:
+                      AppTypography.monoValue.copyWith(color: lum.textSecondary),
+                ),
+              ],
             ),
           ],
-          const Divider(color: AppColors.separator, height: AppSpacing.xl),
+          Divider(color: lum.hairline, height: AppSpacing.xl),
           Row(
             mainAxisAlignment: MainAxisAlignment.end,
             children: [
@@ -211,22 +239,24 @@ class _TrustBadge extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final (color, label) = switch (trustLevel) {
-      'TRUSTED' => (AppColors.success, 'Trusted'),
-      'REVOKED' => (AppColors.destructive, 'Revoked'),
-      _ => (AppColors.warning, 'Pending'),
+    final lum = context.lum;
+    final (bg, fg, label) = switch (trustLevel) {
+      'TRUSTED' => (lum.successSoft, lum.successText, 'Trusted'),
+      'REVOKED' => (lum.dangerSoft, lum.dangerText, 'Revoked'),
+      _ => (lum.warningSoft, lum.warningText, 'Pending'),
     };
 
     return Container(
-      padding: const EdgeInsets.symmetric(horizontal: AppSpacing.sm, vertical: 4),
+      padding:
+          const EdgeInsets.symmetric(horizontal: AppSpacing.sm, vertical: 4),
       decoration: BoxDecoration(
-        color: color.withValues(alpha: 0.12),
+        color: bg,
         borderRadius: BorderRadius.circular(AppRadius.chip),
       ),
       child: Text(
         label,
         style: AppTypography.caption.copyWith(
-          color: color,
+          color: fg,
           fontWeight: FontWeight.w600,
         ),
       ),

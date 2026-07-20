@@ -1,9 +1,11 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../../../core/design/app_colors.dart';
+import '../../../../core/design/app_radius.dart';
 import '../../../../core/design/app_spacing.dart';
 import '../../../../core/design/app_typography.dart';
 import '../../../../core/design/widgets/app_button.dart';
+import '../../../../core/design/widgets/app_card.dart';
 import '../../../../core/design/widgets/app_inline_banner.dart';
 import '../../../../core/widgets/permission_gate.dart';
 import '../controllers/security_logs_controller.dart';
@@ -72,23 +74,44 @@ class _LogsContentState extends ConsumerState<_LogsContent> {
     };
   }
 
+  /// Severity → color pair (badge foreground + soft badge background).
+  /// Status is never color-only: the row keeps its icon shape + text label.
+  (Color, Color) _severity(String action, LumColors lum) {
+    return switch (action) {
+      'LOGIN' || 'SIGNUP' || 'DEVICE_APPROVE' || 'MFA_ENROLL' => (
+          lum.success,
+          lum.successSoft,
+        ),
+      'LOGOUT' || 'PASSWORD_RESET' => (lum.warning, lum.warningSoft),
+      'DEVICE_REVOKE' => (lum.danger, lum.dangerSoft),
+      _ => (lum.accent, lum.accentSoft),
+    };
+  }
+
   @override
   Widget build(BuildContext context) {
+    final lum = context.lum;
     final state = ref.watch(securityLogsControllerProvider);
 
     return Scaffold(
-      backgroundColor: AppColors.background,
+      backgroundColor: lum.paper,
       appBar: AppBar(
-        backgroundColor: AppColors.background,
-        surfaceTintColor: AppColors.background,
+        backgroundColor: lum.paper,
+        surfaceTintColor: lum.paper,
+        elevation: 0,
         leading: IconButton(
-          icon: const Icon(Icons.arrow_back_ios, color: AppColors.accent, size: 20),
+          icon: Icon(Icons.arrow_back_ios, color: lum.accent, size: 20),
           onPressed: () => Navigator.of(context).pop(),
         ),
-        title: Text('Security logs', style: AppTypography.headline),
+        title: Text(
+          'Security logs',
+          style: AppTypography.title3.copyWith(color: lum.textPrimary),
+        ),
       ),
       body: state.when(
-        loading: () => const Center(child: CircularProgressIndicator()),
+        loading: () => Center(
+          child: CircularProgressIndicator(color: lum.accent),
+        ),
         error: (e, _) => Center(
           child: Padding(
             padding: const EdgeInsets.symmetric(horizontal: AppSpacing.screenPadding),
@@ -113,40 +136,71 @@ class _LogsContentState extends ConsumerState<_LogsContent> {
                 child: Column(
                   mainAxisSize: MainAxisSize.min,
                   children: [
-                    Icon(Icons.history, size: 48, color: AppColors.textHint),
+                    Icon(Icons.history, size: 48, color: lum.textTertiary),
                     const SizedBox(height: AppSpacing.md),
                     Text(
                       'No security activity yet.',
-                      style: AppTypography.subhead.copyWith(color: AppColors.textMuted),
+                      style: AppTypography.subhead.copyWith(color: lum.textSecondary),
                     ),
                   ],
                 ),
               ),
             );
           }
-          return ListView.builder(
+          return ListView.separated(
             padding: const EdgeInsets.symmetric(
               horizontal: AppSpacing.screenPadding,
-              vertical: AppSpacing.md,
+              vertical: AppSpacing.base,
             ),
             itemCount: logs.length,
+            separatorBuilder: (_, _) => const SizedBox(height: AppSpacing.md),
             itemBuilder: (_, i) {
               final log = logs[i];
               final action = log['action'] as String? ?? '';
               final entity = log['entity'] as String? ?? '';
               final time = log['created_at'] as String?;
-              return ListTile(
-                contentPadding: EdgeInsets.zero,
-                leading: Icon(_icon(action), color: AppColors.textMuted, size: 22),
-                title: Text(
-                  action.replaceAll('_', ' ').toLowerCase().capitalize(),
-                  style: AppTypography.subhead,
+              final (fg, soft) = _severity(action, lum);
+              return AppCard(
+                padding: const EdgeInsets.all(AppSpacing.base),
+                child: Row(
+                  crossAxisAlignment: CrossAxisAlignment.center,
+                  children: [
+                    Container(
+                      width: 40,
+                      height: 40,
+                      decoration: BoxDecoration(
+                        color: soft,
+                        borderRadius: BorderRadius.circular(AppRadius.sm),
+                      ),
+                      child: Icon(_icon(action), color: fg, size: 20),
+                    ),
+                    const SizedBox(width: AppSpacing.md),
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            action.replaceAll('_', ' ').toLowerCase().capitalize(),
+                            style: AppTypography.label.copyWith(color: lum.textPrimary),
+                          ),
+                          if (entity.isNotEmpty) ...[
+                            const SizedBox(height: AppSpacing.xs),
+                            Text(
+                              entity.capitalize(),
+                              style: AppTypography.footnote
+                                  .copyWith(color: lum.textSecondary),
+                            ),
+                          ],
+                        ],
+                      ),
+                    ),
+                    const SizedBox(width: AppSpacing.md),
+                    Text(
+                      _relativeTime(time),
+                      style: AppTypography.monoValue.copyWith(color: lum.textTertiary),
+                    ),
+                  ],
                 ),
-                subtitle: Text(
-                  '${entity.capitalize()} · ${_relativeTime(time)}',
-                  style: AppTypography.footnote.copyWith(color: AppColors.textMuted),
-                ),
-                dense: true,
               );
             },
           );
