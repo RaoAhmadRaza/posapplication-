@@ -2,10 +2,13 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../../../core/design/app_colors.dart';
+import '../../../../core/design/app_radius.dart';
 import '../../../../core/design/app_spacing.dart';
 import '../../../../core/design/app_typography.dart';
+import '../../../../core/design/clay.dart';
 import '../../../../core/design/widgets/app_button.dart';
 import '../../../../core/design/widgets/app_inline_banner.dart';
+import '../../../../core/design/widgets/lumina_brand.dart';
 import '../../../../core/services/device_service.dart';
 import '../../../../core/services/pin_service.dart';
 import '../../../../core/state/app_flow_state.dart';
@@ -136,45 +139,57 @@ class _WorkspaceInitScreenState extends ConsumerState<WorkspaceInitScreen> {
       WidgetsBinding.instance.addPostFrameCallback((_) => _complete());
     }
 
+    final lum = context.lum;
+
     if (_error) {
       return Scaffold(
-        backgroundColor: AppColors.background,
+        backgroundColor: lum.paper,
         body: SafeArea(
           child: Center(
-            child: Padding(
+            child: SingleChildScrollView(
               padding: const EdgeInsets.symmetric(
                 horizontal: AppSpacing.screenPadding,
               ),
-              child: Column(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  Container(
-                    width: 64,
-                    height: 64,
-                    decoration: BoxDecoration(
-                      color: AppColors.destructive.withValues(alpha: 0.1),
-                      borderRadius: BorderRadius.circular(16),
-                    ),
-                    child: const Center(
-                      child: Icon(
-                        Icons.error_outline,
-                        size: 32,
-                        color: AppColors.destructive,
+              child: ConstrainedBox(
+                constraints: const BoxConstraints(maxWidth: 420),
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Container(
+                      width: 64,
+                      height: 64,
+                      decoration: BoxDecoration(
+                        color: lum.dangerSoft,
+                        borderRadius: BorderRadius.circular(AppRadius.lg),
+                      ),
+                      child: Center(
+                        child: Icon(
+                          Icons.error_outline,
+                          size: 32,
+                          color: lum.danger,
+                        ),
                       ),
                     ),
-                  ),
-                  const SizedBox(height: AppSpacing.xl),
-                  Text(
-                    'Something went wrong',
-                    style: AppTypography.headline,
-                  ),
-                  const SizedBox(height: AppSpacing.xs),
-                  AppInlineBanner(
-                    message: _errorMessage ?? 'Failed to set up your workspace.',
-                  ),
-                  const SizedBox(height: AppSpacing.xxl),
-                  AppButton(label: 'Retry', onPressed: _retry),
-                ],
+                    const SizedBox(height: AppSpacing.xl),
+                    Text(
+                      'Something went wrong',
+                      textAlign: TextAlign.center,
+                      style: AppTypography.largeTitle
+                          .copyWith(color: lum.textPrimary),
+                    ),
+                    const SizedBox(height: AppSpacing.base),
+                    AppInlineBanner(
+                      message:
+                          _errorMessage ?? 'Failed to set up your workspace.',
+                    ),
+                    const SizedBox(height: AppSpacing.xxl),
+                    AppButton(
+                      label: 'Retry',
+                      onPressed: _retry,
+                      fullWidth: true,
+                    ),
+                  ],
+                ),
               ),
             ),
           ),
@@ -183,54 +198,110 @@ class _WorkspaceInitScreenState extends ConsumerState<WorkspaceInitScreen> {
     }
 
     return Scaffold(
-      backgroundColor: AppColors.background,
+      backgroundColor: lum.paper,
       body: SafeArea(
         child: Center(
-          child: Padding(
+          child: SingleChildScrollView(
             padding: const EdgeInsets.symmetric(
               horizontal: AppSpacing.screenPadding,
             ),
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                Container(
-                  width: 64,
-                  height: 64,
-                  decoration: BoxDecoration(
-                    color: AppColors.accent.withValues(alpha: 0.1),
-                    borderRadius: BorderRadius.circular(16),
+            child: ConstrainedBox(
+              constraints: const BoxConstraints(maxWidth: 420),
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  const LuminaGlyph(size: 72, glow: true),
+                  const SizedBox(height: AppSpacing.xl),
+                  Text(
+                    'Setting up your workspace',
+                    textAlign: TextAlign.center,
+                    style: AppTypography.largeTitle
+                        .copyWith(color: lum.textPrimary),
                   ),
-                  child: const Center(
-                    child: Icon(
-                      Icons.dashboard_outlined,
-                      size: 32,
-                      color: AppColors.accent,
+                  const SizedBox(height: AppSpacing.sm),
+                  Text(
+                    'Preparing your profile, permissions, and devices.',
+                    textAlign: TextAlign.center,
+                    style: AppTypography.subhead
+                        .copyWith(color: lum.textSecondary),
+                  ),
+                  const SizedBox(height: AppSpacing.xxl),
+                  ClayContainer(
+                    variant: ClayVariant.soft,
+                    color: lum.surface,
+                    borderRadius: AppRadius.lg,
+                    isDark: lum.isDark,
+                    padding: const EdgeInsets.all(AppSpacing.xl),
+                    child: Column(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        _StepRow(
+                          label: 'Profile & permissions',
+                          done: permsReady,
+                          lum: lum,
+                        ),
+                        const SizedBox(height: AppSpacing.lg),
+                        _StepRow(
+                          label: 'Branches & assignments',
+                          done: branchesReady,
+                          lum: lum,
+                        ),
+                        const SizedBox(height: AppSpacing.lg),
+                        _StepRow(
+                          label: 'Device & PIN sync',
+                          done: permsReady && branchesReady,
+                          lum: lum,
+                        ),
+                      ],
                     ),
                   ),
-                ),
-                const SizedBox(height: AppSpacing.xl),
-                Text(
-                  'Setting up your workspace',
-                  style: AppTypography.headline,
-                ),
-                const SizedBox(height: AppSpacing.xs),
-                Text(
-                  'Loading your profile and permissions...',
-                  style: AppTypography.subhead.copyWith(
-                    color: AppColors.textMuted,
-                  ),
-                ),
-                const SizedBox(height: AppSpacing.xxl),
-                const SizedBox(
-                  width: 24,
-                  height: 24,
-                  child: CircularProgressIndicator(strokeWidth: 2.5),
-                ),
-              ],
+                ],
+              ),
             ),
           ),
         ),
       ),
+    );
+  }
+}
+
+/// One line in the workspace-init progress list: a Lumen spinner while pending,
+/// a success check once the underlying provider reports ready.
+class _StepRow extends StatelessWidget {
+  const _StepRow({
+    required this.label,
+    required this.done,
+    required this.lum,
+  });
+
+  final String label;
+  final bool done;
+  final LumColors lum;
+
+  @override
+  Widget build(BuildContext context) {
+    return Row(
+      children: [
+        SizedBox(
+          width: 22,
+          height: 22,
+          child: done
+              ? Icon(Icons.check_circle_rounded, size: 22, color: lum.success)
+              : CircularProgressIndicator(
+                  strokeWidth: 2,
+                  valueColor: AlwaysStoppedAnimation(lum.accent),
+                ),
+        ),
+        const SizedBox(width: AppSpacing.md),
+        Expanded(
+          child: Text(
+            label,
+            style: AppTypography.subhead.copyWith(
+              color: done ? lum.textPrimary : lum.textSecondary,
+            ),
+          ),
+        ),
+      ],
     );
   }
 }
