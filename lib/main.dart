@@ -7,6 +7,7 @@ import 'package:window_manager/window_manager.dart';
 import 'core/env.dart';
 import 'core/services/pin_service.dart';
 import 'core/state/app_flow_state.dart';
+import 'core/state/theme_controller.dart';
 import 'core/supabase.dart';
 import 'app.dart';
 
@@ -40,6 +41,9 @@ Future<void> main() async {
       await PinService.instance.hasPin()) {
     PinLockState.instance.lock();
   }
+
+  // Restore the saved light/dark choice before the first frame.
+  await ThemeController.load();
 
   runApp(const ProviderScope(child: App()));
 }
