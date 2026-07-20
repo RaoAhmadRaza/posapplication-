@@ -2,13 +2,11 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../../../core/design/app_colors.dart';
-import '../../../../core/design/app_radius.dart';
 import '../../../../core/design/app_spacing.dart';
 import '../../../../core/design/app_typography.dart';
-import '../../../../core/design/clay.dart';
 import '../../../../core/design/widgets/app_button.dart';
 import '../../../../core/design/widgets/app_inline_banner.dart';
-import '../../../../core/design/widgets/lumina_brand.dart';
+import '../../../../core/design/widgets/auth_hero_scaffold.dart';
 import '../../../../core/services/device_service.dart';
 import '../../../../core/services/pin_service.dart';
 import '../../../../core/state/app_flow_state.dart';
@@ -58,8 +56,6 @@ class _WorkspaceInitScreenState extends ConsumerState<WorkspaceInitScreen> {
   }
 
   void _triggerLoads() {
-    // TEMP debug
-    debugPrint('[WORKSPACE-INIT] _triggerLoads called, session uid=${supabase.auth.currentUser?.id}, completed=${WorkspaceInitState.instance.completed}');
     final userId = supabase.auth.currentUser?.id;
     if (userId == null) return;
     ref.read(profileControllerProvider.notifier).load(userId);
@@ -85,6 +81,10 @@ class _WorkspaceInitScreenState extends ConsumerState<WorkspaceInitScreen> {
     });
     _startTimeout();
     WidgetsBinding.instance.addPostFrameCallback((_) => _triggerLoads());
+  }
+
+  Future<void> _signOut() async {
+    await supabase.auth.signOut();
   }
 
   Future<void> _reconcilePin() async {
@@ -141,125 +141,61 @@ class _WorkspaceInitScreenState extends ConsumerState<WorkspaceInitScreen> {
 
     final lum = context.lum;
 
+    final signOutButton = AppButton(
+      label: 'Not you? Sign out',
+      variant: AppButtonVariant.plain,
+      onPressed: _signOut,
+      fullWidth: true,
+    );
+
     if (_error) {
-      return Scaffold(
-        backgroundColor: lum.paper,
-        body: SafeArea(
-          child: Center(
-            child: SingleChildScrollView(
-              padding: const EdgeInsets.symmetric(
-                horizontal: AppSpacing.screenPadding,
-              ),
-              child: ConstrainedBox(
-                constraints: const BoxConstraints(maxWidth: 420),
-                child: Column(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    Container(
-                      width: 64,
-                      height: 64,
-                      decoration: BoxDecoration(
-                        color: lum.dangerSoft,
-                        borderRadius: BorderRadius.circular(AppRadius.lg),
-                      ),
-                      child: Center(
-                        child: Icon(
-                          Icons.error_outline,
-                          size: 32,
-                          color: lum.danger,
-                        ),
-                      ),
-                    ),
-                    const SizedBox(height: AppSpacing.xl),
-                    Text(
-                      'Something went wrong',
-                      textAlign: TextAlign.center,
-                      style: AppTypography.largeTitle
-                          .copyWith(color: lum.textPrimary),
-                    ),
-                    const SizedBox(height: AppSpacing.base),
-                    AppInlineBanner(
-                      message:
-                          _errorMessage ?? 'Failed to set up your workspace.',
-                    ),
-                    const SizedBox(height: AppSpacing.xxl),
-                    AppButton(
-                      label: 'Retry',
-                      onPressed: _retry,
-                      fullWidth: true,
-                    ),
-                  ],
-                ),
-              ),
+      return AuthHeroScaffold(
+        child: AuthFormCard(
+          title: 'Starting up',
+          subtitle: 'Setting up your workspace…',
+          children: [
+            AppInlineBanner(
+              message: _errorMessage ?? 'Failed to set up your workspace.',
             ),
-          ),
+            const SizedBox(height: AppSpacing.xl),
+            AppButton(
+              label: 'Retry',
+              icon: Icons.refresh_rounded,
+              onPressed: _retry,
+              fullWidth: true,
+            ),
+            const SizedBox(height: AppSpacing.sm),
+            signOutButton,
+          ],
         ),
       );
     }
 
-    return Scaffold(
-      backgroundColor: lum.paper,
-      body: SafeArea(
-        child: Center(
-          child: SingleChildScrollView(
-            padding: const EdgeInsets.symmetric(
-              horizontal: AppSpacing.screenPadding,
-            ),
-            child: ConstrainedBox(
-              constraints: const BoxConstraints(maxWidth: 420),
-              child: Column(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  const LuminaGlyph(size: 72, glow: true),
-                  const SizedBox(height: AppSpacing.xl),
-                  Text(
-                    'Setting up your workspace',
-                    textAlign: TextAlign.center,
-                    style: AppTypography.largeTitle
-                        .copyWith(color: lum.textPrimary),
-                  ),
-                  const SizedBox(height: AppSpacing.sm),
-                  Text(
-                    'Preparing your profile, permissions, and devices.',
-                    textAlign: TextAlign.center,
-                    style: AppTypography.subhead
-                        .copyWith(color: lum.textSecondary),
-                  ),
-                  const SizedBox(height: AppSpacing.xxl),
-                  ClayContainer(
-                    variant: ClayVariant.soft,
-                    color: lum.surface,
-                    borderRadius: AppRadius.lg,
-                    isDark: lum.isDark,
-                    padding: const EdgeInsets.all(AppSpacing.xl),
-                    child: Column(
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        _StepRow(
-                          label: 'Profile & permissions',
-                          done: permsReady,
-                          lum: lum,
-                        ),
-                        const SizedBox(height: AppSpacing.lg),
-                        _StepRow(
-                          label: 'Branches & assignments',
-                          done: branchesReady,
-                          lum: lum,
-                        ),
-                        const SizedBox(height: AppSpacing.lg),
-                        _StepRow(
-                          label: 'Device & PIN sync',
-                          done: permsReady && branchesReady,
-                          lum: lum,
-                        ),
-                      ],
-                    ),
-                  ),
-                ],
-              ),
-            ),
+    return AuthHeroScaffold(
+      child: AuthFormCard(
+        title: 'Starting up',
+        subtitle: 'Setting up your workspace…',
+        children: [
+          _StepRow(
+            label: 'Profile & permissions',
+            done: permsReady,
+            lum: lum,
           ),
-        ),
+          const SizedBox(height: AppSpacing.lg),
+          _StepRow(
+            label: 'Branches & assignments',
+            done: branchesReady,
+            lum: lum,
+          ),
+          const SizedBox(height: AppSpacing.lg),
+          _StepRow(
+            label: 'Device & PIN sync',
+            done: permsReady && branchesReady,
+            lum: lum,
+          ),
+          const SizedBox(height: AppSpacing.xl),
+          signOutButton,
+        ],
       ),
     );
   }
