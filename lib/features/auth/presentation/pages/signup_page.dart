@@ -25,6 +25,8 @@ class _SignupPageState extends ConsumerState<SignupPage> {
   final _emailController = TextEditingController();
   final _passwordController = TextEditingController();
   String? _errorMessage;
+  static final _emailRegex =
+      RegExp(r'^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$');
 
   @override
   void dispose() {
@@ -43,6 +45,10 @@ class _SignupPageState extends ConsumerState<SignupPage> {
     final password = _passwordController.text.trim();
     if (email.isEmpty || password.isEmpty) {
       setState(() => _errorMessage = 'Email and password are required.');
+      return;
+    }
+    if (!_emailRegex.hasMatch(email)) {
+      setState(() => _errorMessage = 'Please enter a valid email address.');
       return;
     }
     // Business name is required: a blank one used to drop the user into the shared
@@ -96,7 +102,7 @@ class _SignupPageState extends ConsumerState<SignupPage> {
     if (next.hasError && mounted) {
       final msg = next.error is AuthFailure
           ? (next.error as AuthFailure).message
-          : next.error.toString();
+          : 'Something went wrong. Please try again.';
       setState(() => _errorMessage = msg);
       ref.read(signUpControllerProvider.notifier).clear();
     }
@@ -138,6 +144,8 @@ class _SignupPageState extends ConsumerState<SignupPage> {
             controller: _businessNameController,
             label: 'Business name',
             hint: 'Your store name',
+            autofocus: true,
+            autofillHints: const [AutofillHints.organizationName],
             textInputAction: TextInputAction.next,
             prefixIcon: Icons.store_outlined,
           ),
@@ -156,6 +164,7 @@ class _SignupPageState extends ConsumerState<SignupPage> {
             controller: _fullNameController,
             label: 'Full name',
             hint: 'Your full name',
+            autofillHints: const [AutofillHints.name],
             textInputAction: TextInputAction.next,
             prefixIcon: Icons.person_outline,
           ),
@@ -165,6 +174,7 @@ class _SignupPageState extends ConsumerState<SignupPage> {
             label: 'Email',
             hint: 'you@example.com',
             keyboardType: TextInputType.emailAddress,
+            autofillHints: const [AutofillHints.username, AutofillHints.email],
             textInputAction: TextInputAction.next,
             prefixIcon: Icons.email_outlined,
           ),
@@ -174,6 +184,7 @@ class _SignupPageState extends ConsumerState<SignupPage> {
             label: 'Password',
             hint: 'Create a password',
             obscure: true,
+            autofillHints: const [AutofillHints.newPassword],
             textInputAction: TextInputAction.done,
             prefixIcon: Icons.lock_outline,
             onSubmitted: (_) => _submit(),
@@ -189,7 +200,7 @@ class _SignupPageState extends ConsumerState<SignupPage> {
           AppButton(
             label: 'Create account',
             loading: isLoading,
-            onPressed: _submit,
+            onPressed: isLoading ? null : _submit,
             fullWidth: true,
           ),
           const SizedBox(height: AppSpacing.sm),

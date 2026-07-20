@@ -77,7 +77,7 @@ class _ForgotPasswordPageState extends ConsumerState<ForgotPasswordPage> {
     if (next.hasError && mounted) {
       final msg = next.error is AuthFailure
           ? (next.error as AuthFailure).message
-          : next.error.toString();
+          : 'Something went wrong. Please try again.';
       setState(() => _errorMessage = msg);
       ref.read(forgotControllerProvider.notifier).clear();
     }
@@ -109,6 +109,8 @@ class _ForgotPasswordPageState extends ConsumerState<ForgotPasswordPage> {
             controller: _emailController,
             label: 'Email',
             hint: 'you@company.com',
+            autofocus: true,
+            autofillHints: const [AutofillHints.username, AutofillHints.email],
             keyboardType: TextInputType.emailAddress,
             textInputAction: TextInputAction.done,
             prefixIcon: Icons.mail_outline,

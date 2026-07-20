@@ -7,7 +7,6 @@ import '../../../../core/design/app_radius.dart';
 import '../../../../core/design/app_typography.dart';
 import '../../../../core/design/clay.dart';
 import '../../../../core/design/widgets/app_button.dart';
-import '../../../../core/design/widgets/app_checkbox.dart';
 import '../../../../core/design/widgets/app_inline_banner.dart';
 import '../../../../core/design/widgets/app_text_field.dart';
 import '../../../../core/design/widgets/auth_hero_scaffold.dart';
@@ -29,7 +28,9 @@ class _LoginPageState extends ConsumerState<LoginPage> {
   int _cooldownSeconds = 0;
   Timer? _cooldownTimer;
   String? _cooldownEmail;
-  bool _remember = true; // decorative — Supabase persists the session by default
+
+  static final _emailRegex =
+      RegExp(r'^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$');
 
   @override
   void dispose() {
@@ -45,6 +46,10 @@ class _LoginPageState extends ConsumerState<LoginPage> {
     final password = _passwordController.text.trim();
     if (email.isEmpty || password.isEmpty) {
       setState(() => _errorMessage = 'Email and password are required.');
+      return;
+    }
+    if (!_emailRegex.hasMatch(email)) {
+      setState(() => _errorMessage = 'Please enter a valid email address.');
       return;
     }
 
@@ -83,7 +88,7 @@ class _LoginPageState extends ConsumerState<LoginPage> {
 
     final msg = next.error is AuthFailure
         ? (next.error as AuthFailure).message
-        : next.error.toString();
+        : 'Something went wrong. Please try again.';
 
     if (next.error is InvalidCredentialsFailure) {
       _startCooldownCheck(_emailController.text.trim());
@@ -156,6 +161,8 @@ class _LoginPageState extends ConsumerState<LoginPage> {
               keyboardType: TextInputType.emailAddress,
               textInputAction: TextInputAction.next,
               prefixIcon: Icons.mail_outline,
+              autofocus: true,
+              autofillHints: const [AutofillHints.username, AutofillHints.email],
             ),
             const SizedBox(height: 16),
             AppTextField(
@@ -165,18 +172,10 @@ class _LoginPageState extends ConsumerState<LoginPage> {
               obscure: true,
               textInputAction: TextInputAction.done,
               prefixIcon: Icons.lock_outline,
+              autofillHints: const [AutofillHints.password],
               onSubmitted: (_) => _submit(),
             ),
-            const SizedBox(height: 18),
-            Align(
-              alignment: Alignment.centerLeft,
-              child: AppCheckbox(
-                value: _remember,
-                onChanged: (v) => setState(() => _remember = v),
-                label: 'Remember me',
-              ),
-            ),
-            const SizedBox(height: 20),
+            const SizedBox(height: 24),
             AppButton(
               label: _cooldownSeconds > 0
                   ? 'Try again in ${_formatSeconds(_cooldownSeconds)}'
@@ -186,12 +185,6 @@ class _LoginPageState extends ConsumerState<LoginPage> {
               fullWidth: true,
             ),
             const SizedBox(height: 10),
-            AppButton(
-              label: 'Use PIN instead',
-              variant: AppButtonVariant.plain,
-              onPressed: () => context.go('/pin-lock'),
-              fullWidth: true,
-            ),
             Center(
               child: TextButton(
                 onPressed: () => context.go('/forgot'),

@@ -5,6 +5,7 @@ import '../../../../core/design/app_spacing.dart';
 import '../../../../core/design/widgets/app_button.dart';
 import '../../../../core/design/widgets/app_inline_banner.dart';
 import '../../../../core/design/widgets/app_text_field.dart';
+import '../../../../core/design/widgets/app_toast.dart';
 import '../../../../core/design/widgets/auth_hero_scaffold.dart';
 import '../../../../core/error/auth_failure.dart';
 import '../controllers/reset_controller.dart';
@@ -65,14 +66,21 @@ class _ResetPasswordPageState extends ConsumerState<ResetPasswordPage> {
 
     if (failure != null) {
       setState(() => _errorMessage = failure.message);
+      return;
     }
+
+    showAppToast(
+      context,
+      'Password updated. Please sign in.',
+      type: BannerType.success,
+    );
   }
 
   void _onStateChange(AsyncValue<void>? prev, AsyncValue<void> next) {
     if (next.hasError && mounted) {
       final msg = next.error is AuthFailure
           ? (next.error as AuthFailure).message
-          : next.error.toString();
+          : 'Something went wrong. Please try again.';
       setState(() => _errorMessage = msg);
       ref.read(resetControllerProvider.notifier).clear();
     }
@@ -113,6 +121,8 @@ class _ResetPasswordPageState extends ConsumerState<ResetPasswordPage> {
             controller: _passwordController,
             label: 'New password',
             hint: 'At least 8 characters',
+            autofocus: true,
+            autofillHints: const [AutofillHints.newPassword],
             obscure: true,
             textInputAction: TextInputAction.next,
             prefixIcon: Icons.lock_outline,
@@ -122,6 +132,7 @@ class _ResetPasswordPageState extends ConsumerState<ResetPasswordPage> {
             controller: _confirmController,
             label: 'Confirm password',
             hint: 'Re-enter new password',
+            autofillHints: const [AutofillHints.newPassword],
             obscure: true,
             textInputAction: TextInputAction.done,
             prefixIcon: Icons.lock_outline,
