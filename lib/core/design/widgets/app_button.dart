@@ -1,8 +1,15 @@
 import 'package:flutter/material.dart';
 import '../app_colors.dart';
+import '../app_motion.dart';
 import '../app_radius.dart';
 import '../app_typography.dart';
+import '../clay.dart';
 
+/// Variants map to the design's Button component:
+///   filled → Lumen gloss pill (clay-lumen)
+///   tinted → ghost (accent-soft fill, accent text)
+///   plain  → transparent, accent text
+///   destructive → danger-soft fill, danger text
 enum AppButtonVariant { filled, tinted, plain, destructive }
 
 class AppButton extends StatefulWidget {
@@ -28,81 +35,91 @@ class AppButton extends StatefulWidget {
 }
 
 class _AppButtonState extends State<AppButton> {
-  bool _isPressed = false;
+  bool _pressed = false;
 
   bool get _enabled => widget.onPressed != null && !widget.loading;
 
-  Color get _textColor {
-    switch (widget.variant) {
-      case AppButtonVariant.filled:
-        return Colors.white;
-      case AppButtonVariant.destructive:
-        return Colors.white;
-      case AppButtonVariant.tinted:
-        return AppColors.accent;
-      case AppButtonVariant.plain:
-        return AppColors.accent;
-    }
-  }
-
-  Color get _bgColor {
-    switch (widget.variant) {
-      case AppButtonVariant.filled:
-        return AppColors.accent;
-      case AppButtonVariant.destructive:
-        return AppColors.destructive;
-      case AppButtonVariant.tinted:
-        return AppColors.accent.withValues(alpha: 0.1);
-      case AppButtonVariant.plain:
-        return Colors.transparent;
-    }
-  }
-
   @override
   Widget build(BuildContext context) {
+    final lum = context.lum;
+    final variant = widget.variant;
+    final isFilled = variant == AppButtonVariant.filled;
+
+    final (Color bg, Color fg) = switch (variant) {
+      AppButtonVariant.filled => (lum.accent, Colors.white),
+      AppButtonVariant.destructive => (lum.dangerSoft, lum.dangerText),
+      AppButtonVariant.tinted => (lum.accentSoft, lum.accent),
+      AppButtonVariant.plain => (Colors.transparent, lum.accent),
+    };
+
+    final content = Row(
+      mainAxisSize: MainAxisSize.min,
+      mainAxisAlignment: MainAxisAlignment.center,
+      children: [
+        if (widget.loading)
+          SizedBox(
+            width: 18,
+            height: 18,
+            child: CircularProgressIndicator(
+              strokeWidth: 2.5,
+              valueColor: AlwaysStoppedAnimation<Color>(fg),
+            ),
+          )
+        else ...[
+          if (widget.icon != null) ...[
+            Icon(widget.icon, color: fg, size: 18),
+            const SizedBox(width: 9),
+          ],
+          Text(
+            widget.label,
+            style: AppTypography.label.copyWith(color: fg, fontSize: 15),
+          ),
+        ],
+      ],
+    );
+
+    // Plain/tinted use a simple fill; filled uses the clay Lumen gloss.
+    Widget surface;
+    if (isFilled) {
+      surface = ClayContainer(
+        variant: _pressed ? ClayVariant.pressed : ClayVariant.lumen,
+        color: _pressed ? lum.accentPress : lum.accent,
+        borderRadius: AppRadius.sm,
+        isDark: lum.isDark,
+        height: 50,
+        width: widget.fullWidth ? double.infinity : null,
+        padding: const EdgeInsets.symmetric(horizontal: 22),
+        child: Center(child: content),
+      );
+    } else {
+      surface = Container(
+        height: 50,
+        width: widget.fullWidth ? double.infinity : null,
+        padding: const EdgeInsets.symmetric(horizontal: 22),
+        alignment: Alignment.center,
+        decoration: BoxDecoration(
+          color: variant == AppButtonVariant.plain && _pressed
+              ? lum.accentSoft
+              : bg,
+          borderRadius: BorderRadius.circular(AppRadius.sm),
+        ),
+        child: content,
+      );
+    }
+
     return GestureDetector(
-      onTapDown: _enabled ? (_) => setState(() => _isPressed = true) : null,
-      onTapUp: _enabled ? (_) => setState(() => _isPressed = false) : null,
-      onTapCancel: _enabled ? () => setState(() => _isPressed = false) : null,
+      onTapDown: _enabled ? (_) => setState(() => _pressed = true) : null,
+      onTapUp: _enabled ? (_) => setState(() => _pressed = false) : null,
+      onTapCancel: _enabled ? () => setState(() => _pressed = false) : null,
       onTap: _enabled ? widget.onPressed : null,
-      child: AnimatedOpacity(
-        opacity: _isPressed ? 0.85 : _enabled ? 1.0 : 0.5,
-        duration: const Duration(milliseconds: 120),
-        child: Container(
-          height: 50,
-          width: widget.fullWidth ? double.infinity : null,
-          decoration: BoxDecoration(
-            color: _bgColor,
-            borderRadius: BorderRadius.circular(AppRadius.button),
-          ),
-          child: Center(
-            child: widget.loading
-                ? SizedBox(
-                    width: 20,
-                    height: 20,
-                    child: CircularProgressIndicator(
-                      strokeWidth: 2.5,
-                      valueColor: AlwaysStoppedAnimation<Color>(_textColor),
-                    ),
-                  )
-                : Row(
-                    mainAxisSize: MainAxisSize.min,
-                    mainAxisAlignment: MainAxisAlignment.center,
-                    children: [
-                      if (widget.icon != null) ...[
-                        Icon(widget.icon, color: _textColor, size: 18),
-                        const SizedBox(width: 8),
-                      ],
-                      Text(
-                        widget.label,
-                        style: AppTypography.callout.copyWith(
-                          color: _textColor,
-                          fontWeight: FontWeight.w600,
-                        ),
-                      ),
-                    ],
-                  ),
-          ),
+      child: AnimatedScale(
+        scale: _pressed ? 0.97 : 1.0,
+        duration: AppMotion.fast,
+        curve: AppMotion.curve,
+        child: AnimatedOpacity(
+          opacity: _enabled ? 1.0 : 0.5,
+          duration: AppMotion.fast,
+          child: surface,
         ),
       ),
     );
