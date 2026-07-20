@@ -34,6 +34,13 @@ lib/
 ## Auth — COMPLETE
 All flows end-to-end. 33+ routes, auth redirect, StatefulShellRoute bottom nav. RBAC, branch selection, PIN lock +
 biometric, TOTP MFA (clean-arch, typed AuthFailure — retry banner not lockout), device/session/security management.
+Login-throttle fix (2026-07-20, TC-AUTH-LOGIN-004): _submit throttle pre-check now starts the live cooldown ticker
+(was static text + enabled button → "stuck timer"); _tick reads captured _cooldownEmail not the live field. Device
+re-run owed (6 failed sign-ins to arm lock). Detail in DECISIONS.
+Recovery-flow fix (2026-07-20, TC-AUTH-OTP-002/RESET-001): recovery OTP verify skipped /reset → dashboard. Root =
+verifyOTP(recovery) creates a session whose onAuthStateChange ran resetUserScopedState() → RecoveryState.reset(),
+clobbering codeVerified. Fix: router uid-change handler skips the reset while RecoveryState.isRecovering; reset success
+now signOut()s the transient recovery session → lands on /login. Device re-run owed. Detail in DECISIONS.
 
 ## Staff-onboarding (QR) — Phases 1–9 DONE, feature COMPLETE (2026-07-18; detail in DECISIONS)
 Runbook v3. Phase 1 (security, ships alone): closed CRITICAL self-role-escalation — "users update own" RLS now has a
