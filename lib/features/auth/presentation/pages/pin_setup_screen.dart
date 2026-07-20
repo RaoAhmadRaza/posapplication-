@@ -6,6 +6,7 @@ import '../../../../core/design/app_spacing.dart';
 import '../../../../core/design/app_typography.dart';
 import '../../../../core/design/clay.dart';
 import '../../../../core/design/widgets/app_inline_banner.dart';
+import '../../../../core/design/widgets/app_toast.dart';
 import '../../../../core/services/pin_service.dart';
 
 class PinSetupScreen extends StatefulWidget {
@@ -41,7 +42,11 @@ class _PinSetupScreenState extends State<PinSetupScreen> {
   Future<void> _save(String pin) async {
     setState(() => _loading = true);
     await PinService.instance.setPin(pin);
-    if (mounted) Navigator.of(context).pop();
+    if (!mounted) return;
+    if (context.mounted) {
+      showAppToast(context, 'PIN set', type: BannerType.success);
+    }
+    Navigator.of(context).pop();
   }
 
   @override
