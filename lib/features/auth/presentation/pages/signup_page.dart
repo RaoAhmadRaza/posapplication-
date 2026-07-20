@@ -7,7 +7,7 @@ import '../../../../core/design/app_typography.dart';
 import '../../../../core/design/widgets/app_button.dart';
 import '../../../../core/design/widgets/app_inline_banner.dart';
 import '../../../../core/design/widgets/app_text_field.dart';
-import '../../../../core/design/widgets/responsive_form_scaffold.dart';
+import '../../../../core/design/widgets/auth_hero_scaffold.dart';
 import '../../../../core/error/auth_failure.dart';
 import '../../domain/repositories/auth_repository.dart';
 import '../controllers/sign_up_controller.dart';
@@ -107,27 +107,28 @@ class _SignupPageState extends ConsumerState<SignupPage> {
     ref.listen(signUpControllerProvider, _onStateChange);
     final isLoading = ref.watch(signUpControllerProvider).isLoading;
 
-    return ResponsiveFormScaffold(
-      title: 'Create your account',
-      subtitle: 'Get started with your store',
-      footer: Column(
-        children: [
-          Text(
-            'Already have an account?',
-            style: AppTypography.footnote.copyWith(
-              color: AppColors.textMuted,
+    final lum = context.lum;
+    return AuthHeroScaffold(
+      child: AuthFormCard(
+        title: 'Create your account',
+        subtitle: 'Get started with your store',
+        footer: Column(
+          children: [
+            Text(
+              'Already have an account?',
+              style: AppTypography.footnote.copyWith(
+                color: lum.textSecondary,
+              ),
             ),
-          ),
-          const SizedBox(height: AppSpacing.sm),
-          AppButton(
-            label: 'Log in',
-            variant: AppButtonVariant.tinted,
-            onPressed: () => context.go('/login'),
-          ),
-        ],
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.stretch,
+            const SizedBox(height: AppSpacing.sm),
+            AppButton(
+              label: 'Log in',
+              variant: AppButtonVariant.tinted,
+              onPressed: () => context.go('/login'),
+              fullWidth: true,
+            ),
+          ],
+        ),
         children: [
           if (_errorMessage != null) ...[
             AppInlineBanner(message: _errorMessage!),
@@ -146,7 +147,7 @@ class _SignupPageState extends ConsumerState<SignupPage> {
             child: Text(
               'Required — this creates your store. Joining a team? Use "Scan invite QR" on the login screen.',
               style: AppTypography.caption.copyWith(
-                color: AppColors.textHint,
+                color: lum.textTertiary,
               ),
             ),
           ),
@@ -189,12 +190,14 @@ class _SignupPageState extends ConsumerState<SignupPage> {
             label: 'Create account',
             loading: isLoading,
             onPressed: _submit,
+            fullWidth: true,
           ),
           const SizedBox(height: AppSpacing.sm),
           AppButton(
             label: 'Try the demo instead',
             variant: AppButtonVariant.plain,
             onPressed: isLoading ? null : _submitDemo,
+            fullWidth: true,
           ),
         ],
       ),
