@@ -88,6 +88,7 @@ class _PurchaseOrderFormPageState
   bool _saving = false;
   bool _loadingExisting = false;
   bool _locked = false; // edit blocked when PO is not draft
+  bool _saveAttempted = false; // drives per-line "product required" highlight
 
   bool get _isEditing => widget.poId != null;
 
@@ -284,18 +285,33 @@ class _PurchaseOrderFormPageState
 
   Future<void> _save() async {
     if (_locked) return;
+    setState(() => _saveAttempted = true);
     if (_supplier == null) {
       setState(() => _error = 'Supplier is required.');
       return;
     }
-    final validLines = _lines
-        .where((l) => l.productId != null && l._qty > 0 && l._cost >= 0)
-        .toList();
-    if (validLines.isEmpty) {
-      setState(() => _error =
-          'Add at least one line with a product, quantity > 0 and cost ≥ 0.');
+    if (_lines.isEmpty) {
+      setState(() => _error = 'Add at least one line.');
       return;
     }
+    // Validate every line individually — never silently drop a line the user
+    // filled. A line with a total but no product (the common trap) is flagged
+    // specifically and its product row is highlighted via _saveAttempted.
+    if (_lines.any((l) => l.productId == null)) {
+      setState(() => _error = _lines.length == 1
+          ? 'Select a product for this line before saving.'
+          : 'Select a product for every line, or remove the empty one(s).');
+      return;
+    }
+    if (_lines.any((l) => l._qty <= 0)) {
+      setState(() => _error = 'Every line needs a quantity greater than 0.');
+      return;
+    }
+    if (_lines.any((l) => l._cost < 0)) {
+      setState(() => _error = 'Unit cost cannot be negative.');
+      return;
+    }
+    final validLines = _lines;
     final currency = _currency.text.trim();
     if (currency.isEmpty) {
       setState(() => _error = 'Currency is required.');
@@ -446,6 +462,7 @@ class _PurchaseOrderFormPageState
                             _LineEditor(
                               line: line,
                               enabled: !_locked,
+                              showProductError: _saveAttempted,
                               onPickProduct: () => _pickProduct(line),
                               onRemove:
                                   _lines.length > 1 ? () => _removeLine(line) : null,
@@ -610,12 +627,14 @@ class _LineEditor extends StatelessWidget {
   const _LineEditor({
     required this.line,
     required this.enabled,
+    required this.showProductError,
     required this.onPickProduct,
     required this.onRemove,
   });
 
   final _LineDraft line;
   final bool enabled;
+  final bool showProductError;
   final VoidCallback onPickProduct;
   final VoidCallback? onRemove;
 
@@ -634,15 +653,42 @@ class _LineEditor extends StatelessWidget {
                   Expanded(
                     child: InkWell(
                       onTap: enabled ? onPickProduct : null,
-                      child: Text(
-                        line.productId == null
-                            ? 'Select product'
-                            : line.name,
-                        style: AppTypography.subhead.copyWith(
-                          color: line.productId == null
-                              ? AppColors.accent
-                              : AppColors.textPrimary,
-                          fontWeight: FontWeight.w600,
+                      borderRadius: BorderRadius.circular(AppRadius.field),
+                      child: Container(
+                        padding: const EdgeInsets.symmetric(
+                            horizontal: AppSpacing.base,
+                            vertical: AppSpacing.md),
+                        decoration: BoxDecoration(
+                          color: AppColors.fieldFill,
+                          borderRadius: BorderRadius.circular(AppRadius.field),
+                          border: showProductError && line.productId == null
+                              ? Border.all(color: AppColors.destructive)
+                              : null,
+                        ),
+                        child: Row(
+                          children: [
+                            Icon(Icons.inventory_2_outlined,
+                                size: 18,
+                                color: line.productId == null
+                                    ? AppColors.accent
+                                    : AppColors.textMuted),
+                            const SizedBox(width: AppSpacing.md),
+                            Expanded(
+                              child: Text(
+                                line.productId == null
+                                    ? 'Select product'
+                                    : line.name,
+                                style: AppTypography.subhead.copyWith(
+                                  color: line.productId == null
+                                      ? AppColors.accent
+                                      : AppColors.textPrimary,
+                                  fontWeight: FontWeight.w600,
+                                ),
+                              ),
+                            ),
+                            const Icon(Icons.chevron_right,
+                                color: AppColors.separator),
+                          ],
                         ),
                       ),
                     ),
@@ -655,6 +701,12 @@ class _LineEditor extends StatelessWidget {
                     ),
                 ],
               ),
+              if (showProductError && line.productId == null) ...[
+                const SizedBox(height: AppSpacing.xs),
+                Text('Product required',
+                    style: AppTypography.caption
+                        .copyWith(color: AppColors.destructive)),
+              ],
               const SizedBox(height: AppSpacing.sm),
               Row(
                 children: [
