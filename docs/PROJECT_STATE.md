@@ -1,6 +1,6 @@
 # PROJECT STATE — Lumina POS
 
-Last updated: 2026-07-17
+Last updated: 2026-07-20
 
 ## Stack & Architecture
 
@@ -30,6 +30,36 @@ lib/
   features/dashboard/ (data + domain + controller)
   features/{purchasing,suppliers,customers,accounting,repair,hr}/ (full clean-arch per feature)
 ```
+
+## UI Redesign — LUMINA design system (IN PROGRESS, started 2026-07-20)
+Reskinning the app to the Claude-Design "LUMINA" system (source zip: React/TS + tokens.css, kept in
+scratchpad — reference only, NOT importable). Frontend-only; backend/routing/controllers untouched
+(see CLAUDE.md "Frontend/UI-only tasks" guardrail). Now LIGHT + DARK ("Counter mode") via a toggle.
+- **L1 foundation — DONE.** 3 brand fonts bundled (Clash Display, Satoshi, JetBrains Mono in
+  assets/fonts/ + pubspec). lib/core/design tokens remapped to Lumina: AppColors (light statics, new
+  accent #2C6BFF) + `LumColors` ThemeExtension (full light+dark) read via `context.lum`; AppTypography
+  (3 families, 8-pt scale); AppRadius (sm12/md16/lg22/xl28); clay.dart = ClayContainer CustomPainter
+  (TRUE inset shadows — Flutter has none natively). ThemeController (ValueNotifier<ThemeMode>) + app.dart
+  wires theme+darkTheme+toggle. 6 shared widgets reskinned (AppButton clay-lumen, AppTextField inset
+  well + focus ring, AppCard clay, AppOtpField, AppInlineBanner, ResponsiveFormScaffold) — APIs
+  UNCHANGED so all 12+ features still compile. Every auth screen inherits the brand automatically.
+- **L2 primitives — DONE.** LuminaGlyph (flutter_svg, assets/images/lumina-glyph*.svg), LuminaWordmark,
+  AppCheckbox (clay), AuthHeroScaffold (responsive: two-column ink Prism hero ≥900px / stacked mobile).
+- **L2 Login — DONE + verified** (compiles, runs clean on macOS, no exceptions). Bespoke card, hero,
+  remember-me (decorative), Use-PIN / forgot / QR-join / create-account links; all controller/throttle/
+  nav wiring identical to before.
+- **L2 all 17 auth screens — DONE** (login, signup, otp, forgot, reset, branch-select, workspace-init,
+  pin-lock, pin-setup, mfa-challenge, mfa-enroll, devices, security-logs, sessions, settings,
+  environment-check, splash). Card-form screens use AuthHeroScaffold + AuthFormCard; gate screens use
+  clay cards/keypads; list screens (devices/sessions/security-logs) use AppCard clay rows with
+  mono timestamps + status pills; settings gained a Dark-mode toggle (ThemeController); splash is the
+  ink Prism hero. All theme-aware via context.lum (light + dark), all controller/provider/nav wiring
+  byte-identical. Shared PinPad also made theme-aware. Login field focus = soft accent glow (fixed
+  hard-ring). 12 screens reskinned in parallel via subagents, each flutter-analyze clean.
+- Font on iOS: bumped ios deploy target 13→14 (file_picker req) + fresh Pods (cleared file_picker
+  module-clash). New deps: flutter_svg (logo). GATE: full `flutter analyze` = 13 pre-existing infos,
+  0 new across all 17 screens + shared widgets. VERIFY OWED: on-device visual eyeball of the post-auth
+  screens (agent env can't screenshot; Login already eyeballed OK on iOS sim).
 
 ## Auth — COMPLETE
 All flows end-to-end. 33+ routes, auth redirect, StatefulShellRoute bottom nav. RBAC, branch selection, PIN lock +
