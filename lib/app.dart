@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'core/design/app_theme.dart';
 import 'core/services/pin_service.dart';
 import 'core/state/app_flow_state.dart';
+import 'core/state/theme_controller.dart';
 import 'core/supabase.dart';
 import 'router.dart';
 
@@ -43,11 +44,15 @@ class _AppState extends State<App> with WidgetsBindingObserver {
 
   @override
   Widget build(BuildContext context) {
-    return MaterialApp.router(
-      routerConfig: appRouter,
-      theme: AppTheme.light,
-      themeMode: ThemeMode.light,
-      debugShowCheckedModeBanner: false,
+    return ValueListenableBuilder<ThemeMode>(
+      valueListenable: ThemeController.mode,
+      builder: (context, mode, _) => MaterialApp.router(
+        routerConfig: appRouter,
+        theme: AppTheme.light,
+        darkTheme: AppTheme.dark,
+        themeMode: mode,
+        debugShowCheckedModeBanner: false,
+      ),
     );
   }
 }
