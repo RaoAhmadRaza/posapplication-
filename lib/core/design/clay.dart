@@ -24,6 +24,7 @@ class ClayContainer extends StatelessWidget {
     required this.child,
     this.variant = ClayVariant.soft,
     this.color,
+    this.gradient,
     this.borderRadius = 22,
     this.isDark = false,
     this.padding,
@@ -37,6 +38,10 @@ class ClayContainer extends StatelessWidget {
   /// Fill colour. Null keeps the painter transparent (caller supplies its own
   /// gradient/fill, e.g. the Lumen gloss button).
   final Color? color;
+
+  /// Gradient fill, painted instead of [color] when set. The design system's
+  /// raised cards use a near-white vertical wash (surface → g50).
+  final Gradient? gradient;
   final double borderRadius;
   final bool isDark;
   final EdgeInsetsGeometry? padding;
@@ -98,6 +103,7 @@ class ClayContainer extends StatelessWidget {
       painter: _ClayPainter(
         radius: borderRadius,
         fill: color,
+        gradient: gradient,
         shadows: _shadows,
       ),
       child: SizedBox(
@@ -113,10 +119,16 @@ class ClayContainer extends StatelessWidget {
 }
 
 class _ClayPainter extends CustomPainter {
-  _ClayPainter({required this.radius, required this.fill, required this.shadows});
+  _ClayPainter({
+    required this.radius,
+    required this.fill,
+    required this.shadows,
+    this.gradient,
+  });
 
   final double radius;
   final Color? fill;
+  final Gradient? gradient;
   final List<_Shadow> shadows;
 
   @override
@@ -135,8 +147,13 @@ class _ClayPainter extends CustomPainter {
       canvas.drawRRect(rrect.shift(Offset(s.dx, s.dy)), paint);
     }
 
-    // 2. Fill.
-    if (fill != null) {
+    // 2. Fill — gradient wins over the flat colour when both are supplied.
+    if (gradient != null) {
+      canvas.drawRRect(
+        rrect,
+        Paint()..shader = gradient!.createShader(Offset.zero & size),
+      );
+    } else if (fill != null) {
       canvas.drawRRect(rrect, Paint()..color = fill!);
     }
 
@@ -160,5 +177,8 @@ class _ClayPainter extends CustomPainter {
 
   @override
   bool shouldRepaint(_ClayPainter old) =>
-      old.radius != radius || old.fill != fill || old.shadows != shadows;
+      old.radius != radius ||
+      old.fill != fill ||
+      old.gradient != gradient ||
+      old.shadows != shadows;
 }
