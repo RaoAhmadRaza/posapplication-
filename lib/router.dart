@@ -622,27 +622,6 @@ final appRouter = GoRouter(
       },
     ),
     GoRoute(
-      path: '/repair',
-      builder: (context, state) => const RepairKanbanPage(),
-    ),
-    GoRoute(
-      path: '/repair/intake',
-      builder: (context, state) => const RepairIntakePage(),
-    ),
-    GoRoute(
-      path: '/repair/workload',
-      builder: (context, state) => const TechnicianWorkloadPage(),
-    ),
-    GoRoute(
-      path: '/repair/history',
-      builder: (context, state) => const RepairHistoryPage(),
-    ),
-    GoRoute(
-      path: '/repair/:repairId',
-      builder: (context, state) =>
-          RepairDetailPage(repairId: state.pathParameters['repairId']!),
-    ),
-    GoRoute(
       path: '/hr',
       builder: (context, state) => const EmployeesPage(),
     ),
@@ -1080,6 +1059,41 @@ final appRouter = GoRouter(
             GoRoute(
               path: '/settings',
               builder: (context, state) => const SettingsHubPage(),
+            ),
+          ],
+        ),
+        // Repair is appended last so the branch indices above never shift.
+        // Every repair screen keeps the same rail and header, so these
+        // cross-fade rather than slide, exactly like the sales branch.
+        StatefulShellBranch(
+          routes: [
+            GoRoute(
+              path: '/repair',
+              pageBuilder: (context, state) =>
+                  _fadePage(state, const RepairKanbanPage()),
+            ),
+            GoRoute(
+              path: '/repair/intake',
+              pageBuilder: (context, state) =>
+                  _fadePage(state, const RepairIntakePage()),
+            ),
+            GoRoute(
+              path: '/repair/workload',
+              pageBuilder: (context, state) =>
+                  _fadePage(state, const TechnicianWorkloadPage()),
+            ),
+            GoRoute(
+              path: '/repair/history',
+              pageBuilder: (context, state) =>
+                  _fadePage(state, const RepairHistoryPage()),
+            ),
+            // Declared last so the three literal sub-paths above keep winning.
+            GoRoute(
+              path: '/repair/:repairId',
+              pageBuilder: (context, state) => _fadePage(
+                state,
+                RepairDetailPage(repairId: state.pathParameters['repairId']!),
+              ),
             ),
           ],
         ),

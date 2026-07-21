@@ -100,7 +100,11 @@ class _DetailBody extends ConsumerWidget {
                 AppButton(
                   label: 'Open ${r.entityType}',
                   variant: AppButtonVariant.tinted,
-                  onPressed: () => context.push(entityRoute),
+                  // Repair lives in the nav shell, so it is entered with go;
+                  // purchasing and HR are pushed as before.
+                  onPressed: () => entityRoute.startsWith('/repair')
+                      ? context.go(entityRoute)
+                      : context.push(entityRoute),
                 ),
               ],
             ],

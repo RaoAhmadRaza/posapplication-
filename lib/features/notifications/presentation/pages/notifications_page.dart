@@ -157,7 +157,8 @@ void _deepLink(BuildContext context, AppNotification n) {
   switch (n.actionType) {
     case 'repair':
     case 'REPAIR':
-      if (id != null) context.push('/repair/$id');
+      // Repair lives in the nav shell; go keeps the rail/bottom bar.
+      if (id != null) context.go('/repair/$id');
       return;
     case 'customer':
       if (id != null) context.push('/customers/$id');

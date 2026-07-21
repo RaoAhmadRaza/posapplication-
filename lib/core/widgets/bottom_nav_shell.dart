@@ -25,34 +25,47 @@ class _NavItem {
   final IconData icon;
 }
 
-// Indexed by shell branch: 0 Dashboard, 1 Inventory, 2 Purchase, 3 Sales, 4 Settings.
+// Indexed by shell branch: 0 Dashboard, 1 Inventory, 2 Purchase, 3 Sales,
+// 4 Settings, 5 Repair. Repair is appended so the earlier indices never shift.
 const _allItems = [
   _NavItem('Dashboard', LucideIcons.layoutGrid),
   _NavItem('Inventory', LucideIcons.box),
   _NavItem('Purchase', LucideIcons.truck),
   _NavItem('Sales', LucideIcons.shoppingCart),
   _NavItem('Settings', LucideIcons.settings),
+  _NavItem('Repair', LucideIcons.wrench),
 ];
 
-/// Shell branch index of the sales module, per the router's branch order.
+/// Shell branch indices, per the router's branch order.
 const _kSalesBranch = 3;
+const _kRepairBranch = 5;
 
-/// Sales destinations. Every one of these lives inside the sales shell branch,
-/// so they navigate with `go` — `goBranch` is only for switching module.
-class _SalesDest {
-  const _SalesDest(this.label, this.icon, this.path);
+/// A destination inside a module's own branch. These navigate with `go` —
+/// `goBranch` is only for switching module.
+class _ModuleDest {
+  const _ModuleDest(this.label, this.shortLabel, this.icon, this.path);
   final String label;
+
+  /// Two words do not fit a fifth-width bottom tab; the rail keeps [label].
+  final String shortLabel;
   final IconData icon;
   final String path;
 }
 
 const _salesDests = [
-  _SalesDest('Point of sale', LucideIcons.shoppingCart, '/sales/pos'),
-  _SalesDest('Sales history', LucideIcons.receiptText, '/sales/history'),
-  _SalesDest('Returns', LucideIcons.rotateCcw, '/sales/return'),
+  _ModuleDest('Point of sale', 'Sell', LucideIcons.shoppingCart, '/sales/pos'),
+  _ModuleDest(
+      'Sales history', 'History', LucideIcons.receiptText, '/sales/history'),
+  _ModuleDest('Returns', 'Returns', LucideIcons.rotateCcw, '/sales/return'),
   // /sales/open renders the already-open session state itself, so one entry
   // covers both opening and closing a register.
-  _SalesDest('Session', LucideIcons.lock, '/sales/open'),
+  _ModuleDest('Session', 'Session', LucideIcons.lock, '/sales/open'),
+];
+
+const _repairDests = [
+  _ModuleDest('Repair jobs', 'Jobs', LucideIcons.wrench, '/repair'),
+  _ModuleDest('Workload', 'Workload', LucideIcons.users, '/repair/workload'),
+  _ModuleDest('History', 'History', LucideIcons.history, '/repair/history'),
 ];
 
 /// Which sales destination owns [path]. Checkout (payment/success/receipt) is
@@ -66,6 +79,14 @@ int _salesIndexFor(String path) {
   return 0;
 }
 
+/// Which repair destination owns [path]. Intake and job detail are both part of
+/// working the board, so they keep Repair jobs lit.
+int _repairIndexFor(String path) {
+  if (path.startsWith('/repair/workload')) return 1;
+  if (path.startsWith('/repair/history')) return 2;
+  return 0;
+}
+
 class BottomNavShell extends ConsumerWidget {
   const BottomNavShell({super.key, required this.navigationShell});
 
@@ -76,12 +97,14 @@ class BottomNavShell extends ConsumerWidget {
     final matrix = ref.watch(permissionMatrixProvider).value ?? <String>{};
     final hasPurchase = matrix.contains('purchase:read');
     final hasSales = matrix.contains('sales:read');
+    final hasRepair = matrix.contains('repair:read');
 
     final branchMap = [
       0,
       1,
       if (hasPurchase) 2,
       if (hasSales) 3,
+      if (hasRepair) _kRepairBranch,
       4,
     ];
     final items = [for (final b in branchMap) _allItems[b]];
@@ -92,12 +115,17 @@ class BottomNavShell extends ConsumerWidget {
           initialLocation: i == selected,
         );
 
-    // Inside sales the nav becomes the module's own destinations (the design's
-    // sales rail), with the other modules kept reachable below the hairline on
-    // desktop and behind a Modules tab on mobile.
-    final inSales = navigationShell.currentIndex == _kSalesBranch;
-    final salesIndex =
-        inSales ? _salesIndexFor(GoRouterState.of(context).uri.path) : -1;
+    // Inside sales or repair the nav becomes that module's own destinations
+    // (the design's module rail), with the other modules kept reachable below
+    // the hairline on desktop and behind a Modules tab on mobile.
+    final branch = navigationShell.currentIndex;
+    final path = GoRouterState.of(context).uri.path;
+    final (List<_ModuleDest> dests, int destIndex, String moduleLabel) =
+        switch (branch) {
+      _kSalesBranch => (_salesDests, _salesIndexFor(path), 'Sales'),
+      _kRepairBranch => (_repairDests, _repairIndexFor(path), 'Repair'),
+      _ => (const <_ModuleDest>[], -1, ''),
+    };
 
     return CallbackShortcuts(
       bindings: {
@@ -119,7 +147,9 @@ class BottomNavShell extends ConsumerWidget {
                       items: items,
                       selected: selected,
                       onSelect: onSelect,
-                      salesIndex: salesIndex,
+                      dests: dests,
+                      destIndex: destIndex,
+                      moduleLabel: moduleLabel,
                     ),
                     Expanded(child: navigationShell),
                   ],
@@ -132,7 +162,8 @@ class BottomNavShell extends ConsumerWidget {
                 items: items,
                 selected: selected,
                 onSelect: onSelect,
-                salesIndex: salesIndex,
+                dests: dests,
+                destIndex: destIndex,
               ),
             );
           },
@@ -153,15 +184,22 @@ class _NavRail extends StatelessWidget {
     required this.items,
     required this.selected,
     required this.onSelect,
-    required this.salesIndex,
+    required this.dests,
+    required this.destIndex,
+    required this.moduleLabel,
   });
 
   final List<_NavItem> items;
   final int selected;
   final ValueChanged<int> onSelect;
 
-  /// Active sales destination, or -1 when the shell is not on the sales branch.
-  final int salesIndex;
+  /// Destinations of the module the shell is currently inside, empty when it is
+  /// on a module that has none.
+  final List<_ModuleDest> dests;
+
+  /// Active module destination, or -1 when [dests] is empty.
+  final int destIndex;
+  final String moduleLabel;
 
   @override
   Widget build(BuildContext context) {
@@ -169,12 +207,14 @@ class _NavRail extends StatelessWidget {
     // Settings is always the last destination; it sits below the divider.
     final lastIndex = items.length - 1;
 
-    if (salesIndex >= 0) {
-      return _SalesRail(
+    if (destIndex >= 0) {
+      return _ModuleRail(
         items: items,
         selected: selected,
         onSelect: onSelect,
-        salesIndex: salesIndex,
+        dests: dests,
+        destIndex: destIndex,
+        moduleLabel: moduleLabel,
       );
     }
 
@@ -230,20 +270,25 @@ class _NavRail extends StatelessWidget {
   }
 }
 
-/// Rail shown while the sales branch is active: the module's own destinations
-/// on top, the other modules below a hairline so the user is never stranded.
-class _SalesRail extends StatelessWidget {
-  const _SalesRail({
+/// Rail shown while a module branch with its own destinations is active: the
+/// module's destinations on top, the other modules below a hairline so the user
+/// is never stranded.
+class _ModuleRail extends StatelessWidget {
+  const _ModuleRail({
     required this.items,
     required this.selected,
     required this.onSelect,
-    required this.salesIndex,
+    required this.dests,
+    required this.destIndex,
+    required this.moduleLabel,
   });
 
   final List<_NavItem> items;
   final int selected;
   final ValueChanged<int> onSelect;
-  final int salesIndex;
+  final List<_ModuleDest> dests;
+  final int destIndex;
+  final String moduleLabel;
 
   @override
   Widget build(BuildContext context) {
@@ -270,12 +315,12 @@ class _SalesRail extends StatelessWidget {
             child: ListView(
               padding: EdgeInsets.zero,
               children: [
-                const _RailEyebrow('Sales'),
-                for (var i = 0; i < _salesDests.length; i++) ...[
+                _RailEyebrow(moduleLabel),
+                for (var i = 0; i < dests.length; i++) ...[
                   _RailItem(
-                    item: _NavItem(_salesDests[i].label, _salesDests[i].icon),
-                    active: i == salesIndex,
-                    onTap: () => context.go(_salesDests[i].path),
+                    item: _NavItem(dests[i].label, dests[i].icon),
+                    active: i == destIndex,
+                    onTap: () => context.go(dests[i].path),
                   ),
                   const SizedBox(height: 4),
                 ],
@@ -471,35 +516,37 @@ class _LuminaBottomBar extends StatelessWidget {
     required this.items,
     required this.selected,
     required this.onSelect,
-    required this.salesIndex,
+    required this.dests,
+    required this.destIndex,
   });
 
   final List<_NavItem> items;
   final int selected;
   final ValueChanged<int> onSelect;
 
-  /// Active sales destination, or -1 when the shell is not on the sales branch.
-  final int salesIndex;
+  /// Destinations of the module the shell is inside; empty elsewhere.
+  final List<_ModuleDest> dests;
+
+  /// Active module destination, or -1 when [dests] is empty.
+  final int destIndex;
 
   @override
   Widget build(BuildContext context) {
     final lum = context.lum;
-    final inSales = salesIndex >= 0;
+    final inModule = destIndex >= 0;
 
     final tabs = <Widget>[
-      if (inSales) ...[
+      if (inModule) ...[
         _BottomTab(
           item: const _NavItem('Modules', LucideIcons.layoutGrid),
           active: false,
           onTap: () => _showModulesSheet(context),
         ),
-        for (var i = 0; i < _salesDests.length; i++)
+        for (var i = 0; i < dests.length; i++)
           _BottomTab(
-            // Two words do not fit a fifth-width tab; the rail keeps the full
-            // labels.
-            item: _NavItem(_shortLabels[i], _salesDests[i].icon),
-            active: i == salesIndex,
-            onTap: () => context.go(_salesDests[i].path),
+            item: _NavItem(dests[i].shortLabel, dests[i].icon),
+            active: i == destIndex,
+            onTap: () => context.go(dests[i].path),
           ),
       ] else
         for (var i = 0; i < items.length; i++)
@@ -526,8 +573,6 @@ class _LuminaBottomBar extends StatelessWidget {
       ),
     );
   }
-
-  static const _shortLabels = ['Sell', 'History', 'Returns', 'Session'];
 
   void _showModulesSheet(BuildContext context) {
     final lum = context.lum;

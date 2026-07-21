@@ -161,7 +161,9 @@ class InventoryHubPage extends ConsumerWidget {
                       icon: Icons.build_outlined,
                       title: 'Repairs',
                       subtitle: 'Intake, kanban board, close & invoice',
-                      onTap: () => context.push('/repair'),
+                      // Repair is its own nav-shell branch, so it is entered with go — a
+                      // push would stack it outside the shell and lose the rail.
+                      onTap: () => context.go('/repair'),
                     ),
                     const SizedBox(height: AppSpacing.xxl),
                   ],
