@@ -61,6 +61,53 @@ scratchpad — reference only, NOT importable). Frontend-only; backend/routing/c
   0 new across all 17 screens + shared widgets. VERIFY OWED: on-device visual eyeball of the post-auth
   screens (agent env can't screenshot; Login already eyeballed OK on iOS sim).
 
+## UI Redesign — dashboard + nav (DONE 2026-07-21; detail in DECISIONS)
+Second design export, SAME design-system UUID as the auth zip → tokens/theme/clay reused UNCHANGED; pure
+consumer-side reskin per docs/UI_REDESIGN_PLAYBOOK.md. No router/domain/data/supabase edits; every
+controller/provider binding byte-identical.
+- **Nav now responsive** (bottom_nav_shell.dart is core/widgets = user-approved exception; path/class/ctor
+  identical so router.dart untouched). ≥900px = 244px left rail (wordmark, clay-soft active item, Settings
+  below a hairline, user block); <900px = bottom bar with the accentSoft pill behind the active icon.
+  branchMap/goBranch/permission gating lifted VERBATIM. Theme-aware + Semantics/44dp.
+- **Dashboard** 772-line page → ~260-line root + 10 widgets in presentation/widgets/. Bespoke app bar
+  (edit + spinning refresh + bell + sync pill, no search — dead control, deliberately omitted). Two real
+  bugs fixed: KPI grid is a GridView at **5 cols wide / 2 narrow** (was hardcoded 2-up = 2 giant desktop
+  tiles), and dashboard+nav moved off light-only AppColors → **dark mode now works**. Edit mode moved inline
+  onto each tile. Drilldown page reskinned (RESULTS meta, clay card, inbox/cloud-off states).
+- Charts: sales trend HAND-ROLLED (gloss on latest bar, 55ms staggered entrance); donut KEEPS fl_chart.
+  Both respect OS reduce-motion.
+- **Deltas are honest**: DashboardSummary has no comparison fields, so only today_sales shows a real delta
+  (derived from salesTrend last-vs-prev); the other 9 show static sub-labels. Nothing fabricated.
+- New: app_pill.dart, app_money_text.dart; format.dart += formatAmount/displayCurrency (formatPkr delegates,
+  output identical). NotificationBell + SyncStatusWidget restyled, logic untouched — sync pill now also on
+  the dashboard header, so drain-on-reconnect can fire there (accepted). New dep: lucide_icons_flutter
+  ^3.1.15 (31 symbols pre-verified, zero transitive deps).
+- GATE: analyze 13 pre-existing/0 new; macOS builds + boots clean (WORKSPACE-STATE completed=true, no render
+  exceptions); flutter test = same 2 failures as clean HEAD (proven in a HEAD worktree), NOT from this work.
+- **Parity pass after user screenshot review (2026-07-21):** 4 real bugs found by comparing the running app
+  against the reference renders. (1) Avatars (welcome card + rail) rendered as shadow-only — `ClayVariant.lumen`
+  paints NO fill of its own and I passed no colour; `AppButton` was the existing correct precedent
+  (`color: lum.accent`). (2) KPI tiles had dead space below the content — guessed `childAspectRatio` replaced
+  with a LayoutBuilder that derives the ratio from real cell width against a content-height constant. (3) The
+  donut was MISSING entirely: both chart cards were conditionally dropped when their data was empty, and
+  `payment_breakdown` is scoped to TODAY in the RPC (`dashboard_summary.sql`), so a day with no sales removed
+  the card. Both charts now always render with an in-card empty state. (4) Bar value labels floated at the top
+  of the chart area instead of sitting on the bar. Also added `gradient` to ClayContainer (additive, painter
+  now takes a shader) so tiles/welcome card get the design's surface→g50 wash.
+- **Global search — LIVE** (`lib/features/search/`, user asked for it wired, not decorative). Header field
+  (wide only) drops a results overlay: products + customers + invoices, each section gated client-side via
+  `canProvider` because read RLS on those tables is tenant-only, not permission-checked. Built as a
+  presentation-level aggregator over the modules' EXISTING use cases — no new datasource, no migration. Only
+  backend-ish change: an optional `search` param threaded through loadInvoices datasource→repo→usecase
+  (`.ilike('invoice_number', ...)`); every existing caller is unaffected. ⌘K / Ctrl+K wired in BottomNavShell
+  via CallbackShortcuts (first keyboard shortcut in the app) targeting a GlobalKey on the field; 300ms debounce
+  matching the app's existing idiom; 2-char minimum; 5 hits per section.
+- **VERIFY OWED (on-device eyeball)** — agent env still cannot screenshot: 900px nav boundary, 5/2-col grid,
+  dark mode, edit persistence across restart, 6 drilldown kinds, permission-gated nav variants, and the search
+  overlay (typing, ⌘K focus, Esc dismiss, result deep-links).
+- Pre-existing bug seen in run log, untouched: LoginThrottleService.reset still throws -34018 from
+  FlutterSecureStorage.delete on macOS despite the MacOsOptions fix. Needs its own slice.
+
 ## Auth UX pass — Phases 1–4 DONE (2026-07-20)
 Interaction/UX depth pass on top of the LUMINA reskin (plan: friction→feedback→flow→a11y; delight
 Phase 5 deferred). Frontend + minimal flow/routing (user-approved exception to UI-only guardrail).
