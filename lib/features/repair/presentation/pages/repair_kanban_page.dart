@@ -1,20 +1,24 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
+import 'package:lucide_icons_flutter/lucide_icons.dart';
 import '../../../../core/design/app_colors.dart';
 import '../../../../core/design/app_radius.dart';
 import '../../../../core/design/app_spacing.dart';
 import '../../../../core/design/app_typography.dart';
+import '../../../../core/design/clay.dart';
 import '../../../../core/design/widgets/app_button.dart';
-import '../../../../core/design/widgets/app_inline_banner.dart';
+import '../../../../core/widgets/module_scaffold.dart';
 import '../../../../core/widgets/permission_gate.dart';
+import '../../../auth/presentation/controllers/permission_controller.dart';
 import '../../domain/entities/repair_job.dart';
 import '../../domain/entities/repair_results.dart';
 import '../controllers/repair_jobs_controller.dart';
 import '../controllers/repair_detail_provider.dart';
+import '../widgets/repair_job_card.dart';
+import '../widgets/repair_sheet.dart';
+import '../widgets/repair_states.dart';
 import '../widgets/repair_status_ui.dart';
-
-const _wideBreakpoint = 900.0;
 
 /// Ids of cards selected for a bulk status change (empty = not in select mode).
 final _selectedProvider =
@@ -34,101 +38,237 @@ class _SelectionNotifier extends Notifier<Set<String>> {
   void clear() => state = const {};
 }
 
-class RepairKanbanPage extends ConsumerWidget {
+/// Board column width when the columns cannot all fit on screen at their
+/// comfortable size — the board then scrolls horizontally instead of squeezing.
+const _kMinColumnWidth = 268.0;
+const _kColumnGap = 12.0;
+
+class RepairKanbanPage extends ConsumerStatefulWidget {
   const RepairKanbanPage({super.key});
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
+  ConsumerState<RepairKanbanPage> createState() => _RepairKanbanPageState();
+}
+
+class _RepairKanbanPageState extends ConsumerState<RepairKanbanPage> {
+  final _searchController = TextEditingController();
+  String _query = '';
+
+  @override
+  void dispose() {
+    _searchController.dispose();
+    super.dispose();
+  }
+
+  /// Client-side filter over the jobs already loaded — no query change.
+  List<RepairJob> _filter(List<RepairJob> jobs) {
+    final q = _query.trim().toLowerCase();
+    if (q.isEmpty) return jobs;
+    return [
+      for (final j in jobs)
+        if ([
+          j.jobNumber,
+          j.deviceType,
+          j.deviceBrand,
+          j.deviceModel,
+          j.customerName,
+          j.imei,
+        ].any((f) => f != null && f.toLowerCase().contains(q)))
+          j,
+    ];
+  }
+
+  @override
+  Widget build(BuildContext context) {
     final state = ref.watch(repairJobsProvider);
     final techs = ref.watch(techniciansProvider).value ?? const <Technician>[];
     final techNames = {for (final t in techs) t.id: t.name};
     final activeTech = ref.watch(repairJobsProvider.notifier).technicianFilter;
 
-    return Scaffold(
-      backgroundColor: AppColors.background,
-      appBar: AppBar(
-        backgroundColor: AppColors.background,
-        surfaceTintColor: AppColors.background,
-        title: Text('Repairs', style: AppTypography.headline),
-        actions: [
-          IconButton(
-            icon: const Icon(Icons.people_outline, color: AppColors.accent),
-            tooltip: 'Technician workload',
-            onPressed: () => context.push('/repair/workload'),
-          ),
-          IconButton(
-            icon: const Icon(Icons.history, color: AppColors.accent),
-            tooltip: 'History',
-            onPressed: () => context.push('/repair/history'),
-          ),
-          if (techs.isNotEmpty)
-            PopupMenuButton<String?>(
-              icon: const Icon(Icons.person_search, color: AppColors.accent),
-              onSelected: (id) => ref
-                  .read(repairJobsProvider.notifier)
-                  .setFilters(
-                      technicianId: id, clearTechnician: id == null),
-              itemBuilder: (_) => [
-                const PopupMenuItem(value: null, child: Text('All technicians')),
-                for (final t in techs)
-                  PopupMenuItem(value: t.id, child: Text(t.name)),
-              ],
-            ),
-        ],
-      ),
-      bottomNavigationBar: state.maybeWhen(
-        data: (jobs) => _BulkBar(jobs: jobs),
-        orElse: () => null,
-      ),
-      floatingActionButton: PermissionGate(
-        module: 'repair',
-        action: 'create',
-        child: FloatingActionButton.extended(
-          backgroundColor: AppColors.accent,
-          onPressed: () => context.push('/repair/intake'),
-          icon: const Icon(Icons.add, color: Colors.white),
-          label: const Text('New Job', style: TextStyle(color: Colors.white)),
-        ),
-      ),
-      body: SafeArea(
-        child: Column(
-          children: [
-            if (activeTech != null)
-              Padding(
-                padding: const EdgeInsets.symmetric(
-                    horizontal: AppSpacing.screenPadding,
-                    vertical: AppSpacing.xs),
-                child: Align(
-                  alignment: Alignment.centerLeft,
-                  child: Text(
-                    'Filtered by ${techNames[activeTech] ?? "technician"}',
-                    style: AppTypography.caption
-                        .copyWith(color: AppColors.textMuted),
+    return ModuleScaffold(
+      title: 'Repair jobs',
+      actions: [
+        if (techs.isNotEmpty)
+          _TechFilterButton(techs: techs, activeTech: activeTech),
+      ],
+      child: Stack(
+        children: [
+          Column(
+            children: [
+              _Toolbar(
+                controller: _searchController,
+                onChanged: (v) => setState(() => _query = v),
+              ),
+              if (activeTech != null)
+                Padding(
+                  padding: const EdgeInsets.fromLTRB(24, 0, 24, 6),
+                  child: Align(
+                    alignment: Alignment.centerLeft,
+                    child: Text(
+                      'Filtered by ${techNames[activeTech] ?? "technician"}',
+                      style: AppTypography.caption
+                          .copyWith(color: context.lum.g500),
+                    ),
                   ),
                 ),
-              ),
-            Expanded(
-              child: state.when(
-                loading: () =>
-                    const Center(child: CircularProgressIndicator()),
-                error: (e, _) => _ErrorState(
-                  onRetry: () =>
-                      ref.read(repairJobsProvider.notifier).refresh(),
+              Expanded(
+                child: state.when(
+                  loading: () =>
+                      const Center(child: CircularProgressIndicator()),
+                  error: (e, _) => RepairErrorState(
+                    title: "We couldn't load repair jobs",
+                    body: 'Check your connection and try again. Any jobs you '
+                        'created are saved.',
+                    onRetry: () =>
+                        ref.read(repairJobsProvider.notifier).refresh(),
+                  ),
+                  data: (jobs) {
+                    if (jobs.isEmpty) {
+                      return RepairEmptyState(
+                        icon: LucideIcons.wrench,
+                        title: 'No open repair jobs',
+                        body: 'New jobs will show up here as they come in. '
+                            'Start one from intake.',
+                        action: PermissionGate(
+                          module: 'repair',
+                          action: 'create',
+                          child: AppButton(
+                            label: 'Start a repair',
+                            icon: LucideIcons.plus,
+                            onPressed: () => context.push('/repair/intake'),
+                          ),
+                        ),
+                      );
+                    }
+                    final visible = _filter(jobs);
+                    if (visible.isEmpty) {
+                      return const RepairEmptyState(
+                        icon: LucideIcons.searchX,
+                        title: 'No matching jobs',
+                        body: 'Nothing on the board matches that search.',
+                      );
+                    }
+                    return LayoutBuilder(
+                      builder: (context, constraints) =>
+                          constraints.maxWidth >= kModuleWideBreakpoint
+                              ? _BoardView(
+                                  jobs: visible,
+                                  techNames: techNames,
+                                  available: constraints.maxWidth,
+                                )
+                              : _GroupedListView(
+                                  jobs: visible,
+                                  techNames: techNames,
+                                ),
+                    );
+                  },
                 ),
-                data: (jobs) => jobs.isEmpty
-                    ? const _EmptyState()
-                    : LayoutBuilder(
-                        builder: (context, constraints) {
-                          final wide = constraints.maxWidth >= _wideBreakpoint;
-                          return wide
-                              ? _BoardView(jobs: jobs, techNames: techNames)
-                              : _ListView(jobs: jobs, techNames: techNames);
-                        },
+              ),
+            ],
+          ),
+          state.maybeWhen(
+            data: (jobs) => _BulkBar(jobs: jobs),
+            orElse: () => const SizedBox.shrink(),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+/// Search well plus the New job action. Workload and History are reachable from
+/// the module rail / bottom bar, so they are not repeated here.
+class _Toolbar extends StatelessWidget {
+  const _Toolbar({required this.controller, required this.onChanged});
+
+  final TextEditingController controller;
+  final ValueChanged<String> onChanged;
+
+  @override
+  Widget build(BuildContext context) {
+    final lum = context.lum;
+    final isWide = ModuleScaffold.isWideOf(context);
+
+    return Padding(
+      padding: EdgeInsets.fromLTRB(isWide ? 24 : 14, 16, isWide ? 24 : 14, 6),
+      child: Row(
+        children: [
+          Expanded(
+            child: ClayContainer(
+              variant: ClayVariant.inset,
+              color: lum.surface2,
+              borderRadius: AppRadius.md,
+              isDark: lum.isDark,
+              height: 44,
+              padding: const EdgeInsets.symmetric(horizontal: 14),
+              child: Row(
+                children: [
+                  Icon(LucideIcons.search, size: 18, color: lum.g400),
+                  const SizedBox(width: 10),
+                  Expanded(
+                    child: TextField(
+                      controller: controller,
+                      onChanged: onChanged,
+                      textInputAction: TextInputAction.search,
+                      style: AppTypography.fieldText
+                          .copyWith(fontSize: 14, color: lum.textPrimary),
+                      decoration: InputDecoration(
+                        isDense: true,
+                        border: InputBorder.none,
+                        hintText: 'Search jobs…',
+                        hintStyle: AppTypography.fieldHint
+                            .copyWith(fontSize: 14, color: lum.g400),
                       ),
+                    ),
+                  ),
+                ],
               ),
             ),
-          ],
+          ),
+          const SizedBox(width: 10),
+          PermissionGate(
+            module: 'repair',
+            action: 'create',
+            child: AppButton(
+              label: 'New job',
+              icon: LucideIcons.plus,
+              size: AppButtonSize.sm,
+              onPressed: () => context.push('/repair/intake'),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _TechFilterButton extends ConsumerWidget {
+  const _TechFilterButton({required this.techs, required this.activeTech});
+
+  final List<Technician> techs;
+  final String? activeTech;
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final lum = context.lum;
+    return Semantics(
+      button: true,
+      label: 'Filter by technician',
+      child: PopupMenuButton<String?>(
+        tooltip: 'Filter by technician',
+        icon: Icon(
+          LucideIcons.userSearch,
+          size: 20,
+          color: activeTech != null ? lum.accent : lum.g600,
         ),
+        onSelected: (id) => ref
+            .read(repairJobsProvider.notifier)
+            .setFilters(technicianId: id, clearTechnician: id == null),
+        itemBuilder: (_) => [
+          const PopupMenuItem(value: null, child: Text('All technicians')),
+          for (final t in techs)
+            PopupMenuItem(value: t.id, child: Text(t.name)),
+        ],
       ),
     );
   }
@@ -184,96 +324,160 @@ Future<void> _applyBulk(
       content: Text('${r.succeeded} updated to ${repairStatusLabels[to]}'
           '${r.failed.isEmpty ? '' : ', ${r.failed.length} failed'}')));
   if (r.failed.isNotEmpty) {
-    await showDialog<void>(
+    await showRepairSheet<void>(
       context: context,
-      builder: (_) => AlertDialog(
-        title: Text('${r.failed.length} could not be updated'),
-        content: SizedBox(
-          width: 360,
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              for (final f in r.failed)
-                Padding(
-                  padding: const EdgeInsets.only(bottom: AppSpacing.xs),
-                  child: Text(
-                    '${numbersById[f.repairId] ?? f.repairId}: ${f.error}',
-                    style: AppTypography.caption,
-                  ),
-                ),
-            ],
+      builder: (sheetContext) => Column(
+        mainAxisSize: MainAxisSize.min,
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          RepairSheetHeader(
+            title: '${r.failed.length} could not be updated',
+            subtitle: 'Everything else moved successfully.',
           ),
-        ),
-        actions: [
-          TextButton(
-              onPressed: () => Navigator.of(context).pop(),
-              child: const Text('Close')),
+          for (final f in r.failed)
+            Padding(
+              padding: const EdgeInsets.only(bottom: AppSpacing.xs),
+              child: Text(
+                '${numbersById[f.repairId] ?? f.repairId}: ${f.error}',
+                style: AppTypography.caption
+                    .copyWith(color: context.lum.g600),
+              ),
+            ),
+          const SizedBox(height: 16),
+          AppButton(
+            label: 'Close',
+            variant: AppButtonVariant.tinted,
+            fullWidth: true,
+            onPressed: () => Navigator.of(sheetContext).pop(),
+          ),
         ],
       ),
     );
   }
 }
 
-/// Bottom action bar shown while cards are selected: count + status picker +
-/// clear. Gated behind repair:update.
+/// Status picker used by a card's Move button and by the bulk bar.
+Future<void> _pickStatus(
+  BuildContext context,
+  WidgetRef ref, {
+  RepairJob? job,
+  List<RepairJob>? jobs,
+}) {
+  final lum = context.lum;
+  return showRepairSheet<void>(
+    context: context,
+    width: 400,
+    builder: (sheetContext) => Column(
+      mainAxisSize: MainAxisSize.min,
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        RepairSheetHeader(
+          title: job == null ? 'Change status' : 'Move job',
+          subtitle: job == null
+              ? 'Apply a new status to the selected jobs.'
+              : '${job.jobNumber} · currently '
+                  '${repairStatusLabels[job.status]}',
+        ),
+        for (final s in _bulkTargetStatuses)
+          if (job == null || s != job.status)
+            Padding(
+              padding: const EdgeInsets.only(bottom: 8),
+              child: InkWell(
+                borderRadius: BorderRadius.circular(AppRadius.md),
+                onTap: () {
+                  Navigator.of(sheetContext).pop();
+                  if (job != null) {
+                    _changeStatus(context, ref, job, s);
+                  } else {
+                    _applyBulk(context, ref, s, jobs ?? const []);
+                  }
+                },
+                child: ClayContainer(
+                  variant: ClayVariant.inset,
+                  color: lum.surface2,
+                  borderRadius: AppRadius.md,
+                  isDark: lum.isDark,
+                  height: 48,
+                  padding: const EdgeInsets.symmetric(horizontal: 14),
+                  child: Row(
+                    children: [
+                      Container(
+                        width: 10,
+                        height: 10,
+                        decoration: BoxDecoration(
+                          color: repairStatusColor(context, s),
+                          shape: BoxShape.circle,
+                        ),
+                      ),
+                      const SizedBox(width: 12),
+                      Expanded(
+                        child: Text(
+                          repairStatusLabels[s]!,
+                          style: AppTypography.label.copyWith(
+                            fontSize: 14.5,
+                            color: lum.textPrimary,
+                          ),
+                        ),
+                      ),
+                      Icon(LucideIcons.arrowRight, size: 16, color: lum.g400),
+                    ],
+                  ),
+                ),
+              ),
+            ),
+      ],
+    ),
+  );
+}
+
+/// Floating ink pill shown while cards are selected. Gated behind repair:update.
 class _BulkBar extends ConsumerWidget {
   const _BulkBar({required this.jobs});
   final List<RepairJob> jobs;
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
+    final lum = context.lum;
     final count = ref.watch(_selectedProvider).length;
     if (count == 0) return const SizedBox.shrink();
-    return PermissionGate(
-      module: 'repair',
-      action: 'update',
-      child: SafeArea(
-        child: Container(
-          padding: const EdgeInsets.symmetric(
-              horizontal: AppSpacing.screenPadding, vertical: AppSpacing.sm),
-          decoration: const BoxDecoration(
-            color: AppColors.background,
-            border: Border(
-                top: BorderSide(color: AppColors.separator, width: 0.5)),
-          ),
-          child: Row(
-            children: [
-              IconButton(
-                icon: const Icon(Icons.close, color: AppColors.textMuted),
-                tooltip: 'Clear selection',
-                onPressed: () => ref.read(_selectedProvider.notifier).clear(),
-              ),
-              Text('$count selected', style: AppTypography.subhead),
-              const Spacer(),
-              PopupMenuButton<RepairStatus>(
-                onSelected: (to) => _applyBulk(context, ref, to, jobs),
-                itemBuilder: (_) => [
-                  for (final s in _bulkTargetStatuses)
-                    PopupMenuItem(
-                        value: s, child: Text(repairStatusLabels[s]!)),
+
+    return Positioned(
+      left: 0,
+      right: 0,
+      bottom: 22,
+      child: Center(
+        child: PermissionGate(
+          module: 'repair',
+          action: 'update',
+          child: Material(
+            color: lum.ink,
+            borderRadius: BorderRadius.circular(14),
+            elevation: 8,
+            child: Padding(
+              padding: const EdgeInsets.fromLTRB(18, 10, 12, 10),
+              child: Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Text(
+                    '$count selected',
+                    style: AppTypography.label.copyWith(color: Colors.white),
+                  ),
+                  const SizedBox(width: 12),
+                  _InkAction(
+                    label: 'Change status',
+                    background: lum.accent,
+                    icon: LucideIcons.chevronUp,
+                    onTap: () => _pickStatus(context, ref, jobs: jobs),
+                  ),
+                  const SizedBox(width: 8),
+                  _InkAction(
+                    label: 'Clear',
+                    background: Colors.white.withValues(alpha: 0.12),
+                    onTap: () => ref.read(_selectedProvider.notifier).clear(),
+                  ),
                 ],
-                child: Container(
-                  padding: const EdgeInsets.symmetric(
-                      horizontal: AppSpacing.md, vertical: AppSpacing.sm),
-                  decoration: BoxDecoration(
-                    color: AppColors.accent,
-                    borderRadius: BorderRadius.circular(AppRadius.card),
-                  ),
-                  child: const Row(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      Text('Change status',
-                          style: TextStyle(
-                              color: Colors.white,
-                              fontWeight: FontWeight.w600)),
-                      SizedBox(width: 4),
-                      Icon(Icons.arrow_drop_down, color: Colors.white),
-                    ],
-                  ),
-                ),
               ),
-            ],
+            ),
           ),
         ),
       ),
@@ -281,40 +485,109 @@ class _BulkBar extends ConsumerWidget {
   }
 }
 
-/// Wide layout: horizontal status columns with drag-to-update.
+class _InkAction extends StatelessWidget {
+  const _InkAction({
+    required this.label,
+    required this.background,
+    required this.onTap,
+    this.icon,
+  });
+
+  final String label;
+  final Color background;
+  final VoidCallback onTap;
+  final IconData? icon;
+
+  @override
+  Widget build(BuildContext context) {
+    return Semantics(
+      button: true,
+      label: label,
+      child: Material(
+        color: background,
+        borderRadius: BorderRadius.circular(10),
+        child: InkWell(
+          onTap: onTap,
+          borderRadius: BorderRadius.circular(10),
+          child: Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 9),
+            child: Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Text(
+                  label,
+                  style: AppTypography.label.copyWith(color: Colors.white),
+                ),
+                if (icon != null) ...[
+                  const SizedBox(width: 5),
+                  Icon(icon, size: 15, color: Colors.white),
+                ],
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+/// Wide layout: status columns with drag-to-update. Columns share the available
+/// width when they fit and scroll horizontally when they do not — the width is
+/// derived, never hand-picked.
 class _BoardView extends ConsumerWidget {
-  const _BoardView({required this.jobs, required this.techNames});
+  const _BoardView({
+    required this.jobs,
+    required this.techNames,
+    required this.available,
+  });
+
   final List<RepairJob> jobs;
   final Map<String, String> techNames;
+  final double available;
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
+    final count = repairBoardStatuses.length;
+    const horizontalPadding = 24.0 * 2;
+    final gaps = _kColumnGap * (count - 1);
+    final fitted = (available - horizontalPadding - gaps) / count;
+    final columnWidth = fitted >= _kMinColumnWidth ? fitted : _kMinColumnWidth;
+
     return SingleChildScrollView(
       scrollDirection: Axis.horizontal,
-      padding: const EdgeInsets.all(AppSpacing.md),
+      padding: const EdgeInsets.fromLTRB(24, 6, 24, 28),
       child: Row(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          for (final status in repairBoardStatuses)
-            _Column(
-              status: status,
-              jobs: jobs.where((j) => j.status == status).toList(),
-              techNames: techNames,
-              onDropped: (job) => _changeStatus(context, ref, job, status),
+          for (var i = 0; i < count; i++) ...[
+            if (i > 0) const SizedBox(width: _kColumnGap),
+            SizedBox(
+              width: columnWidth,
+              child: _BoardColumn(
+                status: repairBoardStatuses[i],
+                jobs: jobs
+                    .where((j) => j.status == repairBoardStatuses[i])
+                    .toList(),
+                techNames: techNames,
+                onDropped: (job) =>
+                    _changeStatus(context, ref, job, repairBoardStatuses[i]),
+              ),
             ),
+          ],
         ],
       ),
     );
   }
 }
 
-class _Column extends StatelessWidget {
-  const _Column({
+class _BoardColumn extends StatelessWidget {
+  const _BoardColumn({
     required this.status,
     required this.jobs,
     required this.techNames,
     required this.onDropped,
   });
+
   final RepairStatus status;
   final List<RepairJob> jobs;
   final Map<String, String> techNames;
@@ -322,59 +595,59 @@ class _Column extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final lum = context.lum;
     return DragTarget<RepairJob>(
       onWillAcceptWithDetails: (d) => d.data.status != status,
       onAcceptWithDetails: (d) => onDropped(d.data),
       builder: (context, candidate, _) {
-        return Container(
-          width: 260,
-          margin: const EdgeInsets.only(right: AppSpacing.md),
-          padding: const EdgeInsets.all(AppSpacing.sm),
+        final hovering = candidate.isNotEmpty;
+        return AnimatedContainer(
+          duration: const Duration(milliseconds: 120),
+          padding: const EdgeInsets.all(4),
           decoration: BoxDecoration(
-            color: candidate.isNotEmpty
-                ? AppColors.accent.withValues(alpha: 0.06)
-                : AppColors.fieldFill,
-            borderRadius: BorderRadius.circular(AppRadius.card),
-            border: Border.all(
-              color: candidate.isNotEmpty
-                  ? AppColors.accent
-                  : AppColors.separator,
-              width: 0.5,
-            ),
+            color: hovering ? lum.accentSoft : Colors.transparent,
+            borderRadius: BorderRadius.circular(AppRadius.lg),
           ),
           child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
+            crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
-              Padding(
-                padding: const EdgeInsets.all(AppSpacing.xs),
-                child: Row(
-                  children: [
-                    Text(repairStatusLabels[status]!,
-                        style: AppTypography.footnote
-                            .copyWith(fontWeight: FontWeight.w700)),
-                    const SizedBox(width: AppSpacing.xs),
-                    Text('${jobs.length}',
-                        style: AppTypography.caption
-                            .copyWith(color: AppColors.textMuted)),
-                  ],
-                ),
-              ),
-              for (final job in jobs)
-                Draggable<RepairJob>(
-                  data: job,
-                  feedback: Material(
-                    color: Colors.transparent,
-                    child: SizedBox(
-                      width: 244,
-                      child: _JobCard(job: job, techNames: techNames),
+              _ColumnHeader(status: status, count: jobs.length),
+              const SizedBox(height: 10),
+              if (jobs.isEmpty)
+                Container(
+                  padding: const EdgeInsets.symmetric(
+                      horizontal: 12, vertical: 18),
+                  alignment: Alignment.center,
+                  decoration: BoxDecoration(
+                    border: Border.all(color: lum.hairline),
+                    borderRadius: BorderRadius.circular(AppRadius.md),
+                  ),
+                  child: Text(
+                    'Nothing here',
+                    style: AppTypography.caption
+                        .copyWith(fontSize: 12.5, color: lum.g400),
+                  ),
+                )
+              else
+                for (final job in jobs)
+                  Padding(
+                    padding: const EdgeInsets.only(bottom: 10),
+                    child: Draggable<RepairJob>(
+                      data: job,
+                      feedback: Material(
+                        color: Colors.transparent,
+                        child: SizedBox(
+                          width: 256,
+                          child: _Card(job: job, techNames: techNames),
+                        ),
+                      ),
+                      childWhenDragging: Opacity(
+                        opacity: 0.4,
+                        child: _Card(job: job, techNames: techNames),
+                      ),
+                      child: _Card(job: job, techNames: techNames),
                     ),
                   ),
-                  childWhenDragging: Opacity(
-                    opacity: 0.4,
-                    child: _JobCard(job: job, techNames: techNames),
-                  ),
-                  child: _JobCard(job: job, techNames: techNames),
-                ),
             ],
           ),
         );
@@ -383,35 +656,81 @@ class _Column extends StatelessWidget {
   }
 }
 
-/// Narrow layout: a flat, tappable list grouped by status header.
-class _ListView extends StatelessWidget {
-  const _ListView({required this.jobs, required this.techNames});
+class _ColumnHeader extends StatelessWidget {
+  const _ColumnHeader({required this.status, required this.count});
+
+  final RepairStatus status;
+  final int count;
+
+  @override
+  Widget build(BuildContext context) {
+    final lum = context.lum;
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(4, 2, 4, 0),
+      child: Row(
+        children: [
+          Container(
+            width: 8,
+            height: 8,
+            decoration: BoxDecoration(
+              color: repairStatusColor(context, status),
+              shape: BoxShape.circle,
+            ),
+          ),
+          const SizedBox(width: 8),
+          Expanded(
+            child: Text(
+              repairStatusLabels[status]!,
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              style: AppTypography.label
+                  .copyWith(fontSize: 13.5, color: lum.textPrimary),
+            ),
+          ),
+          const SizedBox(width: 6),
+          Container(
+            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 1),
+            decoration: BoxDecoration(
+              color: lum.surface2,
+              borderRadius: BorderRadius.circular(AppRadius.pill),
+            ),
+            child: Text(
+              '$count',
+              style: AppTypography.monoValue
+                  .copyWith(fontSize: 12, color: lum.g500),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+/// Narrow layout: a flat list grouped by status header.
+class _GroupedListView extends StatelessWidget {
+  const _GroupedListView({required this.jobs, required this.techNames});
+
   final List<RepairJob> jobs;
   final Map<String, String> techNames;
 
   @override
   Widget build(BuildContext context) {
     return ListView(
-      padding: const EdgeInsets.all(AppSpacing.screenPadding),
+      padding: const EdgeInsets.fromLTRB(14, 6, 14, 24),
       children: [
         for (final status in repairBoardStatuses)
           if (jobs.any((j) => j.status == status)) ...[
             Padding(
-              padding: const EdgeInsets.symmetric(vertical: AppSpacing.sm),
-              child: Row(
-                children: [
-                  RepairStatusBadge(status: status),
-                  const SizedBox(width: AppSpacing.sm),
-                  Text('${jobs.where((j) => j.status == status).length}',
-                      style: AppTypography.caption
-                          .copyWith(color: AppColors.textMuted)),
-                ],
+              padding: const EdgeInsets.only(top: 10, bottom: 10),
+              child: _ColumnHeader(
+                status: status,
+                count: jobs.where((j) => j.status == status).length,
               ),
             ),
             for (final job in jobs.where((j) => j.status == status))
               Padding(
-                padding: const EdgeInsets.only(bottom: AppSpacing.sm),
-                child: _JobCard(job: job, techNames: techNames),
+                padding: const EdgeInsets.only(bottom: 10),
+                child: _Card(job: job, techNames: techNames),
               ),
           ],
       ],
@@ -419,8 +738,10 @@ class _ListView extends StatelessWidget {
   }
 }
 
-class _JobCard extends ConsumerWidget {
-  const _JobCard({required this.job, required this.techNames});
+/// Board/list card bound to the selection state and the status picker.
+class _Card extends ConsumerWidget {
+  const _Card({required this.job, required this.techNames});
+
   final RepairJob job;
   final Map<String, String> techNames;
 
@@ -429,149 +750,23 @@ class _JobCard extends ConsumerWidget {
     final selected = ref.watch(_selectedProvider);
     final isSelected = selected.contains(job.id);
     final selecting = selected.isNotEmpty;
-    final device = [job.deviceBrand, job.deviceModel]
-        .where((e) => e != null && e.isNotEmpty)
-        .join(' ');
-    return Container(
-      margin: const EdgeInsets.only(bottom: AppSpacing.xs),
-      decoration: BoxDecoration(
-        color: isSelected
-            ? AppColors.accent.withValues(alpha: 0.06)
-            : AppColors.background,
-        borderRadius: BorderRadius.circular(AppRadius.card),
-        border: Border.all(
-            color: isSelected ? AppColors.accent : AppColors.separator,
-            width: isSelected ? 1 : 0.5),
-      ),
-      child: InkWell(
-        // Long-press to start selecting; tap toggles while selecting, else opens.
-        onLongPress: () => ref.read(_selectedProvider.notifier).toggle(job.id),
-        onTap: selecting
-            ? () => ref.read(_selectedProvider.notifier).toggle(job.id)
-            : () => context.push('/repair/${job.id}'),
-        borderRadius: BorderRadius.circular(AppRadius.card),
-        child: Padding(
-          padding: const EdgeInsets.all(AppSpacing.md),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Row(
-                children: [
-                  if (selecting)
-                    Padding(
-                      padding: const EdgeInsets.only(right: AppSpacing.xs),
-                      child: Icon(
-                        isSelected
-                            ? Icons.check_circle
-                            : Icons.radio_button_unchecked,
-                        size: 18,
-                        color: isSelected
-                            ? AppColors.accent
-                            : AppColors.textHint,
-                      ),
-                    ),
-                  Expanded(
-                    child: Text(job.jobNumber,
-                        style: AppTypography.footnote
-                            .copyWith(fontWeight: FontWeight.w700)),
-                  ),
-                  RepairPriorityChip(priority: job.priority),
-                ],
-              ),
-              const SizedBox(height: 4),
-              Text(device.isEmpty ? job.deviceType : device,
-                  style: AppTypography.subhead,
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis),
-              if (job.customerName != null)
-                Text(job.customerName!,
-                    style: AppTypography.caption
-                        .copyWith(color: AppColors.textMuted),
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis),
-              if (job.technicianId != null)
-                Padding(
-                  padding: const EdgeInsets.only(top: 2),
-                  child: Row(
-                    children: [
-                      const Icon(Icons.build_outlined,
-                          size: 12, color: AppColors.textMuted),
-                      const SizedBox(width: 4),
-                      Expanded(
-                        child: Text(
-                          techNames[job.technicianId] ?? 'Technician',
-                          style: AppTypography.caption
-                              .copyWith(color: AppColors.textMuted),
-                          maxLines: 1,
-                          overflow: TextOverflow.ellipsis,
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-            ],
-          ),
-        ),
-      ),
-    );
-  }
-}
+    // Same matrix PermissionGate reads; the Move affordance is inline on the
+    // card, so it is gated by value rather than by wrapping the whole card.
+    final canUpdate = (ref.watch(permissionMatrixProvider).value ?? const {})
+        .contains('repair:update');
 
-class _EmptyState extends StatelessWidget {
-  const _EmptyState();
-
-  @override
-  Widget build(BuildContext context) {
-    return Center(
-      child: Padding(
-        padding:
-            const EdgeInsets.symmetric(horizontal: AppSpacing.screenPadding),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            const Icon(Icons.build_circle_outlined,
-                size: 48, color: AppColors.textHint),
-            const SizedBox(height: AppSpacing.md),
-            Text('No repair jobs yet',
-                style: AppTypography.subhead
-                    .copyWith(color: AppColors.textMuted)),
-            const SizedBox(height: AppSpacing.xl),
-            PermissionGate(
-              module: 'repair',
-              action: 'create',
-              child: AppButton(
-                label: 'New Job',
-                onPressed: () => context.push('/repair/intake'),
-              ),
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-}
-
-class _ErrorState extends StatelessWidget {
-  const _ErrorState({required this.onRetry});
-  final VoidCallback onRetry;
-
-  @override
-  Widget build(BuildContext context) {
-    return Center(
-      child: Padding(
-        padding:
-            const EdgeInsets.symmetric(horizontal: AppSpacing.screenPadding),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            AppInlineBanner(
-                message: 'Could not load repair jobs.',
-                type: BannerType.error),
-            const SizedBox(height: AppSpacing.md),
-            AppButton(label: 'Retry', onPressed: onRetry),
-          ],
-        ),
-      ),
+    return RepairJobCard(
+      job: job,
+      technicianName:
+          job.technicianId == null ? null : techNames[job.technicianId],
+      selected: isSelected,
+      onToggleSelect: () => ref.read(_selectedProvider.notifier).toggle(job.id),
+      // While a selection is running, tapping a card extends it rather than
+      // navigating away from the board.
+      onTap: selecting
+          ? () => ref.read(_selectedProvider.notifier).toggle(job.id)
+          : () => context.push('/repair/${job.id}'),
+      onMove: canUpdate ? () => _pickStatus(context, ref, job: job) : null,
     );
   }
 }
