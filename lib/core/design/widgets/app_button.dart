@@ -13,6 +13,20 @@ import '../clay.dart';
 ///   destructive → danger-soft fill, danger text
 enum AppButtonVariant { filled, tinted, plain, destructive }
 
+/// Height of the button. [md] is the standard 50px form button; [sm] is the
+/// design's compact toolbar button (Workload / History / New job).
+enum AppButtonSize {
+  md(50, 15, 18, 22),
+  sm(38, 13.5, 16, 14);
+
+  const AppButtonSize(this.height, this.fontSize, this.iconSize, this.gutter);
+
+  final double height;
+  final double fontSize;
+  final double iconSize;
+  final double gutter;
+}
+
 class AppButton extends StatefulWidget {
   const AppButton({
     super.key,
@@ -22,6 +36,7 @@ class AppButton extends StatefulWidget {
     this.loading = false,
     this.fullWidth = false,
     this.icon,
+    this.size = AppButtonSize.md,
   });
 
   final String label;
@@ -30,6 +45,7 @@ class AppButton extends StatefulWidget {
   final bool loading;
   final bool fullWidth;
   final IconData? icon;
+  final AppButtonSize size;
 
   @override
   State<AppButton> createState() => _AppButtonState();
@@ -53,14 +69,15 @@ class _AppButtonState extends State<AppButton> {
       AppButtonVariant.plain => (Colors.transparent, lum.accent),
     };
 
+    final size = widget.size;
     final content = Row(
       mainAxisSize: MainAxisSize.min,
       mainAxisAlignment: MainAxisAlignment.center,
       children: [
         if (widget.loading)
           SizedBox(
-            width: 18,
-            height: 18,
+            width: size.iconSize,
+            height: size.iconSize,
             child: CircularProgressIndicator(
               strokeWidth: 2.5,
               valueColor: AlwaysStoppedAnimation<Color>(fg),
@@ -68,12 +85,13 @@ class _AppButtonState extends State<AppButton> {
           )
         else ...[
           if (widget.icon != null) ...[
-            Icon(widget.icon, color: fg, size: 18),
-            const SizedBox(width: 9),
+            Icon(widget.icon, color: fg, size: size.iconSize),
+            SizedBox(width: size == AppButtonSize.sm ? 7 : 9),
           ],
           Text(
             widget.label,
-            style: AppTypography.label.copyWith(color: fg, fontSize: 15),
+            style:
+                AppTypography.label.copyWith(color: fg, fontSize: size.fontSize),
           ),
         ],
       ],
@@ -87,16 +105,16 @@ class _AppButtonState extends State<AppButton> {
         color: _pressed ? lum.accentPress : lum.accent,
         borderRadius: AppRadius.sm,
         isDark: lum.isDark,
-        height: 50,
+        height: size.height,
         width: widget.fullWidth ? double.infinity : null,
-        padding: const EdgeInsets.symmetric(horizontal: 22),
+        padding: EdgeInsets.symmetric(horizontal: size.gutter),
         child: Center(child: content),
       );
     } else {
       surface = Container(
-        height: 50,
+        height: size.height,
         width: widget.fullWidth ? double.infinity : null,
-        padding: const EdgeInsets.symmetric(horizontal: 22),
+        padding: EdgeInsets.symmetric(horizontal: size.gutter),
         alignment: Alignment.center,
         decoration: BoxDecoration(
           color: variant == AppButtonVariant.plain && _pressed
