@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import '../../../../core/design/app_colors.dart';
+import '../../../../core/design/widgets/app_pill.dart';
 import '../../domain/entities/repair_job.dart';
 
 const repairStatusLabels = {
@@ -25,14 +26,34 @@ const repairBoardStatuses = [
   RepairStatus.delivered,
 ];
 
-Color repairStatusColor(RepairStatus s) {
-  return switch (s) {
-    RepairStatus.cancelled => AppColors.destructive,
-    RepairStatus.warrantyClaim => AppColors.warning,
-    RepairStatus.ready || RepairStatus.delivered => AppColors.success,
-    _ => AppColors.accent,
+/// Semantic tone of a status, per the design's column/pill tone table.
+AppPillTone repairStatusTone(RepairStatus s) => switch (s) {
+      RepairStatus.received => AppPillTone.neutral,
+      RepairStatus.diagnosed ||
+      RepairStatus.inRepair ||
+      RepairStatus.qc =>
+        AppPillTone.lumen,
+      RepairStatus.awaitingApproval => AppPillTone.warning,
+      RepairStatus.ready || RepairStatus.delivered => AppPillTone.success,
+      RepairStatus.warrantyClaim => AppPillTone.transit,
+      RepairStatus.cancelled => AppPillTone.danger,
+    };
+
+/// Solid colour for a tone — the board's column dot and the timeline's node.
+Color repairToneColor(BuildContext context, AppPillTone tone) {
+  final lum = context.lum;
+  return switch (tone) {
+    AppPillTone.neutral => lum.g400,
+    AppPillTone.lumen => lum.accent,
+    AppPillTone.success => lum.success,
+    AppPillTone.warning => lum.warning,
+    AppPillTone.danger => lum.danger,
+    AppPillTone.transit => lum.transit,
   };
 }
+
+Color repairStatusColor(BuildContext context, RepairStatus s) =>
+    repairToneColor(context, repairStatusTone(s));
 
 const repairPriorityLabels = {
   RepairPriority.low: 'Low',
@@ -41,55 +62,43 @@ const repairPriorityLabels = {
   RepairPriority.urgent: 'Urgent',
 };
 
-Color repairPriorityColor(RepairPriority p) {
-  return switch (p) {
-    RepairPriority.urgent => AppColors.destructive,
-    RepairPriority.high => AppColors.warning,
-    RepairPriority.normal => AppColors.accent,
-    RepairPriority.low => AppColors.textMuted,
-  };
-}
+AppPillTone repairPriorityTone(RepairPriority p) => switch (p) {
+      RepairPriority.urgent => AppPillTone.danger,
+      RepairPriority.high => AppPillTone.warning,
+      RepairPriority.normal || RepairPriority.low => AppPillTone.neutral,
+    };
+
+Color repairPriorityColor(BuildContext context, RepairPriority p) =>
+    repairToneColor(context, repairPriorityTone(p));
 
 class RepairStatusBadge extends StatelessWidget {
-  const RepairStatusBadge({super.key, required this.status});
+  const RepairStatusBadge({super.key, required this.status, this.showDot = true});
+
   final RepairStatus status;
+  final bool showDot;
 
   @override
-  Widget build(BuildContext context) {
-    final color = repairStatusColor(status);
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-      decoration: BoxDecoration(
-        color: color.withValues(alpha: 0.12),
-        borderRadius: BorderRadius.circular(999),
-      ),
-      child: Text(
-        repairStatusLabels[status]!,
-        style: TextStyle(
-            fontSize: 11, color: color, fontWeight: FontWeight.w600),
-      ),
-    );
-  }
+  Widget build(BuildContext context) => AppPill(
+        label: repairStatusLabels[status]!,
+        tone: repairStatusTone(status),
+        showDot: showDot,
+      );
 }
 
 class RepairPriorityChip extends StatelessWidget {
-  const RepairPriorityChip({super.key, required this.priority});
+  const RepairPriorityChip({super.key, required this.priority, this.suffix});
+
   final RepairPriority priority;
 
+  /// Appended to the label, e.g. ' priority' on the detail header.
+  final String? suffix;
+
   @override
-  Widget build(BuildContext context) {
-    final color = repairPriorityColor(priority);
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-      decoration: BoxDecoration(
-        color: color.withValues(alpha: 0.12),
-        borderRadius: BorderRadius.circular(999),
-      ),
-      child: Text(
-        repairPriorityLabels[priority]!,
-        style: TextStyle(
-            fontSize: 11, color: color, fontWeight: FontWeight.w600),
-      ),
-    );
-  }
+  Widget build(BuildContext context) => AppPill(
+        label: '${repairPriorityLabels[priority]!}${suffix ?? ''}',
+        tone: repairPriorityTone(priority),
+        // The design dots only the two urgent tones.
+        showDot: priority == RepairPriority.urgent ||
+            priority == RepairPriority.high,
+      );
 }
