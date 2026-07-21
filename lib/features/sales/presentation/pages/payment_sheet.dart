@@ -1,18 +1,21 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
+import 'package:lucide_icons_flutter/lucide_icons.dart';
 import '../../../../core/design/app_colors.dart';
 import '../../../../core/design/app_radius.dart';
-import '../../../../core/design/format.dart';
-import '../../../../core/design/app_spacing.dart';
 import '../../../../core/design/app_typography.dart';
 import '../../../../core/design/widgets/app_button.dart';
 import '../../../../core/design/widgets/app_inline_banner.dart';
+import '../../../../core/design/widgets/app_money_field.dart';
+import '../../../../core/design/widgets/app_money_text.dart';
 import '../../../../core/design/widgets/app_text_field.dart';
 import '../../../../core/widgets/no_access_scaffold.dart';
 import '../../../../core/widgets/permission_gate.dart';
 import '../../../sync/presentation/controllers/connectivity_controller.dart';
 import '../controllers/pos_cart_controller.dart';
+import '../widgets/sales_rise.dart';
+import '../widgets/sales_scaffold.dart';
 
 class PaymentSheet extends ConsumerStatefulWidget {
   const PaymentSheet({super.key, required this.branchId, required this.sessionId});
@@ -25,13 +28,13 @@ class PaymentSheet extends ConsumerStatefulWidget {
 }
 
 class _PaymentRow {
-  PaymentMethodLabel method;
-  final TextEditingController amountCtrl;
-  final TextEditingController refCtrl;
-
   _PaymentRow({this.method = PaymentMethodLabel.cash, required String? amount})
       : amountCtrl = TextEditingController(text: amount),
         refCtrl = TextEditingController();
+
+  PaymentMethodLabel method;
+  final TextEditingController amountCtrl;
+  final TextEditingController refCtrl;
 }
 
 class _PaymentSheetState extends ConsumerState<PaymentSheet> {
@@ -78,6 +81,13 @@ class _PaymentSheetState extends ConsumerState<PaymentSheet> {
       _rows[i].refCtrl.dispose();
       _rows.removeAt(i);
     });
+  }
+
+  /// Fills a tender with whatever is still owed, per the design's 'Exact' chip.
+  void _fillExact(int i) {
+    final remaining =
+        _balance + (double.tryParse(_rows[i].amountCtrl.text) ?? 0);
+    setState(() => _rows[i].amountCtrl.text = remaining.toStringAsFixed(0));
   }
 
   bool get _needsReference {
@@ -153,162 +163,205 @@ class _PaymentSheetState extends ConsumerState<PaymentSheet> {
   }
 
   Widget _buildContent(BuildContext context) {
+    final lum = context.lum;
     final hasCustomer = ref.watch(posCartProvider).customer != null;
     final online = ref.watch(connectivityProvider).maybeWhen(data: (v) => v, orElse: () => true);
-    return Scaffold(
-      backgroundColor: AppColors.background,
-      appBar: AppBar(
-        backgroundColor: AppColors.background,
-        surfaceTintColor: AppColors.background,
-        title: Text('Payment', style: AppTypography.headline),
-      ),
-      body: SafeArea(
-        child: Column(
-          children: [
-            Expanded(
-              child: SingleChildScrollView(
-                padding: const EdgeInsets.symmetric(horizontal: AppSpacing.screenPadding),
-                child: Column(
-                  children: [
-                    const SizedBox(height: AppSpacing.xl),
-                    _SummaryBox(label: 'Grand Total', value: _grand, bold: true),
-                    const SizedBox(height: AppSpacing.xl),
-                    if (!online)
-                      Padding(
-                        padding: const EdgeInsets.only(bottom: AppSpacing.md),
-                        child: AppInlineBanner(
-                          message: 'Offline — cash only. Collect the full amount; the sale queues and syncs when back online.',
-                          type: BannerType.info,
-                        ),
-                      ),
-                    ...List.generate(_rows.length, (i) => _PaymentRowWidget(
-                          row: _rows[i],
-                          index: i,
-                          canRemove: _rows.length > 1,
-                          cashOnly: !online,
-                          onMethodChanged: (m) => setState(() => _rows[i].method = m),
-                          onRemove: () => _removeRow(i),
-                        )),
-                    const SizedBox(height: AppSpacing.sm),
-                    AppButton(
-                      label: '+ Add Payment',
-                      onPressed: _addRow,
-                      variant: AppButtonVariant.plain,
-                      icon: Icons.add,
-                    ),
-                    if (_needsReference)
-                      Padding(
-                        padding: const EdgeInsets.only(top: AppSpacing.xs),
-                        child: Text(
-                          'Reference is optional for non-cash payments.',
-                          style: AppTypography.caption.copyWith(color: AppColors.textHint),
-                        ),
-                      ),
-                    const SizedBox(height: AppSpacing.xl),
-                    _SummaryBox(label: 'Paid', value: _paid),
-                    if (_change > 0)
-                      _SummaryBox(label: 'Change', value: _change, color: AppColors.success),
-                    if (_balance > 0)
-                      _SummaryBox(label: 'Balance Due', value: _balance, color: AppColors.warning),
-                    if (_balance > 0 && !hasCustomer)
-                      Padding(
-                        padding: const EdgeInsets.only(top: AppSpacing.md),
-                        child: AppInlineBanner(
-                          message: 'Credit requires a customer. Go back and select one.',
-                          type: BannerType.info,
-                        ),
-                      ),
-                    if (_error != null) ...[
-                      const SizedBox(height: AppSpacing.md),
-                      AppInlineBanner(message: _error!, type: BannerType.error),
-                    ],
-                  ],
-                ),
-              ),
-            ),
-            Container(
-              width: double.infinity,
-              padding: const EdgeInsets.fromLTRB(AppSpacing.screenPadding, AppSpacing.md, AppSpacing.screenPadding, AppSpacing.xxl),
-              decoration: BoxDecoration(
-                color: AppColors.background,
-                border: Border(top: BorderSide(color: AppColors.separator, width: 0.5)),
-              ),
+
+    return SalesScaffold(
+      title: 'Payment',
+      maxContentWidth: 480,
+      padding: const EdgeInsets.fromLTRB(20, 20, 20, 12),
+      bottomBar: Container(
+        padding: const EdgeInsets.fromLTRB(20, 12, 20, 20),
+        decoration: BoxDecoration(
+          color: lum.surface,
+          border: Border(top: BorderSide(color: lum.hairline)),
+        ),
+        child: SafeArea(
+          top: false,
+          child: Center(
+            child: ConstrainedBox(
+              constraints: const BoxConstraints(maxWidth: 480),
               child: AppButton(
-                label: _balance > 0 ? 'Charge (Leave Balance)' : 'Complete Sale',
+                label: _balance > 0 ? 'Charge · leave balance' : 'Complete sale',
                 onPressed: _loading ? null : _complete,
                 loading: _loading,
                 fullWidth: true,
-                icon: Icons.check,
+                icon: LucideIcons.check,
               ),
             ),
-          ],
+          ),
+        ),
+      ),
+      child: SalesRise(
+        duration: const Duration(milliseconds: 350),
+        child: SingleChildScrollView(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              Center(
+                child: Column(
+                  children: [
+                    Text(
+                      'Amount due',
+                      style: AppTypography.footnote.copyWith(color: lum.g500),
+                    ),
+                    const SizedBox(height: 4),
+                    AppMoneyText(_grand, size: 34),
+                  ],
+                ),
+              ),
+              const SizedBox(height: 22),
+              if (!online) ...[
+                const AppInlineBanner(
+                  message: 'Offline — cash only. Collect the full amount; the '
+                      'sale queues and syncs when back online.',
+                  type: BannerType.info,
+                ),
+                const SizedBox(height: 14),
+              ],
+              Text(
+                'TENDER',
+                style: AppTypography.caption.copyWith(
+                  fontWeight: FontWeight.w700,
+                  letterSpacing: 0.6,
+                  color: lum.g500,
+                ),
+              ),
+              const SizedBox(height: 10),
+              ...List.generate(
+                _rows.length,
+                (i) => _TenderRow(
+                  row: _rows[i],
+                  canRemove: _rows.length > 1,
+                  cashOnly: !online,
+                  onMethodChanged: (m) => setState(() => _rows[i].method = m),
+                  onRemove: () => _removeRow(i),
+                  onExact: () => _fillExact(i),
+                  onAmountChanged: (_) => setState(() {}),
+                ),
+              ),
+              AppButton(
+                label: 'Add tender',
+                onPressed: _addRow,
+                variant: AppButtonVariant.plain,
+                icon: LucideIcons.plus,
+              ),
+              if (_needsReference)
+                Padding(
+                  padding: const EdgeInsets.only(top: 6),
+                  child: Text(
+                    'Reference is optional for non-cash payments.',
+                    style: AppTypography.caption.copyWith(color: lum.g400),
+                  ),
+                ),
+              const SizedBox(height: 18),
+              _TotalLine(label: 'Paid', value: _paid),
+              if (_change > 0)
+                _TotalLine(
+                  label: 'Change due',
+                  value: _change,
+                  color: lum.successText,
+                ),
+              if (_balance > 0)
+                _TotalLine(
+                  label: 'Remaining',
+                  value: _balance,
+                  color: lum.warningText,
+                  strong: true,
+                ),
+              if (_balance > 0 && !hasCustomer) ...[
+                const SizedBox(height: 12),
+                const AppInlineBanner(
+                  message: 'Credit requires a customer. Go back and select one.',
+                  type: BannerType.info,
+                ),
+              ],
+              if (_error != null) ...[
+                const SizedBox(height: 12),
+                AppInlineBanner(message: _error!),
+              ],
+              const SizedBox(height: 8),
+            ],
+          ),
         ),
       ),
     );
   }
 }
 
-class _PaymentRowWidget extends StatelessWidget {
-  const _PaymentRowWidget({
+/// One tender: method, amount (with an 'Exact' shortcut) and an optional
+/// reference for anything that is not cash.
+class _TenderRow extends StatelessWidget {
+  const _TenderRow({
     required this.row,
-    required this.index,
     required this.canRemove,
     required this.cashOnly,
     required this.onMethodChanged,
     required this.onRemove,
+    required this.onExact,
+    required this.onAmountChanged,
   });
 
   final _PaymentRow row;
-  final int index;
   final bool canRemove;
   final bool cashOnly;
   final ValueChanged<PaymentMethodLabel> onMethodChanged;
   final VoidCallback onRemove;
+  final VoidCallback onExact;
+  final ValueChanged<String> onAmountChanged;
 
   @override
   Widget build(BuildContext context) {
-    return Container(
-      margin: const EdgeInsets.only(bottom: AppSpacing.md),
-      padding: const EdgeInsets.all(AppSpacing.base),
-      decoration: BoxDecoration(
-        color: AppColors.fieldFill,
-        borderRadius: BorderRadius.circular(AppRadius.card),
-        border: Border.all(color: AppColors.separator, width: 0.5),
-      ),
+    final lum = context.lum;
+
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 12),
       child: Column(
         children: [
           Row(
             children: [
               Expanded(
-                child: _MethodDropdown(
+                flex: 4,
+                child: _MethodField(
                   value: cashOnly ? PaymentMethodLabel.cash : row.method,
                   enabled: !cashOnly,
                   onChanged: onMethodChanged,
                 ),
               ),
+              const SizedBox(width: 10),
+              Expanded(
+                flex: 6,
+                child: AppMoneyField(
+                  controller: row.amountCtrl,
+                  fontSize: 20,
+                  height: 50,
+                  onChanged: onAmountChanged,
+                  trailing: _ExactChip(onTap: onExact),
+                ),
+              ),
               if (canRemove)
-                IconButton(
-                  icon: Icon(Icons.close, size: 18, color: AppColors.textHint),
-                  onPressed: onRemove,
-                  padding: EdgeInsets.zero,
-                  constraints: const BoxConstraints(minWidth: 28, minHeight: 28),
+                Semantics(
+                  button: true,
+                  label: 'Remove tender',
+                  child: InkWell(
+                    onTap: onRemove,
+                    borderRadius: BorderRadius.circular(AppRadius.pill),
+                    child: SizedBox(
+                      width: 36,
+                      height: 44,
+                      child: Icon(LucideIcons.x, size: 16, color: lum.g400),
+                    ),
+                  ),
                 ),
             ],
           ),
-          const SizedBox(height: AppSpacing.sm),
-          AppTextField(
-            controller: row.amountCtrl,
-            label: 'Amount',
-            prefixIcon: Icons.attach_money,
-            keyboardType: const TextInputType.numberWithOptions(decimal: true),
-            hint: '0',
-          ),
           if (row.method != PaymentMethodLabel.cash) ...[
-            const SizedBox(height: AppSpacing.sm),
+            const SizedBox(height: 10),
             AppTextField(
               controller: row.refCtrl,
               label: 'Reference (optional)',
-              prefixIcon: Icons.receipt_long,
+              prefixIcon: LucideIcons.receiptText,
               hint: 'Transaction #',
             ),
           ],
@@ -318,80 +371,129 @@ class _PaymentRowWidget extends StatelessWidget {
   }
 }
 
-class _MethodDropdown extends StatelessWidget {
-  const _MethodDropdown({required this.value, required this.onChanged, this.enabled = true});
+class _ExactChip extends StatelessWidget {
+  const _ExactChip({required this.onTap});
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    final lum = context.lum;
+    return Semantics(
+      button: true,
+      label: 'Fill exact remaining amount',
+      child: InkWell(
+        onTap: onTap,
+        borderRadius: BorderRadius.circular(AppRadius.pill),
+        child: Container(
+          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+          decoration: BoxDecoration(
+            color: lum.accentSoft,
+            borderRadius: BorderRadius.circular(AppRadius.pill),
+          ),
+          child: Text(
+            'Exact',
+            style: AppTypography.caption.copyWith(
+              fontWeight: FontWeight.w700,
+              color: lum.accentPress,
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+/// Payment-method picker styled as a field rather than a Material dropdown box.
+class _MethodField extends StatelessWidget {
+  const _MethodField({
+    required this.value,
+    required this.onChanged,
+    this.enabled = true,
+  });
+
   final PaymentMethodLabel value;
   final ValueChanged<PaymentMethodLabel> onChanged;
   final bool enabled;
 
+  static String labelOf(PaymentMethodLabel m) => switch (m) {
+        PaymentMethodLabel.cash => 'Cash',
+        PaymentMethodLabel.card => 'Card',
+        PaymentMethodLabel.bankTransfer => 'Bank transfer',
+        PaymentMethodLabel.mobileWallet => 'Mobile wallet',
+        PaymentMethodLabel.cheque => 'Cheque',
+        PaymentMethodLabel.loyaltyPoints => 'Loyalty points',
+        PaymentMethodLabel.creditNote => 'Credit note',
+      };
+
   @override
   Widget build(BuildContext context) {
-    final dropdown = Container(
-      height: 44,
-      padding: const EdgeInsets.symmetric(horizontal: AppSpacing.md),
+    final lum = context.lum;
+    final field = Container(
+      height: 50,
+      padding: const EdgeInsets.symmetric(horizontal: 12),
       decoration: BoxDecoration(
-        color: enabled ? AppColors.background : AppColors.fieldFill,
-        borderRadius: BorderRadius.circular(AppRadius.field),
-        border: Border.all(color: AppColors.separator),
+        color: enabled ? lum.surface : lum.surface2,
+        borderRadius: BorderRadius.circular(AppRadius.md),
+        border: Border.all(color: lum.hairline),
       ),
       child: DropdownButtonHideUnderline(
         child: DropdownButton<PaymentMethodLabel>(
           value: value,
           isExpanded: true,
-          icon: Icon(Icons.keyboard_arrow_down, size: 18, color: AppColors.textMuted),
-          style: AppTypography.subhead,
-          onChanged: enabled ? (v) { if (v != null) onChanged(v); } : null,
-          items: PaymentMethodLabel.values.map((m) {
-            return DropdownMenuItem(
-              value: m,
-              child: Text(
-                switch (m) {
-                  PaymentMethodLabel.cash => 'Cash',
-                  PaymentMethodLabel.card => 'Card',
-                  PaymentMethodLabel.bankTransfer => 'Bank Transfer',
-                  PaymentMethodLabel.mobileWallet => 'Mobile Wallet',
-                  PaymentMethodLabel.cheque => 'Cheque',
-                  PaymentMethodLabel.loyaltyPoints => 'Loyalty Points',
-                  PaymentMethodLabel.creditNote => 'Credit Note',
-                },
-              ),
-            );
-          }).toList(),
+          borderRadius: BorderRadius.circular(AppRadius.md),
+          icon: Icon(LucideIcons.chevronDown, size: 16, color: lum.g400),
+          style: AppTypography.label.copyWith(color: lum.textPrimary),
+          dropdownColor: lum.surface,
+          onChanged: enabled
+              ? (v) {
+                  if (v != null) onChanged(v);
+                }
+              : null,
+          items: [
+            for (final m in PaymentMethodLabel.values)
+              DropdownMenuItem(value: m, child: Text(labelOf(m))),
+          ],
         ),
       ),
     );
-    if (enabled) return dropdown;
-    return Tooltip(message: 'Offline: cash only', child: dropdown);
+    if (enabled) return field;
+    return Tooltip(message: 'Offline: cash only', child: field);
   }
 }
 
-class _SummaryBox extends StatelessWidget {
-  const _SummaryBox({required this.label, required this.value, this.bold = false, this.color});
+class _TotalLine extends StatelessWidget {
+  const _TotalLine({
+    required this.label,
+    required this.value,
+    this.color,
+    this.strong = false,
+  });
+
   final String label;
   final double value;
-  final bool bold;
   final Color? color;
+  final bool strong;
 
   @override
   Widget build(BuildContext context) {
-    return Container(
-      width: double.infinity,
-      padding: const EdgeInsets.symmetric(horizontal: AppSpacing.base, vertical: AppSpacing.md),
-      margin: const EdgeInsets.only(bottom: AppSpacing.sm),
-      decoration: BoxDecoration(
-        color: AppColors.fieldFill,
-        borderRadius: BorderRadius.circular(AppRadius.card),
-        border: color != null ? Border.all(color: color!.withValues(alpha: 0.3)) : null,
-      ),
+    final lum = context.lum;
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 6),
       child: Row(
-        mainAxisAlignment: MainAxisAlignment.spaceBetween,
         children: [
-          Text(label, style: AppTypography.subhead.copyWith(color: AppColors.textMuted)),
-          Text(
-            formatPkr(value),
-            style: (bold ? AppTypography.headline : AppTypography.subhead).copyWith(
-              color: color ?? AppColors.textPrimary,
+          Expanded(
+            child: Text(
+              label,
+              style: AppTypography.body.copyWith(
+                fontWeight: strong ? FontWeight.w600 : FontWeight.w400,
+                color: color ?? lum.g600,
+              ),
             ),
+          ),
+          AppMoneyText(
+            value,
+            size: strong ? 18 : 15,
+            color: color ?? lum.textPrimary,
           ),
         ],
       ),
