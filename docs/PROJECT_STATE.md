@@ -151,6 +151,37 @@ controller/provider binding byte-identical. Sales was the last module still on l
   all 11 screens, the offline pass (chips hidden, cash-only payment), cart sheet on a phone, and a
   screenshot diff against the reference renders.
 
+## UI Redesign — repair module (DONE 2026-07-21; detail in DECISIONS)
+Fourth design export, SAME design-system UUID → tokens untouched; consumer-side reskin of all 5
+repair screens + both pickers. Repair was the last module on light-only `AppColors` — now zero
+static-colour references, works in Counter mode.
+- **Repair is now a nav-shell branch** (user-approved router edit): appended as branch **index 5**
+  after Settings so 0–4 and `_kSalesBranch = 3` never shift; gated `repair:read`; all 5 routes moved
+  to `pageBuilder` + the shared `_fadePage`. `/repair/:repairId` still declared last. The 3 inbound
+  deep links (inventory hub, approvals, notifications) switched `push` → `go`; intra-module
+  drill-downs (intake, detail) keep `push` so back returns to the board.
+- **Sales chrome promoted**: `sales_scaffold.dart` → `core/widgets/module_scaffold.dart`
+  (`ModuleScaffold`/`ModuleHeader`/`ModuleAvatar`); sales file is now 3 typedefs, its 9 pages
+  untouched. `bottom_nav_shell.dart`'s sales-only rail generalised to any module — repair rail =
+  Repair jobs / Workload / History, plus the same Modules escape hatch.
+- **Board**: column width DERIVED in a LayoutBuilder (share the width when all 7 fit, else 268px
+  min + horizontal scroll) — never hand-picked. ≥900px board / grouped list below; **no manual
+  Board-List toggle** (user asked for width-driven responsiveness like the earlier reskins).
+  Header search is REAL (client-side over the loaded list). Bulk bar is now the design's floating
+  ink pill; drag-to-status kept.
+- **Honest data**: no `awaiting_parts` column (not in `repair_status_enum`); cost summary is
+  Parts / Estimate / Final (no labour field exists); part rows have no SKU; the history timeline
+  shows the timestamp alone when `changed_by` is not a known technician; workload keeps the real
+  delivered / avg-turnaround instead of the mock's high/urgent (repairJobsProvider is filtered).
+- New: `widgets/repair_sheet.dart` (one modal-or-sheet helper, replaced every raw `AlertDialog`),
+  `repair_job_card.dart`, `repair_states.dart`, `repair_timeline.dart`; `repair_status_ui.dart`
+  rewritten on `AppPill`. `repair_detail_page.dart` split via `part` into page + cards + dialogs.
+  Additive tokens: `LumColors.transit*`, `AppPillTone.transit`, `AppButtonSize` (md/sm). No new deps.
+- GATE: analyze **8 issues, 0 new** (baseline 10); macOS debug builds clean; `flutter test` = the
+  same 2 failures as clean HEAD.
+- **VERIFY OWED (on-device eyeball)**: 900px rail/bottom-bar boundary, board columns + drag, dark
+  mode on all 5 screens, bulk select, close-&-invoice / warranty paths, screenshot diff vs renders.
+
 ## Auth UX pass — Phases 1–4 DONE (2026-07-20)
 Interaction/UX depth pass on top of the LUMINA reskin (plan: friction→feedback→flow→a11y; delight
 Phase 5 deferred). Frontend + minimal flow/routing (user-approved exception to UI-only guardrail).
