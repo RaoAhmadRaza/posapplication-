@@ -1,6 +1,6 @@
 # PROJECT STATE — Lumina POS
 
-Last updated: 2026-07-20
+Last updated: 2026-07-21
 
 ## Stack & Architecture
 
@@ -181,6 +181,40 @@ static-colour references, works in Counter mode.
   same 2 failures as clean HEAD.
 - **VERIFY OWED (on-device eyeball)**: 900px rail/bottom-bar boundary, board columns + drag, dark
   mode on all 5 screens, bulk select, close-&-invoice / warranty paths, screenshot diff vs renders.
+
+## UI Redesign — settings module (DONE 2026-07-21; detail in DECISIONS)
+Fifth design export, SAME design-system UUID (5cd3f8f0-…) → tokens untouched; consumer-side reskin
+of the settings hub + 5 sub-screens + auth's Profile & security. Settings was the last module on
+light-only static `AppColors` (31 refs, 0 `context.lum`) — now zero, works in Counter mode.
+- **Sub-screens moved INSIDE the nav shell** (user-approved router edit): the six `/settings/*`
+  routes left the top-level list and became siblings of `/settings` in the existing settings
+  `StatefulShellBranch`, on `pageBuilder` + the shared `_fadePage`. Paths, page classes and the
+  hub's `context.push` call sites are byte-identical; no branch index moved. AppBars replaced by
+  the design's in-page back header, so the rail is no longer duplicated by a second bar.
+- **New shared primitives** in `core/design/widgets/`: `app_toggle.dart` (46×28 inset pill switch —
+  Material's Switch cannot express it), `app_dropdown.dart` (clay-inset well on a stdlib
+  `MenuAnchor`, so dismissal/focus/keyboard come free), `app_settings_row.dart`
+  (`AppSettingsRow` + `AppSettingsGroup`), `app_detail_scaffold.dart`. `repair_sheet.dart` was
+  PROMOTED to `core/design/widgets/app_sheet.dart` (`showAppSheet`/`AppSheetHeader`); the repair
+  file is now two aliases, so its 5 call sites are untouched. `AppTextField` gained `maxLines` +
+  `helperText` (additive; defaults unchanged, no existing call site moved).
+- **Honest data**: the design's per-row device/session counts ("3 devices", "2 active") have no
+  source on that page and are OMITTED, not invented; the GL line shows the account code alone
+  (`resolvedAccountCode`) because no account name exists in the payload; payment icons are mapped
+  from `code` with a generic wallet fallback; the hub's version is the REAL `PackageInfo.version`,
+  not the mock's v3.2.0. Theme stays light-only in Preferences (that is what `UiPreferences`
+  offers) — dark lives on the profile Counter-mode toggle, exactly as the design does it.
+- Branch country/currency/timezone became the export's 3-option dropdowns (user's call); a branch
+  stored on any other value still displays it — `AppDropdown` keeps an unmatched value as its own
+  option rather than reading as unselected. Both branch sheets moved onto `showAppSheet`.
+- The profile page's admin rows are now filtered against `permissionMatrixProvider` BEFORE the
+  group builds instead of each being `PermissionGate`-wrapped: a gated-out row still occupies a
+  slot, which would leave its hairline behind as a stray rule. Same permission keys.
+- New dep: `package_info_plus` (hub version line). GATE: `flutter analyze` **8 issues, 0 new**
+  (baseline 8); macOS debug builds and boots clean; `flutter test` = the same 2 failures as clean
+  HEAD (widget_test smoke + kpi_layout_persistence), re-proven in a detached worktree this session.
+- **VERIFY OWED (on-device eyeball)**: 900px rail/bottom-bar boundary, dark mode on all 7 screens,
+  both branch sheets, every dropdown menu, the toggles, and a screenshot diff vs the renders.
 
 ## Auth UX pass — Phases 1–4 DONE (2026-07-20)
 Interaction/UX depth pass on top of the LUMINA reskin (plan: friction→feedback→flow→a11y; delight

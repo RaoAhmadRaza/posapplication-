@@ -2,109 +2,71 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:local_auth/local_auth.dart';
+import 'package:lucide_icons_flutter/lucide_icons.dart';
 import '../../../../core/design/app_colors.dart';
-import '../../../../core/design/app_radius.dart';
 import '../../../../core/design/app_spacing.dart';
 import '../../../../core/design/app_typography.dart';
 import '../../../../core/design/widgets/app_button.dart';
 import '../../../../core/design/widgets/app_card.dart';
 import '../../../../core/design/widgets/app_confirm_dialog.dart';
+import '../../../../core/design/widgets/app_detail_scaffold.dart';
 import '../../../../core/design/widgets/app_inline_banner.dart';
+import '../../../../core/design/widgets/app_pill.dart';
+import '../../../../core/design/widgets/app_settings_row.dart';
+import '../../../../core/design/widgets/app_toggle.dart';
 import '../../../../core/state/theme_controller.dart';
 import '../../domain/usecases/get_enrolled_factor_id.dart';
 import '../../../../core/services/pin_service.dart';
-import '../../../../core/widgets/permission_gate.dart';
 import '../controllers/auth_controller.dart';
+import '../controllers/permission_controller.dart';
 import '../controllers/profile_controller.dart';
 
+/// Profile & security — the account surface the settings hub links to.
 class SettingsPage extends ConsumerWidget {
   const SettingsPage({super.key});
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    final lum = context.lum;
-    return Scaffold(
-      backgroundColor: lum.paper,
-      body: SafeArea(
-        child: SingleChildScrollView(
-          padding: const EdgeInsets.symmetric(
-            horizontal: AppSpacing.screenPadding,
+    return AppDetailScaffold(
+      eyebrow: 'Settings',
+      title: 'Profile & security',
+      description: 'Your account, sign-in and this device.',
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          const _ProfileCard(),
+          const SizedBox(height: AppSpacing.lg),
+          const _SignInSection(),
+          const SizedBox(height: AppSpacing.lg),
+          const _AdminSection(),
+          const SizedBox(height: AppSpacing.sm),
+          AppButton(
+            label: 'Log out',
+            variant: AppButtonVariant.destructive,
+            icon: LucideIcons.logOut,
+            fullWidth: true,
+            onPressed: () async {
+              final ok = await showAppConfirm(
+                context,
+                title: 'Log out?',
+                message:
+                    "You'll need to sign in again to access your account.",
+                confirmLabel: 'Log out',
+                destructive: true,
+              );
+              if (!ok) return;
+              ref.read(authControllerProvider.notifier).signOut();
+            },
           ),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.stretch,
-            children: [
-              const SizedBox(height: AppSpacing.xl),
-              Text(
-                'Settings',
-                style: AppTypography.largeTitle.copyWith(color: lum.textPrimary),
-              ),
-              const SizedBox(height: AppSpacing.xxl),
-              const _ProfileSection(),
-              const SizedBox(height: AppSpacing.lg),
-              _SectionLabel('Appearance'),
-              const SizedBox(height: AppSpacing.sm),
-              const _AppearanceSection(),
-              const SizedBox(height: AppSpacing.lg),
-              _SectionLabel('Security'),
-              const SizedBox(height: AppSpacing.sm),
-              const _SecuritySection(),
-              const SizedBox(height: AppSpacing.lg),
-              _SectionLabel('Administration'),
-              const SizedBox(height: AppSpacing.sm),
-              const _AdminSection(),
-              const SizedBox(height: AppSpacing.lg),
-              _SectionLabel('Configuration'),
-              const SizedBox(height: AppSpacing.sm),
-              const _ConfigurationSection(),
-              const SizedBox(height: AppSpacing.xxl),
-              AppButton(
-                label: 'Log out',
-                variant: AppButtonVariant.destructive,
-                icon: Icons.logout,
-                onPressed: () async {
-                  final ok = await showAppConfirm(
-                    context,
-                    title: 'Log out?',
-                    message:
-                        'You\'ll need to sign in again to access your account.',
-                    confirmLabel: 'Log out',
-                    destructive: true,
-                  );
-                  if (!ok) return;
-                  ref.read(authControllerProvider.notifier).signOut();
-                },
-              ),
-              const SizedBox(height: AppSpacing.xxl),
-            ],
-          ),
-        ),
+        ],
       ),
     );
   }
 }
 
-class _SectionLabel extends StatelessWidget {
-  final String title;
-  const _SectionLabel(this.title);
-
-  @override
-  Widget build(BuildContext context) {
-    return Padding(
-      padding: const EdgeInsets.only(bottom: AppSpacing.xs),
-      child: Text(
-        title.toUpperCase(),
-        style: AppTypography.caption.copyWith(
-          color: context.lum.textTertiary,
-          fontWeight: FontWeight.w600,
-          letterSpacing: 0.5,
-        ),
-      ),
-    );
-  }
-}
-
-class _ProfileSection extends ConsumerWidget {
-  const _ProfileSection();
+/// Avatar, name, email and the role / store the account belongs to.
+class _ProfileCard extends ConsumerWidget {
+  const _ProfileCard();
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
@@ -112,10 +74,10 @@ class _ProfileSection extends ConsumerWidget {
     final profileState = ref.watch(profileControllerProvider);
 
     if (profileState.isLoading) {
-      return const Center(
+      return const AppCard(
         child: Padding(
           padding: EdgeInsets.all(AppSpacing.xl),
-          child: CircularProgressIndicator(),
+          child: Center(child: CircularProgressIndicator()),
         ),
       );
     }
@@ -129,124 +91,83 @@ class _ProfileSection extends ConsumerWidget {
 
     final profile = profileState.value!;
     return AppCard(
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
+      padding: const EdgeInsets.all(24),
+      child: Row(
         children: [
-          Row(
-            children: [
-              Container(
-                width: 56,
-                height: 56,
-                decoration: BoxDecoration(
-                  color: lum.accentSoft,
-                  borderRadius: BorderRadius.circular(AppRadius.chip),
-                ),
-                child: Center(
-                  child: Text(
-                    profile.fullName.isNotEmpty
-                        ? profile.fullName[0].toUpperCase()
-                        : '?',
-                    style: AppTypography.title2.copyWith(color: lum.accent),
+          // ClayVariant.lumen paints no fill of its own, so the accent is set
+          // explicitly here rather than relying on the variant.
+          Container(
+            width: 64,
+            height: 64,
+            decoration: BoxDecoration(
+              color: lum.accent,
+              shape: BoxShape.circle,
+            ),
+            child: Center(
+              child: Text(
+                profile.fullName.isNotEmpty
+                    ? profile.fullName[0].toUpperCase()
+                    : '?',
+                style: AppTypography.title2.copyWith(color: Colors.white),
+              ),
+            ),
+          ),
+          const SizedBox(width: 18),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Text(
+                  profile.fullName,
+                  style: AppTypography.title2.copyWith(
+                    fontSize: 21,
+                    color: lum.textPrimary,
                   ),
                 ),
-              ),
-              const SizedBox(width: AppSpacing.md),
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      profile.fullName,
-                      style: AppTypography.headline
-                          .copyWith(color: lum.textPrimary),
-                    ),
-                    Text(
-                      profile.email,
-                      style: AppTypography.footnote
-                          .copyWith(color: lum.textSecondary),
-                    ),
-                  ],
+                const SizedBox(height: 3),
+                Text(
+                  profile.email,
+                  style: AppTypography.monoValue.copyWith(
+                    fontSize: 13,
+                    color: lum.g500,
+                  ),
                 ),
-              ),
-            ],
+                if (profile.roleName != null || profile.tenantName != null) ...[
+                  const SizedBox(height: 10),
+                  Wrap(
+                    spacing: 8,
+                    runSpacing: 8,
+                    children: [
+                      if (profile.roleName != null)
+                        AppPill(
+                          label: profile.roleName!,
+                          tone: AppPillTone.lumen,
+                          showDot: false,
+                        ),
+                      if (profile.tenantName != null)
+                        AppPill(label: profile.tenantName!, showDot: false),
+                    ],
+                  ),
+                ],
+              ],
+            ),
           ),
-          if (profile.roleName != null || profile.tenantName != null) ...[
-            const SizedBox(height: AppSpacing.base),
-            Divider(color: lum.hairline, height: 1),
-            const SizedBox(height: AppSpacing.base),
-            if (profile.roleName != null)
-              _ProfileDetail(icon: Icons.badge_outlined, label: 'Role', value: profile.roleName!),
-            if (profile.roleName != null && profile.tenantName != null)
-              const SizedBox(height: AppSpacing.sm),
-            if (profile.tenantName != null)
-              _ProfileDetail(icon: Icons.store_outlined, label: 'Store', value: profile.tenantName!),
-          ],
         ],
       ),
     );
   }
 }
 
-class _ProfileDetail extends StatelessWidget {
-  const _ProfileDetail({required this.icon, required this.label, required this.value});
-  final IconData icon;
-  final String label;
-  final String value;
+/// Appearance and sign-in: theme, PIN, biometrics, authenticator.
+class _SignInSection extends ConsumerStatefulWidget {
+  const _SignInSection();
 
   @override
-  Widget build(BuildContext context) {
-    final lum = context.lum;
-    return Row(
-      children: [
-        Icon(icon, size: 18, color: lum.textSecondary),
-        const SizedBox(width: AppSpacing.sm),
-        Text(
-          '$label: ',
-          style: AppTypography.subhead.copyWith(color: lum.textSecondary),
-        ),
-        Text(
-          value,
-          style: AppTypography.subhead.copyWith(color: lum.textPrimary),
-        ),
-      ],
-    );
-  }
+  ConsumerState<_SignInSection> createState() => _SignInSectionState();
 }
 
-/// Light/dark ("Counter mode") toggle wired to [ThemeController].
-class _AppearanceSection extends StatelessWidget {
-  const _AppearanceSection();
-
-  @override
-  Widget build(BuildContext context) {
-    final lum = context.lum;
-    return AppCard(
-      child: _SettingsRow(
-        icon: Icons.dark_mode_outlined,
-        title: 'Dark mode',
-        subtitle: 'Switch to the Counter (dark) theme.',
-        trailing: ValueListenableBuilder<ThemeMode>(
-          valueListenable: ThemeController.mode,
-          builder: (context, mode, _) => Switch(
-            value: mode == ThemeMode.dark,
-            activeTrackColor: lum.accent,
-            onChanged: (on) =>
-                ThemeController.set(on ? ThemeMode.dark : ThemeMode.light),
-          ),
-        ),
-      ),
-    );
-  }
-}
-
-class _SecuritySection extends ConsumerStatefulWidget {
-  const _SecuritySection();
-
-  @override
-  ConsumerState<_SecuritySection> createState() => _SecuritySectionState();
-}
-
-class _SecuritySectionState extends ConsumerState<_SecuritySection> {
+class _SignInSectionState extends ConsumerState<_SignInSection> {
   bool _checked = false;
   bool _hasPin = false;
   bool _showBiometrics = false;
@@ -261,8 +182,10 @@ class _SecuritySectionState extends ConsumerState<_SecuritySection> {
 
   Future<void> _load() async {
     final hasPin = await PinService.instance.hasPin();
-    final canBiometrics = hasPin ? await LocalAuthentication().canCheckBiometrics : false;
-    final biometricsOn = hasPin ? await PinService.instance.isBiometricsEnabled() : false;
+    final canBiometrics =
+        hasPin ? await LocalAuthentication().canCheckBiometrics : false;
+    final biometricsOn =
+        hasPin ? await PinService.instance.isBiometricsEnabled() : false;
     final (factorId, mfaFailure) =
         await ref.read(getEnrolledFactorIdUseCaseProvider).call();
     final hasMfa = mfaFailure == null && factorId != null;
@@ -284,190 +207,131 @@ class _SecuritySectionState extends ConsumerState<_SecuritySection> {
 
   @override
   Widget build(BuildContext context) {
-    final lum = context.lum;
-    if (!_checked) {
-      return AppCard(
-        child: const Padding(
-          padding: EdgeInsets.symmetric(vertical: AppSpacing.xxl),
-          child: Center(child: CircularProgressIndicator(strokeWidth: 2)),
+    final themeRow = AppSettingsRow(
+      icon: LucideIcons.moon,
+      title: 'Counter mode (dark)',
+      subtitle: 'Easier on the eyes during long or low-light shifts.',
+      trailing: ValueListenableBuilder<ThemeMode>(
+        valueListenable: ThemeController.mode,
+        builder: (context, mode, _) => AppToggle(
+          value: mode == ThemeMode.dark,
+          semanticLabel: 'Counter mode',
+          onChanged: (on) =>
+              ThemeController.set(on ? ThemeMode.dark : ThemeMode.light),
         ),
+      ),
+    );
+
+    if (!_checked) {
+      return AppSettingsGroup(
+        title: 'Appearance & sign-in',
+        children: [
+          themeRow,
+          const Padding(
+            padding: EdgeInsets.symmetric(vertical: AppSpacing.xl),
+            child: Center(child: CircularProgressIndicator(strokeWidth: 2)),
+          ),
+        ],
       );
     }
 
-    return AppCard(
-      child: Column(
-        children: [
-          _SettingsRow(
-            icon: Icons.lock_outline,
-            title: _hasPin ? 'Change PIN' : 'Set PIN',
-            subtitle: _hasPin ? 'Update your quick-login PIN.' : 'Add a 4-digit PIN for quick login.',
-            trailing: Icon(Icons.chevron_right, color: lum.textTertiary),
-            onTap: () => context.push('/pin-setup'),
+    return AppSettingsGroup(
+      title: 'Appearance & sign-in',
+      children: [
+        themeRow,
+        AppSettingsRow(
+          icon: LucideIcons.lock,
+          title: _hasPin ? 'Change PIN' : 'Set PIN',
+          subtitle: _hasPin
+              ? 'Used for quick unlock and approving actions.'
+              : 'Add a 4-digit PIN for quick login.',
+          meta: _hasPin
+              ? const AppPill(label: 'PIN set', tone: AppPillTone.success)
+              : null,
+          onTap: () => context.push('/pin-setup'),
+        ),
+        AppSettingsRow(
+          icon: LucideIcons.shieldCheck,
+          title: 'Biometric unlock',
+          subtitle: _showBiometrics
+              ? 'Use Face ID or fingerprint on this device.'
+              : _hasPin
+                  ? 'Not available on this device.'
+                  : 'Set a PIN first.',
+          trailing: AppToggle(
+            value: _biometricsOn,
+            enabled: _showBiometrics,
+            semanticLabel: 'Biometric unlock',
+            onChanged: _toggleBiometrics,
           ),
-          _SettingsRow(
-            icon: Icons.fingerprint,
-            title: 'Biometric unlock',
-            subtitle: _showBiometrics
-                ? 'Use Face ID or fingerprint.'
-                : _hasPin
-                    ? 'Not available on this device.'
-                    : 'Set a PIN first.',
-            trailing: Switch(
-              value: _biometricsOn,
-              activeTrackColor: lum.accent,
-              onChanged: _showBiometrics ? _toggleBiometrics : null,
-            ),
+        ),
+        AppSettingsRow(
+          icon: LucideIcons.smartphone,
+          title: _hasMfa ? 'Authenticator app' : 'Set up authenticator',
+          subtitle: _hasMfa
+              ? 'Two-factor authentication is active.'
+              : 'Add a second step with an authenticator app.',
+          meta: AppPill(
+            label: _hasMfa ? 'Active' : 'Not set',
+            tone: _hasMfa ? AppPillTone.success : AppPillTone.neutral,
+            showDot: _hasMfa,
           ),
-          _SettingsRow(
-            icon: _hasMfa ? Icons.phone_android : Icons.security_outlined,
-            title: _hasMfa ? 'Authenticator app' : 'Set up authenticator',
-            subtitle: _hasMfa ? 'Two-factor authentication is active.' : 'Add extra security to your account.',
-            trailing: Icon(Icons.chevron_right, color: lum.textTertiary),
-            onTap: () => context.push('/mfa-enroll'),
-          ),
-        ],
-      ),
+          onTap: () => context.push('/mfa-enroll'),
+        ),
+      ],
     );
   }
 }
 
-class _AdminSection extends StatelessWidget {
+/// Security & devices — admin-only rows.
+///
+/// The rows are filtered against the permission matrix BEFORE the group is
+/// built rather than each being wrapped in a [PermissionGate]: a gated-out row
+/// still occupies a slot in the group, which would leave its hairline behind as
+/// a stray double rule. The permission keys are unchanged.
+class _AdminSection extends ConsumerWidget {
   const _AdminSection();
 
   @override
-  Widget build(BuildContext context) {
-    final lum = context.lum;
-    return AppCard(
-      child: Column(
-        children: [
-          PermissionGate(
-            module: 'settings',
-            action: 'update',
-            child: _SettingsRow(
-              icon: Icons.devices,
-              title: 'Trusted devices',
-              subtitle: 'Manage registered devices.',
-              trailing: Icon(Icons.chevron_right, color: lum.textTertiary),
-              onTap: () => context.push('/devices'),
-            ),
-          ),
-          PermissionGate(
-            module: 'settings',
-            action: 'read',
-            child: Column(
-              children: [
-                _SettingsRow(
-                  icon: Icons.people_outline,
-                  title: 'Active sessions',
-                  subtitle: 'View and manage user sessions.',
-                  trailing: Icon(Icons.chevron_right, color: lum.textTertiary),
-                  onTap: () => context.push('/sessions'),
-                ),
-                _SettingsRow(
-                  icon: Icons.history,
-                  title: 'Security activity log',
-                  subtitle: 'Recent account and device activity.',
-                  trailing: Icon(Icons.chevron_right, color: lum.textTertiary),
-                  onTap: () => context.push('/security-logs'),
-                ),
-              ],
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-}
+  Widget build(BuildContext context, WidgetRef ref) {
+    final matrix = ref.watch(permissionMatrixProvider).value;
+    bool can(String key) => matrix?.contains(key) ?? false;
 
-class _ConfigurationSection extends StatelessWidget {
-  const _ConfigurationSection();
-
-  @override
-  Widget build(BuildContext context) {
-    final lum = context.lum;
-    return AppCard(
-      child: PermissionGate(
-        module: 'accounting',
-        action: 'read',
-        child: _SettingsRow(
-          icon: Icons.percent,
-          title: 'Tax rules',
-          subtitle: 'Rates applied as defaults on products and sales.',
-          trailing: Icon(Icons.chevron_right, color: lum.textTertiary),
-          onTap: () => context.push('/accounting/tax-rules'),
+    final rows = <Widget>[
+      if (can('settings:update'))
+        AppSettingsRow(
+          icon: LucideIcons.monitor,
+          title: 'Trusted devices',
+          subtitle: 'Devices allowed to sign in without approval.',
+          onTap: () => context.push('/devices'),
         ),
-      ),
-    );
-  }
-}
-
-class _SettingsRow extends StatelessWidget {
-  const _SettingsRow({
-    required this.icon,
-    required this.title,
-    required this.subtitle,
-    required this.trailing,
-    this.onTap,
-  });
-
-  final IconData icon;
-  final String title;
-  final String subtitle;
-  final Widget trailing;
-  final VoidCallback? onTap;
-
-  @override
-  Widget build(BuildContext context) {
-    final lum = context.lum;
-    return Column(
-      children: [
-        Divider(color: lum.hairline, height: 1),
-        Semantics(
-          button: onTap != null,
-          label: title,
-          child: GestureDetector(
-          onTap: onTap,
-          behavior: HitTestBehavior.opaque,
-          child: Padding(
-            padding: const EdgeInsets.symmetric(vertical: AppSpacing.md),
-            child: Row(
-              children: [
-                Container(
-                  width: 40,
-                  height: 40,
-                  decoration: BoxDecoration(
-                    color: lum.accentSoft,
-                    borderRadius: BorderRadius.circular(AppRadius.sm),
-                  ),
-                  child: Center(child: Icon(icon, color: lum.accent, size: 22)),
-                ),
-                const SizedBox(width: AppSpacing.md),
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(
-                        title,
-                        style: AppTypography.headline
-                            .copyWith(color: lum.textPrimary),
-                      ),
-                      const SizedBox(height: 2),
-                      Text(
-                        subtitle,
-                        style: AppTypography.footnote
-                            .copyWith(color: lum.textSecondary),
-                      ),
-                    ],
-                  ),
-                ),
-                const SizedBox(width: AppSpacing.sm),
-                trailing,
-              ],
-            ),
-          ),
+      if (can('settings:read')) ...[
+        AppSettingsRow(
+          icon: LucideIcons.smartphone,
+          title: 'Active sessions',
+          subtitle: "Where you're currently signed in.",
+          onTap: () => context.push('/sessions'),
         ),
+        AppSettingsRow(
+          icon: LucideIcons.fileText,
+          title: 'Security activity log',
+          subtitle: 'Sign-ins, PIN changes and approvals.',
+          onTap: () => context.push('/security-logs'),
         ),
       ],
+      if (can('accounting:read'))
+        AppSettingsRow(
+          icon: LucideIcons.percent,
+          title: 'Tax rules',
+          subtitle: 'Rates and how tax posts to the ledger.',
+          onTap: () => context.push('/accounting/tax-rules'),
+        ),
+    ];
+
+    if (rows.isEmpty) return const SizedBox.shrink();
+    return Padding(
+      padding: const EdgeInsets.only(bottom: AppSpacing.lg),
+      child: AppSettingsGroup(title: 'Security & devices', children: rows),
     );
   }
 }
