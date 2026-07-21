@@ -34,6 +34,38 @@ const _allItems = [
   _NavItem('Settings', LucideIcons.settings),
 ];
 
+/// Shell branch index of the sales module, per the router's branch order.
+const _kSalesBranch = 3;
+
+/// Sales destinations. Every one of these lives inside the sales shell branch,
+/// so they navigate with `go` — `goBranch` is only for switching module.
+class _SalesDest {
+  const _SalesDest(this.label, this.icon, this.path);
+  final String label;
+  final IconData icon;
+  final String path;
+}
+
+const _salesDests = [
+  _SalesDest('Point of sale', LucideIcons.shoppingCart, '/sales/pos'),
+  _SalesDest('Sales history', LucideIcons.receiptText, '/sales/history'),
+  _SalesDest('Returns', LucideIcons.rotateCcw, '/sales/return'),
+  // /sales/open renders the already-open session state itself, so one entry
+  // covers both opening and closing a register.
+  _SalesDest('Session', LucideIcons.lock, '/sales/open'),
+];
+
+/// Which sales destination owns [path]. Checkout (payment/success/receipt) is
+/// part of selling, so it keeps Point of sale lit.
+int _salesIndexFor(String path) {
+  if (path.startsWith('/sales/history')) return 1;
+  if (path.startsWith('/sales/return')) return 2;
+  if (path.startsWith('/sales/open') || path.startsWith('/sales/session')) {
+    return 3;
+  }
+  return 0;
+}
+
 class BottomNavShell extends ConsumerWidget {
   const BottomNavShell({super.key, required this.navigationShell});
 
@@ -60,6 +92,13 @@ class BottomNavShell extends ConsumerWidget {
           initialLocation: i == selected,
         );
 
+    // Inside sales the nav becomes the module's own destinations (the design's
+    // sales rail), with the other modules kept reachable below the hairline on
+    // desktop and behind a Modules tab on mobile.
+    final inSales = navigationShell.currentIndex == _kSalesBranch;
+    final salesIndex =
+        inSales ? _salesIndexFor(GoRouterState.of(context).uri.path) : -1;
+
     return CallbackShortcuts(
       bindings: {
         // Both, so the same binding works on macOS and Windows/Linux.
@@ -77,7 +116,11 @@ class BottomNavShell extends ConsumerWidget {
                 body: Row(
                   children: [
                     _NavRail(
-                        items: items, selected: selected, onSelect: onSelect),
+                      items: items,
+                      selected: selected,
+                      onSelect: onSelect,
+                      salesIndex: salesIndex,
+                    ),
                     Expanded(child: navigationShell),
                   ],
                 ),
@@ -89,6 +132,7 @@ class BottomNavShell extends ConsumerWidget {
                 items: items,
                 selected: selected,
                 onSelect: onSelect,
+                salesIndex: salesIndex,
               ),
             );
           },
@@ -109,17 +153,30 @@ class _NavRail extends StatelessWidget {
     required this.items,
     required this.selected,
     required this.onSelect,
+    required this.salesIndex,
   });
 
   final List<_NavItem> items;
   final int selected;
   final ValueChanged<int> onSelect;
 
+  /// Active sales destination, or -1 when the shell is not on the sales branch.
+  final int salesIndex;
+
   @override
   Widget build(BuildContext context) {
     final lum = context.lum;
     // Settings is always the last destination; it sits below the divider.
     final lastIndex = items.length - 1;
+
+    if (salesIndex >= 0) {
+      return _SalesRail(
+        items: items,
+        selected: selected,
+        onSelect: onSelect,
+        salesIndex: salesIndex,
+      );
+    }
 
     return Container(
       width: 244,
@@ -168,6 +225,103 @@ class _NavRail extends StatelessWidget {
           const SizedBox(height: 8),
           const _RailUserBlock(),
         ],
+      ),
+    );
+  }
+}
+
+/// Rail shown while the sales branch is active: the module's own destinations
+/// on top, the other modules below a hairline so the user is never stranded.
+class _SalesRail extends StatelessWidget {
+  const _SalesRail({
+    required this.items,
+    required this.selected,
+    required this.onSelect,
+    required this.salesIndex,
+  });
+
+  final List<_NavItem> items;
+  final int selected;
+  final ValueChanged<int> onSelect;
+  final int salesIndex;
+
+  @override
+  Widget build(BuildContext context) {
+    final lum = context.lum;
+
+    return Container(
+      width: 244,
+      decoration: BoxDecoration(
+        color: lum.surface,
+        border: Border(right: BorderSide(color: lum.hairline)),
+      ),
+      padding: const EdgeInsets.symmetric(vertical: 20, horizontal: 16),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          const Padding(
+            padding: EdgeInsets.fromLTRB(8, 2, 8, 18),
+            child: Align(
+              alignment: Alignment.centerLeft,
+              child: LuminaWordmark(size: 20),
+            ),
+          ),
+          Expanded(
+            child: ListView(
+              padding: EdgeInsets.zero,
+              children: [
+                const _RailEyebrow('Sales'),
+                for (var i = 0; i < _salesDests.length; i++) ...[
+                  _RailItem(
+                    item: _NavItem(_salesDests[i].label, _salesDests[i].icon),
+                    active: i == salesIndex,
+                    onTap: () => context.go(_salesDests[i].path),
+                  ),
+                  const SizedBox(height: 4),
+                ],
+                Container(
+                  margin: const EdgeInsets.only(top: 10, bottom: 4),
+                  height: 1,
+                  color: lum.hairline,
+                ),
+                const _RailEyebrow('Modules'),
+                for (var i = 0; i < items.length; i++)
+                  if (i != selected) ...[
+                    _RailItem(
+                      item: items[i],
+                      active: false,
+                      onTap: () => onSelect(i),
+                    ),
+                    const SizedBox(height: 4),
+                  ],
+              ],
+            ),
+          ),
+          const SizedBox(height: 8),
+          const _RailUserBlock(),
+        ],
+      ),
+    );
+  }
+}
+
+/// Small uppercase group heading in the rail.
+class _RailEyebrow extends StatelessWidget {
+  const _RailEyebrow(this.label);
+  final String label;
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(14, 0, 14, 8),
+      child: Text(
+        label.toUpperCase(),
+        style: AppTypography.caption.copyWith(
+          fontSize: 11,
+          fontWeight: FontWeight.w700,
+          letterSpacing: 0.66,
+          color: context.lum.g400,
+        ),
       ),
     );
   }
@@ -317,15 +471,45 @@ class _LuminaBottomBar extends StatelessWidget {
     required this.items,
     required this.selected,
     required this.onSelect,
+    required this.salesIndex,
   });
 
   final List<_NavItem> items;
   final int selected;
   final ValueChanged<int> onSelect;
 
+  /// Active sales destination, or -1 when the shell is not on the sales branch.
+  final int salesIndex;
+
   @override
   Widget build(BuildContext context) {
     final lum = context.lum;
+    final inSales = salesIndex >= 0;
+
+    final tabs = <Widget>[
+      if (inSales) ...[
+        _BottomTab(
+          item: const _NavItem('Modules', LucideIcons.layoutGrid),
+          active: false,
+          onTap: () => _showModulesSheet(context),
+        ),
+        for (var i = 0; i < _salesDests.length; i++)
+          _BottomTab(
+            // Two words do not fit a fifth-width tab; the rail keeps the full
+            // labels.
+            item: _NavItem(_shortLabels[i], _salesDests[i].icon),
+            active: i == salesIndex,
+            onTap: () => context.go(_salesDests[i].path),
+          ),
+      ] else
+        for (var i = 0; i < items.length; i++)
+          _BottomTab(
+            item: items[i],
+            active: i == selected,
+            onTap: () => onSelect(i),
+          ),
+    ];
+
     return Container(
       decoration: BoxDecoration(
         color: lum.surface,
@@ -336,17 +520,61 @@ class _LuminaBottomBar extends StatelessWidget {
         child: Padding(
           padding: const EdgeInsets.only(top: 5),
           child: Row(
-            children: [
-              for (var i = 0; i < items.length; i++)
-                Expanded(
-                  child: _BottomTab(
+            children: [for (final tab in tabs) Expanded(child: tab)],
+          ),
+        ),
+      ),
+    );
+  }
+
+  static const _shortLabels = ['Sell', 'History', 'Returns', 'Session'];
+
+  void _showModulesSheet(BuildContext context) {
+    final lum = context.lum;
+    showModalBottomSheet<void>(
+      context: context,
+      backgroundColor: lum.surface,
+      shape: const RoundedRectangleBorder(
+        borderRadius:
+            BorderRadius.vertical(top: Radius.circular(AppRadius.xl)),
+      ),
+      builder: (sheetContext) => SafeArea(
+        top: false,
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            Container(
+              margin: const EdgeInsets.only(top: 10, bottom: 6),
+              width: 40,
+              height: 5,
+              decoration: BoxDecoration(
+                color: lum.g300,
+                borderRadius: BorderRadius.circular(AppRadius.pill),
+              ),
+            ),
+            const Padding(
+              padding: EdgeInsets.only(left: 10, top: 6),
+              child: _RailEyebrow('Modules'),
+            ),
+            for (var i = 0; i < items.length; i++)
+              if (i != selected)
+                Padding(
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 16,
+                    vertical: 2,
+                  ),
+                  child: _RailItem(
                     item: items[i],
-                    active: i == selected,
-                    onTap: () => onSelect(i),
+                    active: false,
+                    onTap: () {
+                      Navigator.of(sheetContext).pop();
+                      onSelect(i);
+                    },
                   ),
                 ),
-            ],
-          ),
+            const SizedBox(height: 12),
+          ],
         ),
       ),
     );
