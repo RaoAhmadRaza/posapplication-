@@ -510,31 +510,6 @@ final appRouter = GoRouter(
       path: '/notifications/settings',
       builder: (context, state) => const NotificationSettingsPage(),
     ),
-    // Settings hub sub-pages (pushed over the /settings tab).
-    GoRoute(
-      path: '/settings/profile',
-      builder: (context, state) => const SettingsPage(),
-    ),
-    GoRoute(
-      path: '/settings/business',
-      builder: (context, state) => const BusinessSettingsPage(),
-    ),
-    GoRoute(
-      path: '/settings/branches',
-      builder: (context, state) => const BranchesPage(),
-    ),
-    GoRoute(
-      path: '/settings/payment-methods',
-      builder: (context, state) => const PaymentMethodsPage(),
-    ),
-    GoRoute(
-      path: '/settings/number-series',
-      builder: (context, state) => const NumberSeriesPage(),
-    ),
-    GoRoute(
-      path: '/settings/preferences',
-      builder: (context, state) => const PreferencesPage(),
-    ),
     GoRoute(
       path: '/notifications/templates',
       builder: (context, state) => const PermissionGate(
@@ -1059,6 +1034,39 @@ final appRouter = GoRouter(
             GoRoute(
               path: '/settings',
               builder: (context, state) => const SettingsHubPage(),
+            ),
+            // The settings detail screens live INSIDE the branch so they keep
+            // the rail/bottom bar, as the design draws them. Same chrome on
+            // every one of them, so they cross-fade rather than slide.
+            GoRoute(
+              path: '/settings/profile',
+              pageBuilder: (context, state) =>
+                  _fadePage(state, const SettingsPage()),
+            ),
+            GoRoute(
+              path: '/settings/business',
+              pageBuilder: (context, state) =>
+                  _fadePage(state, const BusinessSettingsPage()),
+            ),
+            GoRoute(
+              path: '/settings/branches',
+              pageBuilder: (context, state) =>
+                  _fadePage(state, const BranchesPage()),
+            ),
+            GoRoute(
+              path: '/settings/payment-methods',
+              pageBuilder: (context, state) =>
+                  _fadePage(state, const PaymentMethodsPage()),
+            ),
+            GoRoute(
+              path: '/settings/number-series',
+              pageBuilder: (context, state) =>
+                  _fadePage(state, const NumberSeriesPage()),
+            ),
+            GoRoute(
+              path: '/settings/preferences',
+              pageBuilder: (context, state) =>
+                  _fadePage(state, const PreferencesPage()),
             ),
           ],
         ),
