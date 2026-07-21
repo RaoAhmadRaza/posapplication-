@@ -1,18 +1,23 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
+import 'package:lucide_icons_flutter/lucide_icons.dart';
 import '../../../../core/design/app_colors.dart';
-import '../../../../core/design/format.dart';
-import '../../../../core/design/app_spacing.dart';
+import '../../../../core/design/app_radius.dart';
 import '../../../../core/design/app_typography.dart';
+import '../../../../core/design/clay.dart';
+import '../../../../core/design/format.dart';
 import '../../../../core/design/widgets/app_button.dart';
+import '../../../../core/design/widgets/app_card.dart';
 import '../../../../core/design/widgets/app_inline_banner.dart';
-import '../../../../core/design/widgets/app_text_field.dart';
+import '../../../../core/design/widgets/app_money_field.dart';
 import '../../../../core/widgets/no_access_scaffold.dart';
 import '../../../../core/widgets/permission_gate.dart';
 import '../../../auth/presentation/controllers/branch_controller.dart';
 import '../../domain/failures/sales_failure.dart';
 import '../controllers/session_controller.dart';
+import '../widgets/sales_rise.dart';
+import '../widgets/sales_scaffold.dart';
 
 class OpenSessionPage extends ConsumerStatefulWidget {
   const OpenSessionPage({super.key});
@@ -77,9 +82,9 @@ class _OpenSessionPageState extends ConsumerState<OpenSessionPage> {
     final session = sessionState.value;
 
     if (sessionState.isLoading) {
-      return const Scaffold(
-        backgroundColor: AppColors.background,
-        body: Center(child: CircularProgressIndicator()),
+      return const SalesScaffold(
+        title: 'Open session',
+        child: Center(child: CircularProgressIndicator()),
       );
     }
 
@@ -87,50 +92,47 @@ class _OpenSessionPageState extends ConsumerState<OpenSessionPage> {
       final openedAt = session.openedAt;
       final timeStr = '${openedAt.day}/${openedAt.month}/${openedAt.year} '
           '${openedAt.hour.toString().padLeft(2, '0')}:${openedAt.minute.toString().padLeft(2, '0')}';
-      return Scaffold(
-        backgroundColor: AppColors.background,
-        appBar: AppBar(
-          backgroundColor: AppColors.background,
-          surfaceTintColor: AppColors.background,
-          title: Text('Open Session', style: AppTypography.headline),
-        ),
-        body: SafeArea(
-          child: Padding(
-            padding: const EdgeInsets.symmetric(horizontal: AppSpacing.screenPadding),
+      return SalesScaffold(
+        title: 'Open session',
+        maxContentWidth: 440,
+        padding: const EdgeInsets.all(32),
+        child: SalesRise(
+          child: AppCard(
+            raised: true,
+            padding: const EdgeInsets.all(32),
             child: Column(
-              mainAxisAlignment: MainAxisAlignment.center,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              mainAxisSize: MainAxisSize.min,
               children: [
-                Container(
-                  width: 72,
-                  height: 72,
-                  decoration: BoxDecoration(
-                    color: AppColors.accent.withValues(alpha: 0.12),
-                    shape: BoxShape.circle,
-                  ),
-                  child: const Icon(Icons.point_of_sale, size: 36, color: AppColors.accent),
-                ),
-                const SizedBox(height: AppSpacing.xl),
-                Text('Session Already Open', style: AppTypography.title2),
-                const SizedBox(height: AppSpacing.xs),
+                const _IconTile(icon: LucideIcons.shoppingCart),
+                const SizedBox(height: 20),
                 Text(
-                  'Opened $timeStr · Float ${formatPkr(session.openingFloat)}',
-                  style: AppTypography.footnote.copyWith(color: AppColors.textMuted),
-                  textAlign: TextAlign.center,
+                  'Register already open',
+                  style: AppTypography.title1.copyWith(fontSize: 26),
                 ),
-                const SizedBox(height: AppSpacing.xxl),
+                const SizedBox(height: 6),
+                Text(
+                  'Opened $timeStr · float ${formatPkr(session.openingFloat)}. '
+                  'Every sale is tracked against this session.',
+                  style: AppTypography.footnote.copyWith(
+                    height: 1.5,
+                    color: context.lum.g500,
+                  ),
+                ),
+                const SizedBox(height: 26),
                 AppButton(
-                  label: 'Resume Selling',
+                  label: 'Resume selling',
                   onPressed: () => context.go('/sales/pos'),
                   fullWidth: true,
-                  icon: Icons.shopping_cart,
+                  icon: LucideIcons.arrowRight,
                 ),
-                const SizedBox(height: AppSpacing.md),
+                const SizedBox(height: 12),
                 AppButton(
-                  label: 'Close & Reconcile',
+                  label: 'Close & reconcile',
                   onPressed: () => context.go('/sales/session/close'),
                   fullWidth: true,
                   variant: AppButtonVariant.tinted,
-                  icon: Icons.close,
+                  icon: LucideIcons.lock,
                 ),
               ],
             ),
@@ -139,50 +141,75 @@ class _OpenSessionPageState extends ConsumerState<OpenSessionPage> {
       );
     }
 
-    return Scaffold(
-      backgroundColor: AppColors.background,
-      appBar: AppBar(
-        backgroundColor: AppColors.background,
-        surfaceTintColor: AppColors.background,
-        title: Text('Open Session', style: AppTypography.headline),
-      ),
-      body: SafeArea(
-        child: Padding(
-          padding: const EdgeInsets.symmetric(horizontal: AppSpacing.screenPadding),
+    return SalesScaffold(
+      title: 'Open session',
+      maxContentWidth: 440,
+      padding: const EdgeInsets.all(32),
+      child: SalesRise(
+        child: AppCard(
+          raised: true,
+          padding: const EdgeInsets.all(32),
           child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            mainAxisSize: MainAxisSize.min,
             children: [
-              const SizedBox(height: AppSpacing.xxl),
-              Icon(Icons.point_of_sale, size: 48, color: AppColors.accent),
-              const SizedBox(height: AppSpacing.md),
-              Text('Open Cashier Session', style: AppTypography.title2),
-              const SizedBox(height: AppSpacing.xs),
+              const _IconTile(icon: LucideIcons.sunrise),
+              const SizedBox(height: 20),
               Text(
-                'Enter your opening cash float to start selling.',
-                style: AppTypography.footnote.copyWith(color: AppColors.textMuted),
+                'Open register',
+                style: AppTypography.title1.copyWith(fontSize: 26),
               ),
-              const SizedBox(height: AppSpacing.xxl),
-              AppTextField(
+              const SizedBox(height: 6),
+              Text(
+                'Count the cash in the drawer to start your shift. Every sale '
+                'is tracked against this session.',
+                style: AppTypography.footnote.copyWith(
+                  height: 1.5,
+                  color: context.lum.g500,
+                ),
+              ),
+              const SizedBox(height: 22),
+              AppMoneyField(
                 controller: _floatCtrl,
-                label: 'Opening Float (PKR)',
-                prefixIcon: Icons.attach_money,
-                keyboardType: const TextInputType.numberWithOptions(decimal: true),
-                hint: '0',
+                label: 'Opening float',
+                onSubmitted: (_) => _loading ? null : _open(),
               ),
               if (_error != null) ...[
-                const SizedBox(height: AppSpacing.md),
-                AppInlineBanner(message: _error!.message, type: BannerType.error),
+                const SizedBox(height: 14),
+                AppInlineBanner(message: _error!.message),
               ],
-              const SizedBox(height: AppSpacing.xxl),
+              const SizedBox(height: 22),
               AppButton(
-                label: 'Open Session',
+                label: 'Open session',
                 onPressed: _loading ? null : _open,
                 loading: _loading,
                 fullWidth: true,
+                icon: LucideIcons.arrowRight,
               ),
             ],
           ),
         ),
       ),
+    );
+  }
+}
+
+/// 60px clay tile carrying the screen's glyph, per the design's card header.
+class _IconTile extends StatelessWidget {
+  const _IconTile({required this.icon});
+  final IconData icon;
+
+  @override
+  Widget build(BuildContext context) {
+    final lum = context.lum;
+    return ClayContainer(
+      variant: ClayVariant.soft,
+      color: lum.accentSoft,
+      borderRadius: AppRadius.clay,
+      isDark: lum.isDark,
+      width: 60,
+      height: 60,
+      child: Icon(icon, size: 28, color: lum.accent),
     );
   }
 }

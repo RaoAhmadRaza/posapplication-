@@ -1,17 +1,24 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
+import 'package:lucide_icons_flutter/lucide_icons.dart';
 import '../../../../core/design/app_colors.dart';
-import '../../../../core/design/format.dart';
-import '../../../../core/design/app_spacing.dart';
+import '../../../../core/design/app_radius.dart';
 import '../../../../core/design/app_typography.dart';
+import '../../../../core/design/format.dart';
 import '../../../../core/design/widgets/app_button.dart';
+import '../../../../core/design/widgets/app_card.dart';
 import '../../../../core/design/widgets/app_inline_banner.dart';
-import '../../../../core/design/widgets/app_text_field.dart';
+import '../../../../core/design/widgets/app_money_field.dart';
+import '../../../../core/design/widgets/app_money_text.dart';
+import '../../../../core/design/widgets/app_section_card.dart';
 import '../../../../core/widgets/no_access_scaffold.dart';
 import '../../../../core/widgets/permission_gate.dart';
 import '../../domain/failures/sales_failure.dart';
 import '../controllers/session_controller.dart';
+import '../widgets/sales_empty_state.dart';
+import '../widgets/sales_rise.dart';
+import '../widgets/sales_scaffold.dart';
 
 class CloseSessionPage extends ConsumerStatefulWidget {
   const CloseSessionPage({super.key});
@@ -72,155 +79,163 @@ class _CloseSessionPageState extends ConsumerState<CloseSessionPage> {
     final sessionState = ref.watch(sessionProvider);
 
     if (sessionState.isLoading) {
-      return const Scaffold(
-        backgroundColor: AppColors.background,
-        body: Center(child: CircularProgressIndicator()),
+      return const SalesScaffold(
+        title: 'Close session',
+        child: Center(child: CircularProgressIndicator()),
       );
     }
 
     final session = sessionState.value;
 
-    if (_result != null) {
-      final expected = double.tryParse(_result!['expected_float']?.toString() ?? '0') ?? 0;
-      final closing = double.tryParse(_result!['closing_float']?.toString() ?? '0') ?? 0;
-      final variance = double.tryParse(_result!['cash_variance']?.toString() ?? '0') ?? 0;
-      final sales = double.tryParse(_result!['total_sales']?.toString() ?? '0') ?? 0;
-      final txns = _result!['total_transactions'] as int? ?? 0;
+    if (_result != null) return _closedView(context);
 
-      String varianceLabel;
-      Color varianceColor;
-      if (variance == 0) {
-        varianceLabel = 'Balanced';
-        varianceColor = AppColors.success;
-      } else if (variance > 0) {
-        varianceLabel = 'Over by ${formatPkr(variance)}';
-        varianceColor = AppColors.success;
-      } else {
-        varianceLabel = 'Short by ${formatPkr(-variance)}';
-        varianceColor = AppColors.destructive;
-      }
-
-      return Scaffold(
-        backgroundColor: AppColors.background,
-        appBar: AppBar(
-          backgroundColor: AppColors.background,
-          surfaceTintColor: AppColors.background,
-          title: Text('Close Session', style: AppTypography.headline),
-        ),
-        body: SafeArea(
-          child: Padding(
-            padding: const EdgeInsets.symmetric(horizontal: AppSpacing.screenPadding),
-            child: Column(
-              mainAxisAlignment: MainAxisAlignment.center,
-              children: [
-                Container(
-                  width: 72,
-                  height: 72,
-                  decoration: BoxDecoration(
-                    color: varianceColor.withValues(alpha: 0.12),
-                    shape: BoxShape.circle,
-                  ),
-                  child: Icon(
-                    variance == 0 ? Icons.check_circle : Icons.info_outline,
-                    size: 36,
-                    color: varianceColor,
-                  ),
-                ),
-                const SizedBox(height: AppSpacing.xl),
-                Text('Session Closed', style: AppTypography.title2),
-                const SizedBox(height: AppSpacing.md),
-                _SummaryRow(label: 'Total Sales', value: sales),
-                _SummaryRow(label: 'Transactions', value: txns.toDouble()),
-                _SummaryRow(label: 'Expected Float', value: expected),
-                _SummaryRow(label: 'Closing Float', value: closing),
-                const SizedBox(height: AppSpacing.sm),
-                Container(
-                  width: double.infinity,
-                  padding: const EdgeInsets.symmetric(vertical: AppSpacing.sm, horizontal: AppSpacing.base),
-                  decoration: BoxDecoration(
-                    color: varianceColor.withValues(alpha: 0.08),
-                    borderRadius: BorderRadius.circular(AppSpacing.sm),
-                  ),
-                  child: Text(
-                    varianceLabel,
-                    style: AppTypography.headline.copyWith(color: varianceColor),
-                    textAlign: TextAlign.center,
-                  ),
-                ),
-                const SizedBox(height: AppSpacing.xxl),
-                AppButton(
-                  label: 'Go to POS',
-                  onPressed: () => context.go('/sales'),
-                  fullWidth: true,
-                ),
-              ],
-            ),
+    if (session == null) {
+      return SalesScaffold(
+        title: 'Close session',
+        maxContentWidth: 520,
+        padding: const EdgeInsets.all(24),
+        child: SalesEmptyState(
+          icon: LucideIcons.lock,
+          message: 'No register is open right now.',
+          action: AppButton(
+            label: 'Go to sales',
+            onPressed: () => context.go('/sales'),
+            variant: AppButtonVariant.plain,
           ),
         ),
       );
     }
 
-    if (session == null) {
-      return Scaffold(
-        backgroundColor: AppColors.background,
-        appBar: AppBar(
-          backgroundColor: AppColors.background,
-          surfaceTintColor: AppColors.background,
-          title: Text('Close Session', style: AppTypography.headline),
-        ),
-        body: Center(
+    return SalesScaffold(
+      title: 'Close session',
+      maxContentWidth: 520,
+      padding: const EdgeInsets.all(24),
+      child: SalesRise(
+        duration: const Duration(milliseconds: 350),
+        child: SingleChildScrollView(
           child: Column(
-            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
-              Text('No open session.', style: AppTypography.subhead.copyWith(color: AppColors.textMuted)),
-              const SizedBox(height: AppSpacing.md),
+              AppSectionCard(
+                eyebrow: 'Session summary',
+                child: Column(
+                  children: [
+                    // Only what close_cashier_session actually accounts for.
+                    // There is no per-method (cash/card/wallet) split anywhere
+                    // in the session path, so none is shown.
+                    _SummaryRow(label: 'Opening float', value: session.openingFloat),
+                    _SummaryRow(label: 'Total sales', value: session.totalSales),
+                    _SummaryRow(
+                      label: 'Transactions',
+                      count: session.totalTransactions,
+                    ),
+                  ],
+                ),
+              ),
+              const SizedBox(height: 16),
+              AppCard(
+                padding: const EdgeInsets.all(20),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: [
+                    AppMoneyField(
+                      controller: _closingCtrl,
+                      label: 'Counted cash',
+                      onSubmitted: (_) => _loading ? null : _close(),
+                    ),
+                    if (_error != null) ...[
+                      const SizedBox(height: 14),
+                      AppInlineBanner(message: _error!.message),
+                    ],
+                  ],
+                ),
+              ),
+              const SizedBox(height: 20),
               AppButton(
-                label: 'Go to Sales',
-                onPressed: () => context.go('/sales'),
-                variant: AppButtonVariant.plain,
+                label: 'Close session',
+                onPressed: _loading ? null : _close,
+                loading: _loading,
+                fullWidth: true,
+                icon: LucideIcons.lock,
               ),
             ],
           ),
         ),
-      );
-    }
-
-    return Scaffold(
-      backgroundColor: AppColors.background,
-      appBar: AppBar(
-        backgroundColor: AppColors.background,
-        surfaceTintColor: AppColors.background,
-        title: Text('Close Session', style: AppTypography.headline),
       ),
-      body: SafeArea(
-        child: Padding(
-          padding: const EdgeInsets.symmetric(horizontal: AppSpacing.screenPadding),
+    );
+  }
+
+  Widget _closedView(BuildContext context) {
+    final lum = context.lum;
+    final expected =
+        double.tryParse(_result!['expected_float']?.toString() ?? '0') ?? 0;
+    final closing =
+        double.tryParse(_result!['closing_float']?.toString() ?? '0') ?? 0;
+    final variance =
+        double.tryParse(_result!['cash_variance']?.toString() ?? '0') ?? 0;
+    final sales = double.tryParse(_result!['total_sales']?.toString() ?? '0') ?? 0;
+    final txns = _result!['total_transactions'] as int? ?? 0;
+
+    final (label, fg, bg) = switch (variance) {
+      0 => ('Drawer balanced', lum.successText, lum.successSoft),
+      > 0 => ('Over by ${formatPkr(variance)}', lum.accentPress, lum.accentSoft),
+      _ => ('Short by ${formatPkr(-variance)}', lum.dangerText, lum.dangerSoft),
+    };
+
+    return SalesScaffold(
+      title: 'Close session',
+      maxContentWidth: 520,
+      padding: const EdgeInsets.all(24),
+      child: SalesRise(
+        duration: const Duration(milliseconds: 350),
+        child: SingleChildScrollView(
           child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
+            crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
-              const SizedBox(height: AppSpacing.xxl),
-              _SummaryRow(label: 'Total Sales', value: session.totalSales),
-              _SummaryRow(label: 'Transactions', value: session.totalTransactions.toDouble()),
-              _SummaryRow(label: 'Opening Float', value: session.openingFloat),
-              const SizedBox(height: AppSpacing.xxl),
-              AppTextField(
-                controller: _closingCtrl,
-                label: 'Closing Float (Counted Cash)',
-                prefixIcon: Icons.attach_money,
-                keyboardType: const TextInputType.numberWithOptions(decimal: true),
-                hint: '0',
+              AppSectionCard(
+                eyebrow: 'Session closed',
+                child: Column(
+                  children: [
+                    _SummaryRow(label: 'Total sales', value: sales),
+                    _SummaryRow(label: 'Transactions', count: txns),
+                    _SummaryRow(label: 'Expected in drawer', value: expected),
+                    _SummaryRow(label: 'Counted cash', value: closing),
+                  ],
+                ),
               ),
-              if (_error != null) ...[
-                const SizedBox(height: AppSpacing.md),
-                AppInlineBanner(message: _error!.message, type: BannerType.error),
-              ],
-              const SizedBox(height: AppSpacing.xxl),
+              const SizedBox(height: 16),
+              Container(
+                padding:
+                    const EdgeInsets.symmetric(vertical: 12, horizontal: 16),
+                decoration: BoxDecoration(
+                  color: bg,
+                  borderRadius: BorderRadius.circular(AppRadius.md),
+                ),
+                child: Row(
+                  children: [
+                    Icon(
+                      variance == 0
+                          ? LucideIcons.check
+                          : LucideIcons.circleAlert,
+                      size: 18,
+                      color: fg,
+                    ),
+                    const SizedBox(width: 10),
+                    Expanded(
+                      child: Text(
+                        label,
+                        style: AppTypography.label.copyWith(color: fg),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              const SizedBox(height: 20),
               AppButton(
-                label: 'Close Session',
-                onPressed: _loading ? null : _close,
-                loading: _loading,
+                label: 'Back to sales',
+                onPressed: () => context.go('/sales'),
                 fullWidth: true,
-                variant: AppButtonVariant.destructive,
+                icon: LucideIcons.arrowRight,
               ),
             ],
           ),
@@ -230,23 +245,38 @@ class _CloseSessionPageState extends ConsumerState<CloseSessionPage> {
   }
 }
 
+/// One label/value line in a summary card. [count] renders a plain integer
+/// (transactions are not money), [value] renders the money treatment.
 class _SummaryRow extends StatelessWidget {
-  const _SummaryRow({required this.label, required this.value});
+  const _SummaryRow({required this.label, this.value, this.count});
+
   final String label;
-  final double value;
+  final double? value;
+  final int? count;
 
   @override
   Widget build(BuildContext context) {
+    final lum = context.lum;
     return Padding(
-      padding: const EdgeInsets.symmetric(vertical: AppSpacing.sm),
+      padding: const EdgeInsets.symmetric(vertical: 7),
       child: Row(
-        mainAxisAlignment: MainAxisAlignment.spaceBetween,
         children: [
-          Text(label, style: AppTypography.subhead.copyWith(color: AppColors.textMuted)),
-          Text(
-            formatPkr(value),
-            style: AppTypography.headline,
+          Expanded(
+            child: Text(
+              label,
+              style: AppTypography.body.copyWith(color: lum.g600),
+            ),
           ),
+          if (count != null)
+            Text(
+              '$count',
+              style: AppTypography.monoValue.copyWith(
+                fontWeight: FontWeight.w600,
+                color: lum.textPrimary,
+              ),
+            )
+          else
+            AppMoneyText(value ?? 0, size: 15),
         ],
       ),
     );
