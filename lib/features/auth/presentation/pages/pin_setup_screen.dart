@@ -40,8 +40,23 @@ class _PinSetupScreenState extends State<PinSetupScreen> {
   }
 
   Future<void> _save(String pin) async {
-    setState(() => _loading = true);
-    await PinService.instance.setPin(pin);
+    setState(() {
+      _loading = true;
+      _errorMessage = null;
+    });
+    try {
+      await PinService.instance.setPin(pin);
+    } on Exception {
+      // Never leave the spinner spinning — a storage failure must let the user
+      // retry instead of bricking the screen (e.g. Keychain access denied).
+      if (!mounted) return;
+      setState(() {
+        _loading = false;
+        _firstPin = null;
+        _errorMessage = 'Could not save your PIN. Please try again.';
+      });
+      return;
+    }
     if (!mounted) return;
     if (context.mounted) {
       showAppToast(context, 'PIN set', type: BannerType.success);
