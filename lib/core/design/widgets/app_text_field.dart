@@ -18,6 +18,12 @@ class AppTextField extends StatefulWidget {
   final bool autofocus;
   final Iterable<String>? autofillHints;
   final bool enabled;
+
+  /// >1 grows the well into a textarea (receipt footers, notes).
+  final int maxLines;
+
+  /// Grey note under the well, shown when there is no [errorText].
+  final String? helperText;
   const AppTextField({
     super.key,
     required this.controller,
@@ -33,6 +39,8 @@ class AppTextField extends StatefulWidget {
     this.autofocus = false,
     this.autofillHints,
     this.enabled = true,
+    this.maxLines = 1,
+    this.helperText,
   });
 
   @override
@@ -55,12 +63,19 @@ class _AppTextFieldState extends State<AppTextField> {
     final focused = _focus.hasFocus;
     final hasError = widget.errorText != null;
 
+    final multiline = widget.maxLines > 1;
+
     final row = Row(
+      crossAxisAlignment:
+          multiline ? CrossAxisAlignment.start : CrossAxisAlignment.center,
       children: [
-        Icon(
-          widget.prefixIcon,
-          color: focused ? lum.accent : lum.g400,
-          size: 18,
+        Padding(
+          padding: EdgeInsets.only(top: multiline ? 3 : 0),
+          child: Icon(
+            widget.prefixIcon,
+            color: focused ? lum.accent : lum.g400,
+            size: 18,
+          ),
         ),
         const SizedBox(width: 10),
         Expanded(
@@ -68,6 +83,7 @@ class _AppTextFieldState extends State<AppTextField> {
             controller: widget.controller,
             focusNode: _focus,
             obscureText: _hidden,
+            maxLines: widget.obscure ? 1 : widget.maxLines,
             enabled: widget.enabled,
             autofocus: widget.autofocus,
             autofillHints: widget.autofillHints,
@@ -123,8 +139,8 @@ class _AppTextFieldState extends State<AppTextField> {
     final ring = hasError ? lum.danger : lum.accent;
     final well = AnimatedContainer(
       duration: AppMotion.fast,
-      height: 50,
-      padding: const EdgeInsets.symmetric(horizontal: 14),
+      height: multiline ? null : 50,
+      padding: EdgeInsets.symmetric(horizontal: 14, vertical: multiline ? 13 : 0),
       decoration: BoxDecoration(
         color: active ? lum.surface : lum.surface2,
         borderRadius: BorderRadius.circular(AppRadius.md),
@@ -156,6 +172,14 @@ class _AppTextFieldState extends State<AppTextField> {
           ),
         ),
         well,
+        if (!hasError && widget.helperText != null)
+          Padding(
+            padding: const EdgeInsets.only(left: 2, top: 7),
+            child: Text(
+              widget.helperText!,
+              style: AppTypography.caption.copyWith(color: lum.g500),
+            ),
+          ),
         if (hasError)
           Padding(
             padding: const EdgeInsets.only(left: 2, top: 7),
