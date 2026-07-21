@@ -233,10 +233,11 @@ String? _redirect(BuildContext context, GoRouterState state) {
   return null;
 }
 
-/// Cross-fade page for the auth hero screens. Every hero screen draws the same
-/// left branding panel, so fading (instead of the default slide) makes that
-/// panel read as static while only the right-hand form cross-fades.
-CustomTransitionPage<void> _authFadePage(GoRouterState state, Widget child) {
+/// Cross-fade page for screens that share persistent chrome. The auth hero
+/// screens all draw the same left branding panel and the sales screens all draw
+/// the same rail and header, so fading (instead of the default slide) keeps that
+/// chrome reading as static while only the changing pane cross-fades.
+CustomTransitionPage<void> _fadePage(GoRouterState state, Widget child) {
   return CustomTransitionPage<void>(
     key: state.pageKey,
     transitionDuration: const Duration(milliseconds: 300),
@@ -272,16 +273,16 @@ final appRouter = GoRouter(
     GoRoute(
       path: '/env-check',
       pageBuilder: (context, state) =>
-          _authFadePage(state, const EnvironmentCheckScreen()),
+          _fadePage(state, const EnvironmentCheckScreen()),
     ),
     GoRoute(
       path: '/login',
-      pageBuilder: (context, state) => _authFadePage(state, const LoginPage()),
+      pageBuilder: (context, state) => _fadePage(state, const LoginPage()),
     ),
     GoRoute(
       path: '/signup',
       pageBuilder: (context, state) =>
-          _authFadePage(state, const SignupPage()),
+          _fadePage(state, const SignupPage()),
     ),
     GoRoute(
       path: '/otp',
@@ -290,9 +291,9 @@ final appRouter = GoRouter(
         // (deep-link / malformed push) instead of throwing on the cast.
         final extra = state.extra;
         if (extra is! Map || extra['email'] is! String) {
-          return _authFadePage(state, const LoginPage());
+          return _fadePage(state, const LoginPage());
         }
-        return _authFadePage(
+        return _fadePage(
           state,
           OtpPage(
             email: extra['email'] as String,
@@ -304,27 +305,27 @@ final appRouter = GoRouter(
     GoRoute(
       path: '/forgot',
       pageBuilder: (context, state) =>
-          _authFadePage(state, const ForgotPasswordPage()),
+          _fadePage(state, const ForgotPasswordPage()),
     ),
     GoRoute(
       path: '/reset',
       pageBuilder: (context, state) =>
-          _authFadePage(state, const ResetPasswordPage()),
+          _fadePage(state, const ResetPasswordPage()),
     ),
     GoRoute(
       path: '/branch-select',
       pageBuilder: (context, state) =>
-          _authFadePage(state, const BranchSelectPage()),
+          _fadePage(state, const BranchSelectPage()),
     ),
     GoRoute(
       path: '/workspace-init',
       pageBuilder: (context, state) =>
-          _authFadePage(state, const WorkspaceInitScreen()),
+          _fadePage(state, const WorkspaceInitScreen()),
     ),
     GoRoute(
       path: '/pin-lock',
       pageBuilder: (context, state) =>
-          _authFadePage(state, const PinLockScreen()),
+          _fadePage(state, const PinLockScreen()),
     ),
     GoRoute(
       path: '/pin-setup',
@@ -345,7 +346,7 @@ final appRouter = GoRouter(
     GoRoute(
       path: '/mfa-challenge',
       pageBuilder: (context, state) =>
-          _authFadePage(state, const MfaChallengeScreen()),
+          _fadePage(state, const MfaChallengeScreen()),
     ),
     GoRoute(
       path: '/mfa-enroll',
@@ -977,9 +978,12 @@ final appRouter = GoRouter(
     // from anywhere and pops back to its origin.
     GoRoute(
       path: '/sales/invoice/:invoiceId',
-      builder: (context, state) {
+      pageBuilder: (context, state) {
         final id = state.pathParameters['invoiceId']!;
-        return InvoiceDetailPage(invoiceId: id);
+        // Same cross-fade as the rest of sales; state.pageKey is what the
+        // default page would have used, so the key reservation above is
+        // unaffected.
+        return _fadePage(state, InvoiceDetailPage(invoiceId: id));
       },
     ),
     StatefulShellRoute.indexedStack(
@@ -1016,46 +1020,58 @@ final appRouter = GoRouter(
               path: '/sales',
               redirect: (context, state) => '/sales/pos',
             ),
+            // Every sales screen keeps the same rail and header, so these all
+            // cross-fade rather than slide — otherwise the static chrome
+            // appears to travel with the pane that is actually changing.
             GoRoute(
               path: '/sales/pos',
-              builder: (context, state) => const PosTerminalPage(),
+              pageBuilder: (context, state) =>
+                  _fadePage(state, const PosTerminalPage()),
             ),
             GoRoute(
               path: '/sales/open',
-              builder: (context, state) => const OpenSessionPage(),
+              pageBuilder: (context, state) =>
+                  _fadePage(state, const OpenSessionPage()),
             ),
             GoRoute(
               path: '/sales/session/close',
-              builder: (context, state) => const CloseSessionPage(),
+              pageBuilder: (context, state) =>
+                  _fadePage(state, const CloseSessionPage()),
             ),
             GoRoute(
               path: '/sales/payment',
-              builder: (context, state) {
+              pageBuilder: (context, state) {
                 final extra = state.extra as Map<String, dynamic>;
-                return PaymentSheet(
-                  branchId: extra['branchId'] as String,
-                  sessionId: extra['sessionId'] as String?,
+                return _fadePage(
+                  state,
+                  PaymentSheet(
+                    branchId: extra['branchId'] as String,
+                    sessionId: extra['sessionId'] as String?,
+                  ),
                 );
               },
             ),
             GoRoute(
               path: '/sales/success',
-              builder: (context, state) => const SaleSuccessPage(),
+              pageBuilder: (context, state) =>
+                  _fadePage(state, const SaleSuccessPage()),
             ),
             GoRoute(
               path: '/sales/receipt',
-              builder: (context, state) {
+              pageBuilder: (context, state) {
                 final invoiceId = state.extra as String;
-                return ReceiptPage(invoiceId: invoiceId);
+                return _fadePage(state, ReceiptPage(invoiceId: invoiceId));
               },
             ),
             GoRoute(
               path: '/sales/history',
-              builder: (context, state) => const SalesHistoryPage(),
+              pageBuilder: (context, state) =>
+                  _fadePage(state, const SalesHistoryPage()),
             ),
             GoRoute(
               path: '/sales/return',
-              builder: (context, state) => const SalesReturnPage(),
+              pageBuilder: (context, state) =>
+                  _fadePage(state, const SalesReturnPage()),
             ),
           ],
         ),
