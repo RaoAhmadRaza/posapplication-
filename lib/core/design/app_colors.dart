@@ -200,7 +200,10 @@ class LumColors extends ThemeExtension<LumColors> {
     accentSoft: Color(0x2E5E86FF), // rgba(94,134,255,.18)
     beam: Color(0xFFFFB26B),
     beamSoft: Color(0x33FF9F45),
-    ink: Color(0xFF0B0E16),
+    // Distinct from `paper` (both were 0xFF0B0E16) so an "ink" chip/text —
+    // the kanban bulk bar, LuminaWordmark's default color — stays visible
+    // against the dark background instead of vanishing into it.
+    ink: Color(0xFF161B28),
     success: Color(0xFF28C786),
     successSoft: Color(0x2628C786),
     successText: Color(0xFF5BE0AC),

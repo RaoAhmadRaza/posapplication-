@@ -225,6 +225,7 @@ class _PasswordStrengthHint extends StatelessWidget {
   Widget build(BuildContext context) {
     if (password.isEmpty) return const SizedBox.shrink();
 
+    final lum = context.lum;
     String label;
     Color color;
     double fraction;
@@ -232,15 +233,15 @@ class _PasswordStrengthHint extends StatelessWidget {
     switch (_scorePassword(password)) {
       case _PwStrength.weak:
         label = 'Weak';
-        color = AppColors.destructive;
+        color = lum.danger;
         fraction = 0.33;
       case _PwStrength.medium:
         label = 'Medium';
-        color = AppColors.warning;
+        color = lum.warning;
         fraction = 0.66;
       case _PwStrength.strong:
         label = 'Strong';
-        color = AppColors.success;
+        color = lum.success;
         fraction = 1.0;
     }
 
@@ -251,7 +252,7 @@ class _PasswordStrengthHint extends StatelessWidget {
           borderRadius: BorderRadius.circular(2),
           child: LinearProgressIndicator(
             value: fraction,
-            backgroundColor: AppColors.fieldFill,
+            backgroundColor: lum.surface2,
             valueColor: AlwaysStoppedAnimation<Color>(color),
             minHeight: 3,
           ),
