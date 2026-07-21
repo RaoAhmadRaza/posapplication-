@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:lucide_icons_flutter/lucide_icons.dart';
 import '../../../../core/design/app_colors.dart';
 import '../../../../core/design/app_radius.dart';
 import '../../../../core/design/app_spacing.dart';
@@ -15,6 +16,10 @@ Future<Customer?> showCustomerPicker(BuildContext context) {
   return showModalBottomSheet<Customer?>(
     context: context,
     isScrollControlled: true,
+    backgroundColor: context.lum.surface,
+    shape: const RoundedRectangleBorder(
+      borderRadius: BorderRadius.vertical(top: Radius.circular(AppRadius.xl)),
+    ),
     builder: (ctx) => const _CustomerPickerSheet(),
   );
 }
@@ -100,20 +105,20 @@ class _CustomerPickerSheetState extends ConsumerState<_CustomerPickerSheet> {
           children: [
             Center(
               child: Container(
-                width: 36,
-                height: 4,
+                width: 40,
+                height: 5,
                 decoration: BoxDecoration(
-                  color: AppColors.separator,
-                  borderRadius: BorderRadius.circular(2),
+                  color: context.lum.g300,
+                  borderRadius: BorderRadius.circular(AppRadius.pill),
                 ),
               ),
             ),
             const SizedBox(height: AppSpacing.md),
-            Text('Select Customer', style: AppTypography.title2),
+            Text('Select customer', style: AppTypography.title3),
             const SizedBox(height: AppSpacing.md),
             _CustomerTile(
-              label: 'Walk-in',
-              subtitle: 'No customer assigned',
+              label: 'Walk-in customer',
+              subtitle: 'No account on this sale',
               selected: selectedId == null,
               onTap: _selectWalkIn,
             ),
@@ -122,7 +127,7 @@ class _CustomerPickerSheetState extends ConsumerState<_CustomerPickerSheet> {
               AppTextField(
                 controller: _searchCtrl,
                 label: 'Search',
-                prefixIcon: Icons.search,
+                prefixIcon: LucideIcons.search,
                 hint: 'Name or phone',
                 onSubmitted: _search,
               ),
@@ -144,25 +149,25 @@ class _CustomerPickerSheetState extends ConsumerState<_CustomerPickerSheet> {
               ),
               const SizedBox(height: AppSpacing.md),
               AppButton(
-                label: '+ New Customer',
+                label: 'New customer',
                 onPressed: () => setState(() => _showCreate = true),
                 variant: AppButtonVariant.plain,
                 fullWidth: true,
-                icon: Icons.add,
+                icon: LucideIcons.plus,
               ),
             ] else ...[
               const SizedBox(height: AppSpacing.md),
               AppTextField(
                 controller: _nameCtrl,
                 label: 'Name',
-                prefixIcon: Icons.person,
+                prefixIcon: LucideIcons.user,
                 hint: 'Required',
               ),
               const SizedBox(height: AppSpacing.md),
               AppTextField(
                 controller: _phoneCtrl,
                 label: 'Phone',
-                prefixIcon: Icons.phone,
+                prefixIcon: LucideIcons.phone,
                 hint: 'Optional',
                 keyboardType: TextInputType.phone,
               ),
@@ -216,47 +221,67 @@ class _CustomerTile extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return InkWell(
-      onTap: onTap,
-      borderRadius: BorderRadius.circular(AppRadius.card),
-      child: Container(
-        padding: const EdgeInsets.symmetric(horizontal: AppSpacing.base, vertical: AppSpacing.md),
-        decoration: BoxDecoration(
-          color: selected ? AppColors.accent.withValues(alpha: 0.08) : AppColors.fieldFill,
-          borderRadius: BorderRadius.circular(AppRadius.card),
-          border: selected ? Border.all(color: AppColors.accent, width: 1) : null,
-        ),
-        child: Row(
-          children: [
-            Container(
-              width: 36,
-              height: 36,
-              decoration: BoxDecoration(
-                color: selected ? AppColors.accent.withValues(alpha: 0.15) : AppColors.separator,
-                borderRadius: BorderRadius.circular(8),
-              ),
-              child: Center(
+    final lum = context.lum;
+    return Semantics(
+      button: true,
+      selected: selected,
+      label: label,
+      child: InkWell(
+        onTap: onTap,
+        borderRadius: BorderRadius.circular(AppRadius.md),
+        child: Container(
+          padding: const EdgeInsets.symmetric(
+            horizontal: AppSpacing.base,
+            vertical: 12,
+          ),
+          decoration: BoxDecoration(
+            color: selected ? lum.accentSoft : lum.surface2,
+            borderRadius: BorderRadius.circular(AppRadius.md),
+          ),
+          child: Row(
+            children: [
+              Container(
+                width: 34,
+                height: 34,
+                decoration: BoxDecoration(
+                  color: selected ? lum.accent : lum.g200,
+                  shape: BoxShape.circle,
+                ),
                 child: Icon(
-                  selected ? Icons.check : Icons.person_outline,
-                  size: 18,
-                  color: selected ? AppColors.accent : AppColors.textMuted,
+                  selected ? LucideIcons.check : LucideIcons.user,
+                  size: 17,
+                  color: selected ? Colors.white : lum.g500,
                 ),
               ),
-            ),
-            const SizedBox(width: AppSpacing.md),
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(label, style: AppTypography.headline.copyWith(color: selected ? AppColors.accent : AppColors.textPrimary)),
-                  if (subtitle.isNotEmpty)
-                    Text(subtitle, style: AppTypography.caption.copyWith(color: AppColors.textMuted)),
-                ],
+              const SizedBox(width: AppSpacing.md),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Text(
+                      label,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: AppTypography.label.copyWith(
+                        color: selected ? lum.accentPress : lum.textPrimary,
+                      ),
+                    ),
+                    if (subtitle.isNotEmpty)
+                      Text(
+                        subtitle,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: AppTypography.monoValue.copyWith(
+                          fontSize: 11.5,
+                          color: lum.g500,
+                        ),
+                      ),
+                  ],
+                ),
               ),
-            ),
-            if (selected)
-              Icon(Icons.check_circle, size: 20, color: AppColors.accent),
-          ],
+            ],
+          ),
         ),
       ),
     );

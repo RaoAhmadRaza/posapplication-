@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:lucide_icons_flutter/lucide_icons.dart';
 import '../../../../core/design/app_colors.dart';
 import '../../../../core/design/app_radius.dart';
 import '../../../../core/design/app_spacing.dart';
@@ -8,11 +9,16 @@ import '../../../../core/design/widgets/app_button.dart';
 import '../../../../core/design/widgets/app_inline_banner.dart';
 import '../../domain/entities/held_sale.dart';
 import '../controllers/pos_cart_controller.dart';
+import '../widgets/sales_empty_state.dart';
 
 Future<HeldSale?> showHeldSalesSheet(BuildContext context, WidgetRef ref) {
   return showModalBottomSheet<HeldSale?>(
     context: context,
     isScrollControlled: true,
+    backgroundColor: context.lum.surface,
+    shape: const RoundedRectangleBorder(
+      borderRadius: BorderRadius.vertical(top: Radius.circular(AppRadius.xl)),
+    ),
     builder: (ctx) => _HeldSalesSheet(ref: ref),
   );
 }
@@ -70,16 +76,16 @@ class _HeldSalesSheetState extends ConsumerState<_HeldSalesSheet> {
           children: [
             Center(
               child: Container(
-                width: 36,
-                height: 4,
+                width: 40,
+                height: 5,
                 decoration: BoxDecoration(
-                  color: AppColors.separator,
-                  borderRadius: BorderRadius.circular(2),
+                  color: context.lum.g300,
+                  borderRadius: BorderRadius.circular(AppRadius.pill),
                 ),
               ),
             ),
             const SizedBox(height: AppSpacing.md),
-            Text('Held Sales', style: AppTypography.title2),
+            Text('Held sales', style: AppTypography.title3),
             const SizedBox(height: AppSpacing.md),
             if (_loading)
               const Center(child: CircularProgressIndicator())
@@ -89,11 +95,11 @@ class _HeldSalesSheetState extends ConsumerState<_HeldSalesSheet> {
                 child: AppInlineBanner(message: _error!, type: BannerType.error),
               )
             else if (_held.isEmpty)
-              Padding(
-                padding: const EdgeInsets.symmetric(vertical: AppSpacing.xxl),
-                child: Center(
-                  child: Text('No held sales.', style: AppTypography.subhead.copyWith(color: AppColors.textHint)),
-                ),
+              const SalesEmptyState(
+                icon: LucideIcons.pause,
+                message: 'No sales on hold. Park a cart from the POS and it '
+                    'will show up here.',
+                minHeight: 160,
               )
             else
               Flexible(
@@ -102,34 +108,59 @@ class _HeldSalesSheetState extends ConsumerState<_HeldSalesSheet> {
                   itemCount: _held.length,
                   itemBuilder: (_, i) {
                     final h = _held[i];
+                    final lum = context.lum;
                     return Container(
                       margin: const EdgeInsets.only(bottom: AppSpacing.sm),
-                      padding: const EdgeInsets.all(AppSpacing.base),
+                      padding: const EdgeInsets.fromLTRB(16, 12, 12, 12),
                       decoration: BoxDecoration(
-                        color: AppColors.fieldFill,
-                        borderRadius: BorderRadius.circular(AppRadius.card),
+                        color: lum.surface2,
+                        borderRadius: BorderRadius.circular(AppRadius.md),
                       ),
                       child: Row(
                         children: [
                           Expanded(
                             child: Column(
                               crossAxisAlignment: CrossAxisAlignment.start,
+                              mainAxisSize: MainAxisSize.min,
                               children: [
-                                Text(h.label, style: AppTypography.headline),
+                                Text(
+                                  h.label,
+                                  maxLines: 1,
+                                  overflow: TextOverflow.ellipsis,
+                                  style: AppTypography.label.copyWith(
+                                    color: lum.textPrimary,
+                                  ),
+                                ),
                                 const SizedBox(height: 2),
                                 Text(
                                   '${h.itemCount} items · ${_timeAgo(h.createdAt)}',
-                                  style: AppTypography.caption.copyWith(color: AppColors.textMuted),
+                                  style: AppTypography.monoValue.copyWith(
+                                    fontSize: 11.5,
+                                    color: lum.g500,
+                                  ),
                                 ),
                               ],
                             ),
                           ),
-                          IconButton(
-                            icon: Icon(Icons.delete_outline, size: 20, color: AppColors.textHint),
-                            onPressed: () => _delete(h),
-                            padding: EdgeInsets.zero,
-                            constraints: const BoxConstraints(minWidth: 32, minHeight: 32),
+                          Semantics(
+                            button: true,
+                            label: 'Delete ${h.label}',
+                            child: InkWell(
+                              onTap: () => _delete(h),
+                              borderRadius:
+                                  BorderRadius.circular(AppRadius.pill),
+                              child: SizedBox(
+                                width: 44,
+                                height: 44,
+                                child: Icon(
+                                  LucideIcons.trash2,
+                                  size: 18,
+                                  color: lum.g400,
+                                ),
+                              ),
+                            ),
                           ),
+                          const SizedBox(width: 4),
                           AppButton(
                             label: 'Resume',
                             onPressed: () => _resume(h),
