@@ -12,6 +12,17 @@ import '../../../sync/presentation/controllers/sync_controller.dart';
 
 enum PaymentMethodLabel { cash, bankTransfer, card, mobileWallet, cheque, loyaltyPoints, creditNote }
 
+/// Matches `payment_method_enum` labels in supabase/migrations/20260618114258_sales_foundation.sql.
+String _paymentMethodDbValue(PaymentMethodLabel method) => switch (method) {
+      PaymentMethodLabel.cash => 'CASH',
+      PaymentMethodLabel.bankTransfer => 'BANK_TRANSFER',
+      PaymentMethodLabel.card => 'CARD',
+      PaymentMethodLabel.mobileWallet => 'MOBILE_WALLET',
+      PaymentMethodLabel.cheque => 'CHEQUE',
+      PaymentMethodLabel.loyaltyPoints => 'LOYALTY_POINTS',
+      PaymentMethodLabel.creditNote => 'CREDIT_NOTE',
+    };
+
 class CartPayment {
   final PaymentMethodLabel method;
   final double amount;
@@ -266,7 +277,7 @@ class PosCartController extends Notifier<CartState> {
         }).toList();
 
     final payments = state.payments.map((p) => <String, dynamic>{
-          'method': p.method.name.toUpperCase(),
+          'method': _paymentMethodDbValue(p.method),
           'amount': p.amount,
           if (p.reference != null && p.reference!.isNotEmpty) 'reference': p.reference,
         }).toList();

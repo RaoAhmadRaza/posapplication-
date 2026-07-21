@@ -176,8 +176,8 @@ class SalesRemoteDataSource {
   }) async {
     final payload = {
       'branch_id': branchId,
-      if (sessionId != null) 'session_id': sessionId,
-      if (customerId != null) 'customer_id': customerId,
+      'session_id': ?sessionId,
+      'customer_id': ?customerId,
       'cart_json': cartJson,
       'label': label,
       'created_by': _userId,
