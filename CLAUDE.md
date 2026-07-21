@@ -149,6 +149,12 @@ supabase/
   supabase/ (migrations, functions, config), env, or providers' wiring.
 - Reskin the widget tree only; keep every controller/provider/route binding identical. If a UI
   change appears to need a backend/routing change, STOP and ask first — do not change it silently.
+- **Reskin from a provided design export/zip (any module, not just auth):** follow
+  docs/UI_REDESIGN_PLAYBOOK.md step-by-step — locate/inventory the zip → extract tokens → gap-analyze
+  current lib/core/design/ → source fonts if needed → implement tokens→primitives→widgets→pages in
+  order → keep old APIs aliased for backward compat → verify on native (not web) → update docs. Don't
+  freelance a different order; the playbook exists because of gotchas hit doing this for real (font
+  download failures, blank web screenshots, breaking radius/API changes) — see the playbook for detail.
 
 ## Design system — clean iOS, light mode only
 - Use lib/core/design tokens (AppColors / AppTypography / AppSpacing / AppRadius / AppShadows).
