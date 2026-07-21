@@ -1,15 +1,20 @@
-import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
+import 'package:lucide_icons_flutter/lucide_icons.dart';
 import '../../../../core/design/app_colors.dart';
-import '../../../../core/design/format.dart';
 import '../../../../core/design/app_radius.dart';
-import '../../../../core/design/app_spacing.dart';
 import '../../../../core/design/app_typography.dart';
+import '../../../../core/design/clay.dart';
+import '../../../../core/design/format.dart';
 import '../../../../core/design/widgets/app_button.dart';
+import '../../../../core/design/widgets/app_card.dart';
+import '../../../../core/design/widgets/app_checkbox.dart';
 import '../../../../core/design/widgets/app_inline_banner.dart';
-import '../../../../core/design/widgets/app_text_field.dart';
+import '../../../../core/design/widgets/app_money_field.dart';
+import '../../../../core/design/widgets/app_money_text.dart';
+import '../../../../core/design/widgets/app_filter_chips.dart';
+import '../../../../core/design/widgets/app_qty_stepper.dart';
 import '../../../../core/services/scanner_support.dart';
 import '../../../../core/widgets/barcode_scan_page.dart';
 import '../../../../core/widgets/no_access_scaffold.dart';
@@ -17,6 +22,9 @@ import '../../../../core/widgets/permission_gate.dart';
 import '../../domain/entities/customer.dart';
 import '../controllers/customers_controller.dart';
 import '../controllers/invoices_controller.dart';
+import '../widgets/sales_empty_state.dart';
+import '../widgets/sales_rise.dart';
+import '../widgets/sales_scaffold.dart';
 
 class SalesReturnPage extends ConsumerStatefulWidget {
   const SalesReturnPage({super.key});
@@ -82,7 +90,7 @@ class _SalesReturnPageState extends ConsumerState<SalesReturnPage> {
       }
       setState(() {
         _loading = false;
-        _error = 'Invoice not found. Scan barcode or enter invoice number.';
+        _error = 'No matching invoice. Scan the barcode or check the number.';
       });
       return;
     }
@@ -179,6 +187,19 @@ class _SalesReturnPageState extends ConsumerState<SalesReturnPage> {
     }
   }
 
+  /// Value of the lines currently ticked, shown beside the editable refund.
+  double get _selectedValue {
+    final items = (_invoiceDetail?['invoice_items'] as List<dynamic>?) ?? [];
+    var total = 0.0;
+    for (final raw in items) {
+      final item = raw as Map<String, dynamic>;
+      final qty = _returnQtys[item['id'] as String] ?? 0;
+      final unit = double.tryParse(item['unit_price']?.toString() ?? '0') ?? 0;
+      total += qty * unit;
+    }
+    return total;
+  }
+
   @override
   Widget build(BuildContext context) {
     return PermissionGate(
@@ -190,130 +211,272 @@ class _SalesReturnPageState extends ConsumerState<SalesReturnPage> {
   }
 
   Widget _buildContent(BuildContext context) {
+    final lum = context.lum;
     final customers = ref.watch(customersProvider).value ?? <Customer>[];
+    final detail = _invoiceDetail;
 
-    return Scaffold(
-      backgroundColor: AppColors.background,
-      appBar: AppBar(
-        backgroundColor: AppColors.background,
-        surfaceTintColor: AppColors.background,
-        title: Text('Sales Return', style: AppTypography.headline),
-      ),
-      body: SafeArea(
-        child: SingleChildScrollView(
-          padding: const EdgeInsets.symmetric(horizontal: AppSpacing.screenPadding),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              const SizedBox(height: AppSpacing.xl),
-              Row(
+    return SalesScaffold(
+      title: 'Sales return',
+      maxContentWidth: 760,
+      padding: const EdgeInsets.fromLTRB(18, 16, 18, 0),
+      child: SingleChildScrollView(
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            AppCard(
+              padding: const EdgeInsets.all(18),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Expanded(
-                    child: AppTextField(
-                      controller: _searchCtrl,
-                      label: 'Invoice Number',
-                      prefixIcon: Icons.search,
-                      hint: 'Scan or type invoice number',
-                      onSubmitted: (_) => _lookupInvoice(),
+                  Text(
+                    'Find the original invoice',
+                    style: AppTypography.footnote.copyWith(
+                      fontWeight: FontWeight.w600,
+                      color: lum.g600,
                     ),
                   ),
-                  if (barcodeScanSupported) ...[
-                    const SizedBox(width: AppSpacing.sm),
-                    Container(
-                      width: 44,
-                      height: 44,
-                      decoration: BoxDecoration(
-                        color: AppColors.accent.withValues(alpha: 0.1),
-                        borderRadius: BorderRadius.circular(AppRadius.field),
+                  const SizedBox(height: 10),
+                  Row(
+                    children: [
+                      Expanded(child: _LookupField(controller: _searchCtrl, onSubmit: _lookupInvoice)),
+                      if (barcodeScanSupported) ...[
+                        const SizedBox(width: 10),
+                        _SquareAction(
+                          icon: LucideIcons.scanLine,
+                          label: 'Scan invoice',
+                          onTap: _scanInvoice,
+                        ),
+                      ],
+                      const SizedBox(width: 10),
+                      AppButton(
+                        label: 'Look up',
+                        onPressed: _loading ? null : _lookupInvoice,
+                        loading: _loading,
                       ),
-                      child: IconButton(
-                        icon: const Icon(Icons.qr_code_scanner, color: AppColors.accent, size: 22),
-                        onPressed: _scanInvoice,
-                      ),
-                    ),
-                  ],
+                    ],
+                  ),
                 ],
               ),
-              const SizedBox(height: AppSpacing.md),
-              AppButton(
-                label: 'Look Up',
-                onPressed: _loading ? null : _lookupInvoice,
-                loading: _loading,
-                fullWidth: true,
-              ),
-              if (_error != null) ...[
-                const SizedBox(height: AppSpacing.md),
-                AppInlineBanner(message: _error!, type: BannerType.error),
-              ],
-              if (_successMessage != null) ...[
-                const SizedBox(height: AppSpacing.md),
-                AppInlineBanner(message: _successMessage!, type: BannerType.success),
-                const SizedBox(height: AppSpacing.md),
-                AppButton(
-                  label: 'View History',
-                  onPressed: () => context.go('/sales/history'),
-                  fullWidth: true,
-                  variant: AppButtonVariant.plain,
-                ),
-              ],
-              if (_invoiceDetail != null) ...[
-                const SizedBox(height: AppSpacing.xl),
-                _InvoiceHeader(detail: _invoiceDetail!, customers: customers),
-                const SizedBox(height: AppSpacing.xl),
-                Text('Select Items to Return', style: AppTypography.headline),
-                const SizedBox(height: AppSpacing.sm),
-                ...(_invoiceDetail!['invoice_items'] as List<dynamic>).map(
-                  (item) => _ReturnItemRow(
-                    item: item as Map<String, dynamic>,
-                    returnQty: _returnQtys[item['id'] as String] ?? 0,
-                    maxQty: _maxQtys[item['id'] as String] ?? 0,
-                    onChanged: (qty) => setState(() => _returnQtys[item['id'] as String] = qty),
+            ),
+            if (_error != null) ...[
+              const SizedBox(height: 14),
+              AppInlineBanner(message: _error!),
+            ],
+            if (_successMessage != null) ...[
+              const SizedBox(height: 14),
+              SalesRise(
+                duration: const Duration(milliseconds: 300),
+                child: AppCard(
+                  padding: const EdgeInsets.all(32),
+                  child: Column(
+                    children: [
+                      Container(
+                        width: 56,
+                        height: 56,
+                        decoration: BoxDecoration(
+                          color: lum.successSoft,
+                          shape: BoxShape.circle,
+                        ),
+                        child: Icon(
+                          LucideIcons.check,
+                          size: 26,
+                          color: lum.successText,
+                        ),
+                      ),
+                      const SizedBox(height: 16),
+                      Text('Return processed', style: AppTypography.title3),
+                      const SizedBox(height: 6),
+                      Text(
+                        '$_successMessage. Stock has been added back.',
+                        textAlign: TextAlign.center,
+                        style: AppTypography.footnote.copyWith(
+                          height: 1.5,
+                          color: lum.g500,
+                        ),
+                      ),
+                      const SizedBox(height: 18),
+                      AppButton(
+                        label: 'View history',
+                        onPressed: () => context.go('/sales/history'),
+                        variant: AppButtonVariant.plain,
+                        fullWidth: true,
+                      ),
+                    ],
                   ),
                 ),
-                const SizedBox(height: AppSpacing.xl),
-                Text('Return Reason', style: AppTypography.headline),
-                const SizedBox(height: AppSpacing.sm),
-                Wrap(
-                  spacing: AppSpacing.sm,
-                  runSpacing: AppSpacing.sm,
-                  children: _returnReasons.map((r) {
-                    final active = _reason == r;
-                    return GestureDetector(
-                      onTap: () => setState(() => _reason = active ? '' : r),
-                      child: Container(
-                        padding: const EdgeInsets.symmetric(horizontal: AppSpacing.md, vertical: AppSpacing.sm),
-                        decoration: BoxDecoration(
-                          color: active ? AppColors.accent.withValues(alpha: 0.1) : AppColors.fieldFill,
-                          borderRadius: BorderRadius.circular(AppRadius.chip),
-                          border: active ? Border.all(color: AppColors.accent, width: 1) : null,
-                        ),
-                        child: Text(r, style: AppTypography.footnote.copyWith(
-                          color: active ? AppColors.accent : AppColors.textMuted,
-                        )),
-                      ),
-                    );
-                  }).toList(),
-                ),
-                const SizedBox(height: AppSpacing.xl),
-                AppTextField(
-                  controller: _refundCtrl,
-                  label: 'Refund Amount',
-                  prefixIcon: Icons.attach_money,
-                  keyboardType: const TextInputType.numberWithOptions(decimal: true),
-                  hint: '0',
-                ),
-                const SizedBox(height: AppSpacing.xxl),
-                AppButton(
-                  label: 'Process Return',
-                  onPressed: _loading ? null : _submitReturn,
-                  loading: _loading,
-                  fullWidth: true,
-                  variant: AppButtonVariant.destructive,
-                ),
-              ],
-              const SizedBox(height: AppSpacing.xxl),
+              ),
             ],
+            if (detail == null && _successMessage == null && _error == null)
+              const SalesEmptyState(
+                icon: LucideIcons.rotateCcw,
+                message: 'Look up an invoice to start a return.',
+              ),
+            if (detail != null) ...[
+              const SizedBox(height: 14),
+              _InvoiceHeader(detail: detail, customers: customers),
+              const SizedBox(height: 14),
+              AppCard(
+                padding: const EdgeInsets.symmetric(vertical: 8),
+                child: Column(
+                  children: [
+                    for (final raw in detail['invoice_items'] as List<dynamic>)
+                      _ReturnItemRow(
+                        item: raw as Map<String, dynamic>,
+                        returnQty: _returnQtys[raw['id'] as String] ?? 0,
+                        maxQty: _maxQtys[raw['id'] as String] ?? 0,
+                        onChanged: (qty) => setState(
+                          () => _returnQtys[raw['id'] as String] = qty,
+                        ),
+                      ),
+                  ],
+                ),
+              ),
+              const SizedBox(height: 14),
+              Text(
+                'REASON',
+                style: AppTypography.caption.copyWith(
+                  fontWeight: FontWeight.w700,
+                  letterSpacing: 0.6,
+                  color: lum.g500,
+                ),
+              ),
+              const SizedBox(height: 8),
+              Wrap(
+                spacing: 8,
+                runSpacing: 8,
+                children: [
+                  // create_sales_return requires a reason; the design has no
+                  // reason control, so it stays and is styled to match.
+                  for (final r in _returnReasons)
+                    AppFilterChip(
+                      label: r,
+                      active: _reason == r,
+                      onTap: () =>
+                          setState(() => _reason = _reason == r ? '' : r),
+                    ),
+                ],
+              ),
+              const SizedBox(height: 16),
+              AppCard(
+                padding: const EdgeInsets.all(18),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: [
+                    Row(
+                      children: [
+                        Expanded(
+                          child: Text(
+                            'Selected items',
+                            style: AppTypography.footnote
+                                .copyWith(color: lum.g500),
+                          ),
+                        ),
+                        AppMoneyText(_selectedValue, size: 15),
+                      ],
+                    ),
+                    const SizedBox(height: 12),
+                    AppMoneyField(
+                      controller: _refundCtrl,
+                      label: 'Refund amount',
+                      fontSize: 24,
+                    ),
+                    const SizedBox(height: 16),
+                    AppButton(
+                      label: 'Process return',
+                      onPressed: _loading ? null : _submitReturn,
+                      loading: _loading,
+                      fullWidth: true,
+                      icon: LucideIcons.rotateCcw,
+                    ),
+                  ],
+                ),
+              ),
+            ],
+            const SizedBox(height: 28),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+/// Mono invoice-number field in the lookup card.
+class _LookupField extends StatelessWidget {
+  const _LookupField({required this.controller, required this.onSubmit});
+  final TextEditingController controller;
+  final VoidCallback onSubmit;
+
+  @override
+  Widget build(BuildContext context) {
+    final lum = context.lum;
+    return ClayContainer(
+      variant: ClayVariant.inset,
+      color: lum.surface2,
+      borderRadius: AppRadius.md,
+      isDark: lum.isDark,
+      height: 50,
+      padding: const EdgeInsets.symmetric(horizontal: 14),
+      child: Row(
+        children: [
+          Icon(LucideIcons.search, size: 18, color: lum.g400),
+          const SizedBox(width: 10),
+          Expanded(
+            child: TextField(
+              controller: controller,
+              onSubmitted: (_) => onSubmit(),
+              cursorColor: lum.accent,
+              style: AppTypography.monoValue.copyWith(
+                fontSize: 14,
+                color: lum.textPrimary,
+              ),
+              decoration: InputDecoration(
+                isCollapsed: true,
+                filled: false,
+                border: InputBorder.none,
+                enabledBorder: InputBorder.none,
+                focusedBorder: InputBorder.none,
+                hintText: 'Invoice number, e.g. INV-1042',
+                hintStyle: AppTypography.monoValue.copyWith(
+                  fontSize: 14,
+                  color: lum.textTertiary,
+                ),
+              ),
+            ),
           ),
+        ],
+      ),
+    );
+  }
+}
+
+class _SquareAction extends StatelessWidget {
+  const _SquareAction({
+    required this.icon,
+    required this.label,
+    required this.onTap,
+  });
+
+  final IconData icon;
+  final String label;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    final lum = context.lum;
+    return Semantics(
+      button: true,
+      label: label,
+      child: InkWell(
+        onTap: onTap,
+        borderRadius: BorderRadius.circular(AppRadius.md),
+        child: ClayContainer(
+          variant: ClayVariant.soft,
+          color: lum.surface,
+          borderRadius: AppRadius.md,
+          isDark: lum.isDark,
+          width: 50,
+          height: 50,
+          child: Icon(icon, size: 22, color: lum.textPrimary),
         ),
       ),
     );
@@ -327,33 +490,44 @@ class _InvoiceHeader extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final lum = context.lum;
     final number = detail['invoice_number']?.toString() ?? '';
-    final createdAt = detail['created_at']?.toString();
-    final dateStr = createdAt != null
-        ? '${DateTime.parse(createdAt).day}/${DateTime.parse(createdAt).month}/${DateTime.parse(createdAt).year}'
-        : '';
+    final createdAt = DateTime.tryParse(detail['created_at']?.toString() ?? '');
+    final dateStr = createdAt == null
+        ? ''
+        : '${createdAt.day}/${createdAt.month}/${createdAt.year}';
     final customerId = detail['customer_id']?.toString();
     final customerName = customerId != null
         ? customers.where((c) => c.id == customerId).firstOrNull?.name ?? 'Walk-in'
         : 'Walk-in';
     final grand = double.tryParse(detail['grand_total']?.toString() ?? '0') ?? 0;
 
-    return Container(
-      width: double.infinity,
-      padding: const EdgeInsets.all(AppSpacing.base),
-      decoration: BoxDecoration(
-        color: AppColors.fieldFill,
-        borderRadius: BorderRadius.circular(AppRadius.card),
-        border: Border.all(color: AppColors.separator, width: 0.5),
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
+    return AppCard(
+      padding: const EdgeInsets.all(18),
+      child: Row(
         children: [
-          Text(number, style: AppTypography.title2),
-          const SizedBox(height: 4),
-          Text('$dateStr · $customerName', style: AppTypography.subhead.copyWith(color: AppColors.textMuted)),
-          const SizedBox(height: 4),
-          Text('Total: ${formatPkr(grand)}', style: AppTypography.headline.copyWith(color: AppColors.accent)),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Text(
+                  number,
+                  style: AppTypography.monoValue.copyWith(
+                    fontSize: 18,
+                    fontWeight: FontWeight.w700,
+                    color: lum.textPrimary,
+                  ),
+                ),
+                const SizedBox(height: 2),
+                Text(
+                  [customerName, if (dateStr.isNotEmpty) dateStr].join(' · '),
+                  style: AppTypography.footnote.copyWith(color: lum.g500),
+                ),
+              ],
+            ),
+          ),
+          AppMoneyText(grand, size: 18),
         ],
       ),
     );
@@ -375,54 +549,61 @@ class _ReturnItemRow extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final lum = context.lum;
     final desc = item['description']?.toString() ?? 'Item';
     final unitPrice = double.tryParse(item['unit_price']?.toString() ?? '0') ?? 0;
     final active = returnQty > 0;
 
-    return Container(
-      margin: const EdgeInsets.only(bottom: AppSpacing.sm),
-      padding: const EdgeInsets.all(AppSpacing.md),
-      decoration: BoxDecoration(
-        color: active ? AppColors.accent.withValues(alpha: 0.04) : AppColors.fieldFill,
-        borderRadius: BorderRadius.circular(AppRadius.card),
-        border: active ? Border.all(color: AppColors.accent.withValues(alpha: 0.3)) : null,
-      ),
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
       child: Row(
         children: [
+          AppCheckbox(
+            value: active,
+            onChanged: (checked) => onChanged(checked ? 1 : 0),
+          ),
+          const SizedBox(width: 12),
           Expanded(
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
+              mainAxisSize: MainAxisSize.min,
               children: [
-                Text(desc, style: AppTypography.subhead),
-                const SizedBox(height: 2),
-                Text('${formatPkr(unitPrice)}  (max ${maxQty.toStringAsFixed(0)})',
-                    style: AppTypography.caption.copyWith(color: AppColors.textMuted)),
+                Text(
+                  desc.isEmpty ? 'Item' : desc,
+                  maxLines: 2,
+                  overflow: TextOverflow.ellipsis,
+                  style: AppTypography.label.copyWith(color: lum.textPrimary),
+                ),
+                Text(
+                  'bought ${maxQty.toStringAsFixed(0)} · '
+                  '${formatPkr(unitPrice)} each',
+                  style: AppTypography.monoValue.copyWith(
+                    fontSize: 11.5,
+                    color: lum.g500,
+                  ),
+                ),
               ],
             ),
           ),
-          Row(
-            children: [
-              IconButton(
-                icon: Icon(Icons.remove_circle_outline, color: AppColors.textMuted, size: 22),
-                onPressed: returnQty > 0 ? () => onChanged(returnQty - 1) : null,
-                padding: EdgeInsets.zero,
-                constraints: const BoxConstraints(minWidth: 28, minHeight: 28),
+          const SizedBox(width: 8),
+          AppQtyStepper(
+            value: returnQty.round(),
+            min: 1,
+            max: maxQty.round(),
+            enabled: active,
+            onChanged: (q) => onChanged(q.toDouble()),
+          ),
+          const SizedBox(width: 8),
+          SizedBox(
+            width: 80,
+            child: Align(
+              alignment: Alignment.centerRight,
+              child: AppMoneyText(
+                returnQty * unitPrice,
+                size: 13.5,
+                color: active ? lum.textPrimary : lum.g400,
               ),
-              SizedBox(
-                width: 30,
-                child: Text(
-                  returnQty.toStringAsFixed(0),
-                  textAlign: TextAlign.center,
-                  style: AppTypography.headline.copyWith(color: active ? AppColors.accent : AppColors.textMuted),
-                ),
-              ),
-              IconButton(
-                icon: Icon(Icons.add_circle_outline, color: AppColors.accent, size: 22),
-                onPressed: returnQty < maxQty ? () => onChanged(returnQty + 1) : null,
-                padding: EdgeInsets.zero,
-                constraints: const BoxConstraints(minWidth: 28, minHeight: 28),
-              ),
-            ],
+            ),
           ),
         ],
       ),

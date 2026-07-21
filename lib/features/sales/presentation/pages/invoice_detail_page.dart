@@ -1,19 +1,27 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:lucide_icons_flutter/lucide_icons.dart';
 import 'package:printing/printing.dart';
 import '../../../../core/design/app_colors.dart';
-import '../../../../core/design/format.dart';
 import '../../../../core/design/app_radius.dart';
-import '../../../../core/design/app_spacing.dart';
 import '../../../../core/design/app_typography.dart';
+import '../../../../core/design/clay.dart';
+import '../../../../core/design/format.dart';
 import '../../../../core/design/widgets/app_button.dart';
 import '../../../../core/design/widgets/app_card.dart';
+import '../../../../core/design/widgets/app_money_text.dart';
+import '../../../../core/design/widgets/app_pill.dart';
+import '../../../../core/design/widgets/app_section_card.dart';
+import '../../../../core/design/widgets/app_toast.dart';
+import '../../../../core/design/widgets/app_inline_banner.dart';
 import '../../../../core/widgets/no_access_scaffold.dart';
 import '../../../../core/widgets/permission_gate.dart';
 import '../../domain/entities/customer.dart';
 import '../../data/services/receipt_pdf_service.dart';
 import '../controllers/customers_controller.dart';
 import '../controllers/invoices_controller.dart';
+import '../widgets/sales_empty_state.dart';
+import '../widgets/sales_scaffold.dart';
 
 class InvoiceDetailPage extends ConsumerWidget {
   const InvoiceDetailPage({super.key, required this.invoiceId});
@@ -41,18 +49,12 @@ class InvoiceDetailPage extends ConsumerWidget {
         .firstOrNull;
     final customers = ref.watch(customersProvider).value ?? <Customer>[];
 
-    return Scaffold(
-      backgroundColor: AppColors.background,
-      appBar: AppBar(
-        backgroundColor: AppColors.background,
-        surfaceTintColor: AppColors.background,
-        leading: IconButton(
-          icon: const Icon(Icons.arrow_back_ios, color: AppColors.accent, size: 20),
-          onPressed: () => Navigator.of(context).pop(),
-        ),
-        title: Text(invoice?.invoiceNumber ?? 'Invoice', style: AppTypography.headline),
-      ),
-      body: invoice == null
+    return SalesScaffold(
+      title: invoice?.invoiceNumber ?? 'Invoice',
+      maxContentWidth: 820,
+      padding: const EdgeInsets.fromLTRB(18, 16, 18, 0),
+      leading: _BackButton(onTap: () => Navigator.of(context).maybePop()),
+      child: invoice == null
           ? const Center(child: CircularProgressIndicator())
           : FutureBuilder<Map<String, dynamic>?>(
               future: ref.read(invoicesProvider.notifier).loadDetail(invoice.id),
@@ -62,12 +64,14 @@ class InvoiceDetailPage extends ConsumerWidget {
                   if (snapshot.connectionState == ConnectionState.waiting) {
                     return const Center(child: CircularProgressIndicator());
                   }
-                  return Center(
-                    child: Text('Could not load invoice.', style: AppTypography.subhead.copyWith(color: AppColors.textMuted)),
+                  return const SalesEmptyState(
+                    icon: LucideIcons.receiptText,
+                    message: "We couldn't load this invoice. Try again once "
+                        'the connection is back.',
                   );
                 }
-              return _buildContent(context, invoice, detail, customers, ref);
-                },
+                return _buildContent(context, invoice, detail, customers, ref);
+              },
             ),
     );
   }
@@ -77,83 +81,88 @@ class InvoiceDetailPage extends ConsumerWidget {
     final items = (detail['invoice_items'] as List<dynamic>?) ?? [];
     final payments = (detail['payments'] as List<dynamic>?) ?? [];
 
-    return SafeArea(
-      child: SingleChildScrollView(
-        padding: const EdgeInsets.symmetric(horizontal: AppSpacing.screenPadding),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            const SizedBox(height: AppSpacing.xl),
-            _HeaderCard(invoice: invoice, customerName: customerName),
-            const SizedBox(height: AppSpacing.xl),
-            Text('Items', style: AppTypography.headline),
-            const SizedBox(height: AppSpacing.sm),
-            AppCard(
-              padding: EdgeInsets.zero,
-              child: Column(
-                children: items.map((item) => _ItemRow(item as Map<String, dynamic>)).toList(),
-              ),
-            ),
-            if (payments.isNotEmpty) ...[
-              const SizedBox(height: AppSpacing.xl),
-              Text('Payments', style: AppTypography.headline),
-              const SizedBox(height: AppSpacing.sm),
-              AppCard(
-                padding: EdgeInsets.zero,
-                child: Column(
-                  children: payments.map((p) => _PaymentRow(p as Map<String, dynamic>)).toList(),
-                ),
-              ),
-            ],
-            const SizedBox(height: AppSpacing.xl),
-            _TotalsCard(invoice: invoice),
-            const SizedBox(height: AppSpacing.xxl),
-            Row(
+    return SingleChildScrollView(
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          _HeaderCard(
+            invoice: invoice,
+            customerName: customerName,
+            onVoid: _isVoided(invoice)
+                ? null
+                : () => _doVoid(context, ref, invoice),
+          ),
+          const SizedBox(height: 14),
+          AppSectionCard(
+            eyebrow: 'Items',
+            padded: false,
+            child: Column(
               children: [
-                Expanded(
-                  child: AppButton(
-                    label: 'Reprint',
-                    onPressed: () async {
-                      final service = ReceiptPdfService();
-                      final bytes = await service.buildReceipt(detail);
-                      await Printing.layoutPdf(onLayout: (_) => bytes, name: 'receipt_${invoice.invoiceNumber}');
-                    },
-                    icon: Icons.print,
-                    variant: AppButtonVariant.tinted,
-                  ),
-                ),
-                const SizedBox(width: AppSpacing.md),
-                Expanded(
-                  child: AppButton(
-                    label: 'Share',
-                    onPressed: () async {
-                      final service = ReceiptPdfService();
-                      final bytes = await service.buildReceipt(detail);
-                      await Printing.sharePdf(bytes: bytes, filename: 'receipt_${invoice.invoiceNumber}.pdf');
-                    },
-                    icon: Icons.share,
-                    variant: AppButtonVariant.plain,
-                  ),
-                ),
+                for (final item in items)
+                  _ItemRow(item as Map<String, dynamic>),
               ],
             ),
-            if (!_isVoided(invoice)) ...[
-              const SizedBox(height: AppSpacing.md),
-              PermissionGate(
-                module: 'sales',
-                action: 'delete',
+          ),
+          const SizedBox(height: 14),
+          // Wrap rather than collapse: a section that vanishes silently widens
+          // its neighbour and reads as a layout bug.
+          Wrap(
+            spacing: 14,
+            runSpacing: 14,
+            children: [
+              _WrapCard(
+                child: AppSectionCard(
+                  eyebrow: 'Payments',
+                  padded: false,
+                  child: payments.isEmpty
+                      ? const SalesEmptyState(
+                          icon: LucideIcons.creditCard,
+                          message: 'Nothing collected against this invoice yet.',
+                          minHeight: 90,
+                        )
+                      : Column(
+                          children: [
+                            for (final p in payments)
+                              _PaymentRow(p as Map<String, dynamic>),
+                          ],
+                        ),
+                ),
+              ),
+              _WrapCard(child: _TotalsCard(invoice: invoice)),
+            ],
+          ),
+          const SizedBox(height: 18),
+          Row(
+            children: [
+              Expanded(
                 child: AppButton(
-                  label: 'Void Invoice',
-                  onPressed: () => _doVoid(context, ref, invoice, detail),
-                  fullWidth: true,
-                  variant: AppButtonVariant.destructive,
-                  icon: Icons.cancel_outlined,
+                  label: 'Reprint',
+                  onPressed: () async {
+                    final service = ReceiptPdfService();
+                    final bytes = await service.buildReceipt(detail);
+                    await Printing.layoutPdf(onLayout: (_) => bytes, name: 'receipt_${invoice.invoiceNumber}');
+                  },
+                  icon: LucideIcons.printer,
+                  variant: AppButtonVariant.tinted,
+                ),
+              ),
+              const SizedBox(width: 12),
+              Expanded(
+                child: AppButton(
+                  label: 'Share',
+                  onPressed: () async {
+                    final service = ReceiptPdfService();
+                    final bytes = await service.buildReceipt(detail);
+                    await Printing.sharePdf(bytes: bytes, filename: 'receipt_${invoice.invoiceNumber}.pdf');
+                  },
+                  icon: LucideIcons.share2,
+                  variant: AppButtonVariant.plain,
                 ),
               ),
             ],
-            const SizedBox(height: AppSpacing.xxl),
-          ],
-        ),
+          ),
+          const SizedBox(height: 28),
+        ],
       ),
     );
   }
@@ -168,38 +177,100 @@ class InvoiceDetailPage extends ConsumerWidget {
     return status == 'VOID' || status == 'VOIDED' || status == 'RETURNED';
   }
 
-  static Future<void> _doVoid(BuildContext context, WidgetRef ref, dynamic invoice, Map<String, dynamic> detail) async {
+  static Future<void> _doVoid(
+    BuildContext context,
+    WidgetRef ref,
+    dynamic invoice,
+  ) async {
+    // The design's confirm carries no reason box, but void_invoice requires a
+    // reason, so the field stays — collapsed into the same dialog.
     final reasonCtrl = TextEditingController();
     final confirmed = await showDialog<bool>(
       context: context,
-      builder: (ctx) => AlertDialog(
-        title: const Text('Void Invoice'),
-        content: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Text('Void invoice ${invoice.invoiceNumber}? This will restock all items.', style: const TextStyle(fontSize: 14)),
-            const SizedBox(height: 12),
-            TextField(
-              controller: reasonCtrl,
-              decoration: const InputDecoration(hintText: 'Reason for voiding'),
-              autofocus: true,
+      builder: (dialogContext) {
+        final lum = dialogContext.lum;
+        return Dialog(
+          backgroundColor: Colors.transparent,
+          elevation: 0,
+          child: ClayContainer(
+            variant: ClayVariant.raised,
+            color: lum.surface,
+            borderRadius: AppRadius.xl,
+            isDark: lum.isDark,
+            padding: const EdgeInsets.all(26),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                Container(
+                  width: 54,
+                  height: 54,
+                  decoration: BoxDecoration(
+                    color: lum.dangerSoft,
+                    shape: BoxShape.circle,
+                  ),
+                  child: Icon(LucideIcons.ban, size: 24, color: lum.dangerText),
+                ),
+                const SizedBox(height: 18),
+                Text('Void this invoice?', style: AppTypography.title3),
+                const SizedBox(height: 8),
+                Text(
+                  'This reverses the sale and returns items to stock. The '
+                  'invoice stays on record marked as void. This can\'t be undone.',
+                  style: AppTypography.footnote.copyWith(
+                    height: 1.5,
+                    color: lum.g600,
+                  ),
+                ),
+                const SizedBox(height: 18),
+                ClayContainer(
+                  variant: ClayVariant.inset,
+                  color: lum.surface2,
+                  borderRadius: AppRadius.md,
+                  isDark: lum.isDark,
+                  height: 50,
+                  padding: const EdgeInsets.symmetric(horizontal: 14),
+                  child: Center(
+                    child: TextField(
+                      controller: reasonCtrl,
+                      autofocus: true,
+                      style: AppTypography.fieldText
+                          .copyWith(color: lum.textPrimary),
+                      cursorColor: lum.accent,
+                      decoration: InputDecoration(
+                        isCollapsed: true,
+                        filled: false,
+                        border: InputBorder.none,
+                        enabledBorder: InputBorder.none,
+                        focusedBorder: InputBorder.none,
+                        hintText: 'Reason for voiding',
+                        hintStyle: AppTypography.fieldHint
+                            .copyWith(color: lum.textTertiary),
+                      ),
+                    ),
+                  ),
+                ),
+                const SizedBox(height: 18),
+                AppButton(
+                  label: 'Void invoice',
+                  fullWidth: true,
+                  variant: AppButtonVariant.destructive,
+                  onPressed: () => Navigator.pop(dialogContext, true),
+                ),
+                const SizedBox(height: 8),
+                AppButton(
+                  label: 'Keep it',
+                  fullWidth: true,
+                  variant: AppButtonVariant.plain,
+                  onPressed: () => Navigator.pop(dialogContext, false),
+                ),
+              ],
             ),
-          ],
-        ),
-        actions: [
-          TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text('Cancel')),
-          TextButton(
-            onPressed: () => Navigator.pop(ctx, true),
-            style: TextButton.styleFrom(foregroundColor: Colors.red),
-            child: const Text('Void'),
           ),
-        ],
-      ),
+        );
+      },
     );
     if (confirmed != true || !context.mounted) return;
-
-    final scaffold = ScaffoldMessenger.of(context);
-    scaffold.showSnackBar(const SnackBar(content: Text('Voiding invoice...'), duration: Duration(seconds: 1)));
 
     final failure = await ref.read(invoicesProvider.notifier).voidInvoice(
       invoiceId: invoice.id.toString(),
@@ -208,79 +279,127 @@ class InvoiceDetailPage extends ConsumerWidget {
 
     if (!context.mounted) return;
     if (failure != null) {
-      scaffold.showSnackBar(SnackBar(content: Text(failure.message), backgroundColor: Colors.red));
+      showAppToast(context, failure.message, type: BannerType.error);
     } else {
-      scaffold.showSnackBar(const SnackBar(content: Text('Invoice voided.')));
-      Navigator.of(context).pop();
+      showAppToast(context, 'Invoice voided.', type: BannerType.success);
+      Navigator.of(context).maybePop();
     }
   }
 }
 
+/// Header row: number, status, customer, date and the destructive Void action.
 class _HeaderCard extends StatelessWidget {
-  const _HeaderCard({required this.invoice, required this.customerName});
+  const _HeaderCard({
+    required this.invoice,
+    required this.customerName,
+    required this.onVoid,
+  });
+
   final dynamic invoice;
   final String customerName;
+  final VoidCallback? onVoid;
 
   @override
   Widget build(BuildContext context) {
+    final lum = context.lum;
     final status = invoice.status.toString().split('.').last.toUpperCase();
-    final (color, label) = switch (status) {
-      'PAID' => (AppColors.success, 'PAID'),
-      'PARTIALLYPAID' => (AppColors.warning, 'PARTIALLY PAID'),
-      'CONFIRMED' => (AppColors.accent, 'CREDIT'),
-      'RETURNED' => (AppColors.destructive, 'RETURNED'),
-      'VOID' => (AppColors.textMuted, 'VOID'),
-      _ => (AppColors.textHint, status),
+    final (tone, label) = switch (status) {
+      'PAID' => (AppPillTone.success, 'Paid'),
+      'PARTIALLYPAID' => (AppPillTone.warning, 'Partially paid'),
+      'CONFIRMED' => (AppPillTone.lumen, 'Credit'),
+      'RETURNED' => (AppPillTone.danger, 'Returned'),
+      'VOID' || 'VOIDED' => (AppPillTone.neutral, 'Void'),
+      _ => (AppPillTone.neutral, status),
     };
 
     return AppCard(
-      child: Column(
+      padding: const EdgeInsets.all(22),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Row(
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
-            children: [
-              Text(invoice.invoiceNumber, style: AppTypography.title2),
-              Container(
-                padding: const EdgeInsets.symmetric(horizontal: AppSpacing.sm, vertical: 4),
-                decoration: BoxDecoration(
-                  color: color.withValues(alpha: 0.12),
-                  borderRadius: BorderRadius.circular(AppRadius.chip),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Row(
+                  children: [
+                    Flexible(
+                      child: Text(
+                        invoice.invoiceNumber,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: AppTypography.monoValue.copyWith(
+                          fontSize: 22,
+                          fontWeight: FontWeight.w700,
+                          color: lum.textPrimary,
+                        ),
+                      ),
+                    ),
+                    const SizedBox(width: 10),
+                    AppPill(label: label, tone: tone),
+                  ],
                 ),
-                child: Text(label, style: AppTypography.caption.copyWith(color: color, fontWeight: FontWeight.w700)),
-              ),
-            ],
+                const SizedBox(height: 6),
+                Text(
+                  customerName,
+                  style: AppTypography.body.copyWith(color: lum.g600),
+                ),
+                Text(
+                  _formatDate(invoice.createdAt),
+                  style: AppTypography.footnote.copyWith(color: lum.g500),
+                ),
+                if (invoice.notes != null &&
+                    (invoice.notes as String).isNotEmpty) ...[
+                  const SizedBox(height: 6),
+                  Text(
+                    invoice.notes.toString(),
+                    style: AppTypography.footnote.copyWith(color: lum.g500),
+                  ),
+                ],
+              ],
+            ),
           ),
-          const SizedBox(height: AppSpacing.lg),
-          _DetailRow(label: 'Date', value: _formatDate(invoice.createdAt)),
-          _DetailRow(label: 'Customer', value: customerName),
-          if (invoice.notes != null && (invoice.notes as String).isNotEmpty)
-            _DetailRow(label: 'Notes', value: invoice.notes.toString()),
+          if (onVoid != null) ...[
+            const SizedBox(width: 12),
+            PermissionGate(
+              module: 'sales',
+              action: 'delete',
+              child: AppButton(
+                label: 'Void',
+                onPressed: onVoid,
+                variant: AppButtonVariant.destructive,
+                icon: LucideIcons.ban,
+              ),
+            ),
+          ],
         ],
       ),
     );
   }
 
-  String _formatDate(DateTime dt) {
-    return '${dt.day}/${dt.month}/${dt.year} ${dt.hour.toString().padLeft(2, '0')}:${dt.minute.toString().padLeft(2, '0')}';
-  }
+  static String _formatDate(DateTime dt) =>
+      '${dt.day}/${dt.month}/${dt.year} '
+      '${dt.hour.toString().padLeft(2, '0')}:'
+      '${dt.minute.toString().padLeft(2, '0')}';
 }
 
-class _DetailRow extends StatelessWidget {
-  const _DetailRow({required this.label, required this.value});
-  final String label;
-  final String value;
+/// Half-width card on wide layouts, full width once it cannot fit.
+class _WrapCard extends StatelessWidget {
+  const _WrapCard({required this.child});
+  final Widget child;
 
   @override
   Widget build(BuildContext context) {
-    return Padding(
-      padding: const EdgeInsets.only(bottom: AppSpacing.sm),
-      child: Row(
-        mainAxisAlignment: MainAxisAlignment.spaceBetween,
-        children: [
-          Text(label, style: AppTypography.footnote.copyWith(color: AppColors.textMuted)),
-          Text(value, style: AppTypography.subhead),
-        ],
-      ),
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        final available = constraints.maxWidth;
+        final half = (available - 14) / 2;
+        return SizedBox(
+          width: half >= 260 ? half : available,
+          child: child,
+        );
+      },
     );
   }
 }
@@ -291,6 +410,7 @@ class _ItemRow extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final lum = context.lum;
     final qty = double.tryParse(item['qty']?.toString() ?? '0') ?? 0;
     final price = double.tryParse(item['unit_price']?.toString() ?? '0') ?? 0;
     final total = double.tryParse(item['line_total']?.toString() ?? '0') ?? 0;
@@ -299,31 +419,35 @@ class _ItemRow extends StatelessWidget {
     final tp = double.tryParse(item['tax_pct']?.toString() ?? '0') ?? 0;
 
     return Padding(
-      padding: const EdgeInsets.fromLTRB(AppSpacing.base, AppSpacing.md, AppSpacing.base, AppSpacing.md),
-      child: Column(
+      padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 9),
+      child: Row(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Row(
-            children: [
-              Text('${qty.toStringAsFixed(0)} x ${formatPkr(price)}', style: AppTypography.subhead),
-              const Spacer(),
-              Text(formatPkr(total), style: AppTypography.headline.copyWith(color: AppColors.accent)),
-            ],
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Text(
+                  // invoice_items carries no product name or SKU, only the
+                  // description captured at sale time.
+                  desc.isEmpty ? 'Item' : desc,
+                  style: AppTypography.label.copyWith(color: lum.textPrimary),
+                ),
+                Text(
+                  '${formatPkr(price)} × ${qty.toStringAsFixed(0)}'
+                  '${dp > 0 ? ' · disc ${dp.toStringAsFixed(0)}%' : ''}'
+                  '${tp > 0 ? ' · tax ${tp.toStringAsFixed(0)}%' : ''}',
+                  style: AppTypography.monoValue.copyWith(
+                    fontSize: 11.5,
+                    color: lum.g500,
+                  ),
+                ),
+              ],
+            ),
           ),
-          if (desc.isNotEmpty)
-            Padding(
-              padding: const EdgeInsets.only(top: 4),
-              child: Text(desc, style: AppTypography.caption.copyWith(color: AppColors.textHint)),
-            ),
-          if (dp > 0 || tp > 0)
-            Padding(
-              padding: const EdgeInsets.only(top: 4),
-              child: Text(
-                '${dp > 0 ? 'Disc ${dp.toStringAsFixed(0)}% ' : ''}${tp > 0 ? 'Tax ${tp.toStringAsFixed(0)}%' : ''}',
-                style: AppTypography.caption.copyWith(color: AppColors.textMuted),
-              ),
-            ),
-          const Divider(color: AppColors.separator, height: AppSpacing.md),
+          const SizedBox(width: 12),
+          AppMoneyText(total, size: 14),
         ],
       ),
     );
@@ -336,31 +460,50 @@ class _PaymentRow extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final lum = context.lum;
     final method = payment['method']?.toString() ?? '';
     final amount = double.tryParse(payment['amount']?.toString() ?? '0') ?? 0;
-    final ref = payment['reference']?.toString();
+    final reference = payment['reference']?.toString();
 
     return Padding(
-      padding: const EdgeInsets.fromLTRB(AppSpacing.base, AppSpacing.md, AppSpacing.base, AppSpacing.md),
-      child: Column(
+      padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 9),
+      child: Row(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Row(
-            children: [
-              Text(method, style: AppTypography.subhead),
-              const Spacer(),
-              Text(formatPkr(amount), style: AppTypography.headline.copyWith(color: AppColors.accent)),
-            ],
-          ),
-          if (ref != null && ref.isNotEmpty)
-            Padding(
-              padding: const EdgeInsets.only(top: 4),
-              child: Text('Ref: $ref', style: AppTypography.caption.copyWith(color: AppColors.textHint)),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Text(
+                  _label(method),
+                  style: AppTypography.body.copyWith(color: lum.g600),
+                ),
+                if (reference != null && reference.isNotEmpty)
+                  Text(
+                    'Ref $reference',
+                    style: AppTypography.monoValue.copyWith(
+                      fontSize: 11.5,
+                      color: lum.g500,
+                    ),
+                  ),
+              ],
             ),
-          const Divider(color: AppColors.separator, height: AppSpacing.md),
+          ),
+          const SizedBox(width: 12),
+          AppMoneyText(amount, size: 14),
         ],
       ),
     );
+  }
+
+  static String _label(String raw) {
+    if (raw.isEmpty) return 'Payment';
+    return raw
+        .toLowerCase()
+        .split('_')
+        .map((w) => w.isEmpty ? w : '${w[0].toUpperCase()}${w.substring(1)}')
+        .join(' ');
   }
 }
 
@@ -370,24 +513,51 @@ class _TotalsCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final lum = context.lum;
     final grand = (invoice.grandTotal as num).toDouble();
+    final subtotal = (invoice.subtotal as num).toDouble();
     final paid = (invoice.paidAmount as num).toDouble();
     final change = (invoice.changeAmount as num).toDouble();
     final balance = (invoice.balance as num).toDouble();
     final discount = (invoice.discountTotal as num).toDouble();
     final tax = (invoice.taxTotal as num).toDouble();
 
-    return AppCard(
+    return AppSectionCard(
+      eyebrow: 'Totals',
       child: Column(
         children: [
-          _TotalLine(label: 'Subtotal', value: grand, muted: true),
-          if (discount > 0) _TotalLine(label: 'Discount', value: discount, muted: true),
-          if (tax > 0) _TotalLine(label: 'Tax', value: tax, muted: true),
-          _TotalLine(label: 'Grand Total', value: grand, bold: true),
-          const Divider(color: AppColors.separator, height: AppSpacing.base),
+          _TotalLine(label: 'Subtotal', value: subtotal),
+          if (discount > 0) _TotalLine(label: 'Discount', value: -discount),
+          if (tax > 0) _TotalLine(label: 'Tax', value: tax),
+          Padding(
+            padding: const EdgeInsets.symmetric(vertical: 8),
+            child: Container(height: 1, color: lum.hairline),
+          ),
+          Row(
+            children: [
+              Expanded(
+                child: Text(
+                  'Total',
+                  style: AppTypography.label.copyWith(color: lum.textPrimary),
+                ),
+              ),
+              AppMoneyText(grand, size: 22),
+            ],
+          ),
+          const SizedBox(height: 8),
           _TotalLine(label: 'Paid', value: paid),
-          if (change > 0) _TotalLine(label: 'Change', value: change, color: AppColors.success),
-          if (balance > 0) _TotalLine(label: 'Balance Due', value: balance, bold: true, color: AppColors.warning),
+          if (change > 0)
+            _TotalLine(
+              label: 'Change',
+              value: change,
+              color: lum.successText,
+            ),
+          if (balance > 0)
+            _TotalLine(
+              label: 'Balance due',
+              value: balance,
+              color: lum.warningText,
+            ),
         ],
       ),
     );
@@ -395,31 +565,50 @@ class _TotalsCard extends StatelessWidget {
 }
 
 class _TotalLine extends StatelessWidget {
-  const _TotalLine({required this.label, required this.value, this.bold = false, this.muted = false, this.color});
+  const _TotalLine({required this.label, required this.value, this.color});
   final String label;
   final double value;
-  final bool bold;
-  final bool muted;
   final Color? color;
 
   @override
   Widget build(BuildContext context) {
+    final lum = context.lum;
     return Padding(
-      padding: const EdgeInsets.only(bottom: 4),
+      padding: const EdgeInsets.only(bottom: 5),
       child: Row(
-        mainAxisAlignment: MainAxisAlignment.spaceBetween,
         children: [
-          Text(label, style: (bold ? AppTypography.headline : AppTypography.footnote).copyWith(
-            color: muted ? AppColors.textMuted : AppColors.textPrimary,
-          )),
-          Text(
-            formatPkr(value),
-            style: (bold ? AppTypography.headline : AppTypography.footnote).copyWith(
-              color: color ?? AppColors.textPrimary,
-              fontWeight: bold ? FontWeight.w700 : FontWeight.w400,
+          Expanded(
+            child: Text(
+              label,
+              style: AppTypography.footnote.copyWith(color: lum.g500),
             ),
           ),
+          AppMoneyText(value, size: 13.5, color: color ?? lum.textPrimary),
         ],
+      ),
+    );
+  }
+}
+
+/// Back affordance for the pushed invoice route (it sits outside the nav shell).
+class _BackButton extends StatelessWidget {
+  const _BackButton({required this.onTap});
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    final lum = context.lum;
+    return Semantics(
+      button: true,
+      label: 'Back',
+      child: InkWell(
+        onTap: onTap,
+        borderRadius: BorderRadius.circular(AppRadius.pill),
+        child: SizedBox(
+          width: 40,
+          height: 44,
+          child: Icon(LucideIcons.arrowLeft, size: 20, color: lum.g600),
+        ),
       ),
     );
   }
