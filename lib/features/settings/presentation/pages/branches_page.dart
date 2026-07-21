@@ -1,17 +1,43 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:lucide_icons_flutter/lucide_icons.dart';
 import '../../../../core/design/app_colors.dart';
+import '../../../../core/design/app_radius.dart';
 import '../../../../core/design/app_spacing.dart';
 import '../../../../core/design/app_typography.dart';
 import '../../../../core/design/widgets/app_button.dart';
 import '../../../../core/design/widgets/app_card.dart';
+import '../../../../core/design/widgets/app_detail_scaffold.dart';
+import '../../../../core/design/widgets/app_dropdown.dart';
 import '../../../../core/design/widgets/app_inline_banner.dart';
+import '../../../../core/design/widgets/app_pill.dart';
+import '../../../../core/design/widgets/app_sheet.dart';
 import '../../../../core/design/widgets/app_text_field.dart';
+import '../../../../core/design/widgets/app_toggle.dart';
 import '../../../auth/presentation/controllers/branch_controller.dart';
 import '../../../auth/presentation/controllers/permission_controller.dart';
 import '../../domain/entities/branch_config.dart';
 import '../../domain/failures/settings_failure.dart';
 import '../controllers/branches_controller.dart';
+
+/// Option lists carried by the design export. A branch already stored on a
+/// value outside these lists still displays it — [AppDropdown] keeps an
+/// unmatched value as its own option rather than dropping it.
+const _countries = [
+  AppDropdownOption(value: 'Pakistan', label: 'Pakistan'),
+  AppDropdownOption(value: 'UAE', label: 'United Arab Emirates'),
+  AppDropdownOption(value: 'Saudi Arabia', label: 'Saudi Arabia'),
+];
+const _currencies = [
+  AppDropdownOption(value: 'PKR', label: 'PKR — Pakistani rupee'),
+  AppDropdownOption(value: 'AED', label: 'AED — UAE dirham'),
+  AppDropdownOption(value: 'USD', label: 'USD — US dollar'),
+];
+const _timezones = [
+  AppDropdownOption(value: 'Asia/Karachi', label: 'Asia/Karachi (PKT)'),
+  AppDropdownOption(value: 'Asia/Dubai', label: 'Asia/Dubai (GST)'),
+  AppDropdownOption(value: 'Asia/Riyadh', label: 'Asia/Riyadh (AST)'),
+];
 
 class BranchesPage extends ConsumerWidget {
   const BranchesPage({super.key});
@@ -23,221 +49,137 @@ class BranchesPage extends ConsumerWidget {
   ) async {
     final name = TextEditingController(text: branch.name);
     final city = TextEditingController(text: branch.city ?? '');
-    final country = TextEditingController(text: branch.country ?? '');
-    final currency = TextEditingController(text: branch.currency);
-    final timezone = TextEditingController(text: branch.timezone);
+    var country = branch.country ?? 'Pakistan';
+    var currency = branch.currency;
+    var timezone = branch.timezone;
     var isActive = branch.isActive;
     var saving = false;
+    var nameTouched = false;
 
-    await showModalBottomSheet<void>(
+    await showAppSheet<void>(
       context: context,
-      isScrollControlled: true,
-      backgroundColor: AppColors.background,
-      builder: (sheetContext) => Padding(
-        padding: EdgeInsets.only(
-          left: AppSpacing.screenPadding,
-          right: AppSpacing.screenPadding,
-          top: AppSpacing.lg,
-          bottom: MediaQuery.of(sheetContext).viewInsets.bottom +
-              AppSpacing.lg,
-        ),
-        child: StatefulBuilder(
-          builder: (builderContext, setSheetState) => Column(
-            mainAxisSize: MainAxisSize.min,
-            crossAxisAlignment: CrossAxisAlignment.stretch,
-            children: [
-              Text(branch.name, style: AppTypography.title2),
-              const SizedBox(height: 2),
-              Text(branch.code, style: AppTypography.subtitleMuted),
-              const SizedBox(height: AppSpacing.lg),
-              AppTextField(
-                controller: name,
-                label: 'Name',
-                prefixIcon: Icons.store_outlined,
-              ),
-              const SizedBox(height: AppSpacing.md),
-              AppTextField(
-                controller: city,
-                label: 'City',
-                prefixIcon: Icons.location_city_outlined,
-              ),
-              const SizedBox(height: AppSpacing.md),
-              AppTextField(
-                controller: country,
-                label: 'Country',
-                prefixIcon: Icons.public_outlined,
-              ),
-              const SizedBox(height: AppSpacing.md),
-              AppTextField(
-                controller: currency,
-                label: 'Currency',
-                prefixIcon: Icons.payments_outlined,
-              ),
-              const SizedBox(height: AppSpacing.md),
-              AppTextField(
-                controller: timezone,
-                label: 'Timezone',
-                prefixIcon: Icons.schedule_outlined,
-              ),
-              SwitchListTile(
-                contentPadding: EdgeInsets.zero,
-                activeThumbColor: AppColors.accent,
-                title: Text('Active', style: AppTypography.body),
-                value: isActive,
-                onChanged: saving
-                    ? null
-                    : (v) => setSheetState(() => isActive = v),
-              ),
-              const SizedBox(height: AppSpacing.lg),
-              AppButton(
-                label: 'Save',
-                loading: saving,
-                fullWidth: true,
-                onPressed: saving
-                    ? null
-                    : () async {
-                        setSheetState(() => saving = true);
-                        final failure = await ref
-                            .read(branchesProvider.notifier)
-                            .saveBranch(
-                              branchId: branch.id,
-                              name: name.text.trim(),
-                              city: city.text.trim(),
-                              country: country.text.trim(),
-                              currency: currency.text.trim(),
-                              timezone: timezone.text.trim(),
-                              isActive: isActive,
-                            );
-                        if (!builderContext.mounted) return;
-                        setSheetState(() => saving = false);
-                        if (failure == null) {
-                          Navigator.of(builderContext).pop();
-                        }
-                        if (!context.mounted) return;
-                        ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-                          content:
-                              Text(failure == null ? 'Saved' : failure.message),
-                        ));
-                      },
-              ),
-            ],
-          ),
-        ),
+      builder: (sheetContext) => StatefulBuilder(
+        builder: (builderContext, setSheetState) {
+          final nameEmpty = name.text.trim().isEmpty;
+          return _BranchForm(
+            title: 'Edit branch',
+            subtitle: "Update this location's details.",
+            name: name,
+            city: city,
+            country: country,
+            currency: currency,
+            timezone: timezone,
+            isActive: isActive,
+            saving: saving,
+            nameError: nameTouched && nameEmpty,
+            saveLabel: 'Save',
+            onNameChanged: (_) => setSheetState(() => nameTouched = true),
+            onCountry: (v) => setSheetState(() => country = v),
+            onCurrency: (v) => setSheetState(() => currency = v),
+            onTimezone: (v) => setSheetState(() => timezone = v),
+            onActive: (v) => setSheetState(() => isActive = v),
+            onCancel: () => Navigator.of(builderContext).pop(),
+            onSave: saving || nameEmpty
+                ? null
+                : () async {
+                    setSheetState(() => saving = true);
+                    final failure = await ref
+                        .read(branchesProvider.notifier)
+                        .saveBranch(
+                          branchId: branch.id,
+                          name: name.text.trim(),
+                          city: city.text.trim(),
+                          country: country,
+                          currency: currency,
+                          timezone: timezone,
+                          isActive: isActive,
+                        );
+                    if (!builderContext.mounted) return;
+                    setSheetState(() => saving = false);
+                    if (failure == null) {
+                      Navigator.of(builderContext).pop();
+                    }
+                    if (!context.mounted) return;
+                    ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+                      content:
+                          Text(failure == null ? 'Saved' : failure.message),
+                    ));
+                  },
+          );
+        },
       ),
     );
 
     name.dispose();
     city.dispose();
-    country.dispose();
-    currency.dispose();
-    timezone.dispose();
   }
 
   Future<void> _openCreate(BuildContext context, WidgetRef ref) async {
     final name = TextEditingController();
     final city = TextEditingController();
-    final country = TextEditingController(text: 'Pakistan');
-    final currency = TextEditingController(text: 'PKR');
-    final timezone = TextEditingController(text: 'Asia/Karachi');
+    var country = 'Pakistan';
+    var currency = 'PKR';
+    var timezone = 'Asia/Karachi';
+    var isActive = true;
     var saving = false;
+    var nameTouched = false;
     String? error;
 
-    await showModalBottomSheet<void>(
+    await showAppSheet<void>(
       context: context,
-      isScrollControlled: true,
-      backgroundColor: AppColors.background,
-      builder: (sheetContext) => Padding(
-        padding: EdgeInsets.only(
-          left: AppSpacing.screenPadding,
-          right: AppSpacing.screenPadding,
-          top: AppSpacing.lg,
-          bottom: MediaQuery.of(sheetContext).viewInsets.bottom + AppSpacing.lg,
-        ),
-        child: StatefulBuilder(
-          builder: (builderContext, setSheetState) => Column(
-            mainAxisSize: MainAxisSize.min,
-            crossAxisAlignment: CrossAxisAlignment.stretch,
-            children: [
-              Text('New branch', style: AppTypography.title2),
-              const SizedBox(height: AppSpacing.lg),
-              AppTextField(
-                controller: name,
-                label: 'Name',
-                prefixIcon: Icons.store_outlined,
-              ),
-              const SizedBox(height: AppSpacing.md),
-              AppTextField(
-                controller: city,
-                label: 'City',
-                prefixIcon: Icons.location_city_outlined,
-              ),
-              const SizedBox(height: AppSpacing.md),
-              AppTextField(
-                controller: country,
-                label: 'Country',
-                prefixIcon: Icons.public_outlined,
-              ),
-              const SizedBox(height: AppSpacing.md),
-              AppTextField(
-                controller: currency,
-                label: 'Currency',
-                prefixIcon: Icons.payments_outlined,
-              ),
-              const SizedBox(height: AppSpacing.md),
-              AppTextField(
-                controller: timezone,
-                label: 'Timezone',
-                prefixIcon: Icons.schedule_outlined,
-              ),
-              if (error != null) ...[
-                const SizedBox(height: AppSpacing.md),
-                AppInlineBanner(message: error!, type: BannerType.error),
-              ],
-              const SizedBox(height: AppSpacing.lg),
-              AppButton(
-                label: 'Create branch',
-                loading: saving,
-                fullWidth: true,
-                onPressed: saving
-                    ? null
-                    : () async {
-                        if (name.text.trim().isEmpty) {
-                          setSheetState(() => error = 'Name is required.');
-                          return;
-                        }
-                        setSheetState(() {
-                          saving = true;
-                          error = null;
-                        });
-                        final failure = await ref
-                            .read(branchesProvider.notifier)
-                            .createBranch(
-                              name: name.text.trim(),
-                              city: city.text.trim(),
-                              country: country.text.trim(),
-                              currency: currency.text.trim(),
-                              timezone: timezone.text.trim(),
-                            );
-                        if (!builderContext.mounted) return;
-                        setSheetState(() => saving = false);
-                        if (failure == null) {
-                          Navigator.of(builderContext).pop();
-                        } else {
-                          setSheetState(() => error = failure.message);
-                        }
-                      },
-              ),
-            ],
-          ),
-        ),
+      builder: (sheetContext) => StatefulBuilder(
+        builder: (builderContext, setSheetState) {
+          final nameEmpty = name.text.trim().isEmpty;
+          return _BranchForm(
+            title: 'New branch',
+            subtitle: 'Add a location to your business.',
+            name: name,
+            city: city,
+            country: country,
+            currency: currency,
+            timezone: timezone,
+            isActive: isActive,
+            saving: saving,
+            nameError: nameTouched && nameEmpty,
+            error: error,
+            saveLabel: 'Create branch',
+            onNameChanged: (_) => setSheetState(() => nameTouched = true),
+            onCountry: (v) => setSheetState(() => country = v),
+            onCurrency: (v) => setSheetState(() => currency = v),
+            onTimezone: (v) => setSheetState(() => timezone = v),
+            onActive: (v) => setSheetState(() => isActive = v),
+            onCancel: () => Navigator.of(builderContext).pop(),
+            onSave: saving || nameEmpty
+                ? null
+                : () async {
+                    setSheetState(() {
+                      saving = true;
+                      error = null;
+                    });
+                    final failure = await ref
+                        .read(branchesProvider.notifier)
+                        .createBranch(
+                          name: name.text.trim(),
+                          city: city.text.trim(),
+                          country: country,
+                          currency: currency,
+                          timezone: timezone,
+                        );
+                    if (!builderContext.mounted) return;
+                    setSheetState(() => saving = false);
+                    if (failure == null) {
+                      Navigator.of(builderContext).pop();
+                    } else {
+                      setSheetState(() => error = failure.message);
+                    }
+                  },
+          );
+        },
       ),
     );
 
     name.dispose();
     city.dispose();
-    country.dispose();
-    currency.dispose();
-    timezone.dispose();
   }
 
   @override
@@ -246,57 +188,53 @@ class BranchesPage extends ConsumerWidget {
     final matrix = ref.watch(permissionMatrixProvider).value;
     final canEdit = matrix?.contains('settings:update') ?? false;
     final canCreate = matrix?.contains('settings:create') ?? false;
-    final branchCount =
-        ref.watch(userBranchesProvider).value?.length ?? 0;
+    final branchCount = ref.watch(userBranchesProvider).value?.length ?? 0;
 
-    return Scaffold(
-      backgroundColor: AppColors.background,
-      appBar: AppBar(
-        backgroundColor: AppColors.background,
-        surfaceTintColor: AppColors.background,
-        title: Text('Branches', style: AppTypography.headline),
-        actions: [
-          // Manual entry to the branch selector (only meaningful with >1 branch;
-          // re-arms the router's needsSelection redirect to /branch-select).
-          if (branchCount > 1)
-            IconButton(
-              icon: const Icon(Icons.swap_horiz, color: AppColors.accent),
-              tooltip: 'Switch branch',
-              onPressed: () =>
-                  BranchRouterState.instance.reopenSelection(),
-            ),
-        ],
-      ),
-      floatingActionButton: canCreate
-          ? FloatingActionButton.extended(
-              onPressed: () => _openCreate(context, ref),
-              backgroundColor: AppColors.accent,
-              icon: const Icon(Icons.add, color: Colors.white),
-              label: const Text('New branch',
-                  style: TextStyle(color: Colors.white)),
-            )
-          : null,
-      body: SafeArea(
-        child: state.when(
-          loading: () => const Center(child: CircularProgressIndicator()),
-          error: (e, _) => Padding(
-            padding: const EdgeInsets.all(AppSpacing.screenPadding),
-            child: AppInlineBanner(
-              message: e is SettingsFailure ? e.message : e.toString(),
-            ),
+    return AppDetailScaffold(
+      eyebrow: 'Settings',
+      title: 'Branches',
+      description: 'The locations your business operates.',
+      actions: [
+        // Manual entry to the branch selector (only meaningful with >1 branch;
+        // re-arms the router's needsSelection redirect to /branch-select).
+        if (branchCount > 1)
+          AppButton(
+            label: 'Switch',
+            variant: AppButtonVariant.tinted,
+            size: AppButtonSize.sm,
+            icon: LucideIcons.repeat,
+            onPressed: () => BranchRouterState.instance.reopenSelection(),
           ),
-          data: (branches) => ListView.separated(
-            padding: const EdgeInsets.all(AppSpacing.screenPadding),
-            itemCount: branches.length,
-            separatorBuilder: (_, _) => const SizedBox(height: AppSpacing.md),
-            itemBuilder: (_, i) => _BranchCard(
-              branch: branches[i],
-              canEdit: canEdit,
-              onTap: canEdit
-                  ? () => _openEditor(context, ref, branches[i])
-                  : null,
-            ),
+        if (canCreate)
+          AppButton(
+            label: 'New branch',
+            size: AppButtonSize.sm,
+            icon: LucideIcons.plus,
+            onPressed: () => _openCreate(context, ref),
           ),
+      ],
+      child: state.when(
+        loading: () => const Padding(
+          padding: EdgeInsets.all(AppSpacing.xxl),
+          child: Center(child: CircularProgressIndicator()),
+        ),
+        error: (e, _) => AppInlineBanner(
+          message: e is SettingsFailure ? e.message : e.toString(),
+        ),
+        data: (branches) => Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            for (var i = 0; i < branches.length; i++) ...[
+              if (i > 0) const SizedBox(height: 14),
+              _BranchCard(
+                branch: branches[i],
+                canEdit: canEdit,
+                onTap: canEdit
+                    ? () => _openEditor(context, ref, branches[i])
+                    : null,
+              ),
+            ],
+          ],
         ),
       ),
     );
@@ -316,68 +254,302 @@ class _BranchCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final lum = context.lum;
     final location = [branch.city, branch.country]
         .where((s) => s != null && s.isNotEmpty)
         .join(', ');
 
-    final card = AppCard(
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
+    return AppCard(
+      onTap: onTap,
+      padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 18),
+      child: Row(
         children: [
-          Row(
-            children: [
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
+          Container(
+            width: 46,
+            height: 46,
+            decoration: BoxDecoration(
+              color: lum.accentSoft,
+              borderRadius: BorderRadius.circular(AppRadius.sm),
+            ),
+            child: Icon(LucideIcons.mapPin, size: 22, color: lum.accent),
+          ),
+          const SizedBox(width: 16),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Row(
                   children: [
-                    Text(branch.name, style: AppTypography.body),
-                    const SizedBox(height: 2),
-                    Text(branch.code, style: AppTypography.subtitleMuted),
+                    Flexible(
+                      child: Text(
+                        branch.name,
+                        style: AppTypography.headline.copyWith(
+                          fontSize: 16,
+                          color: lum.textPrimary,
+                        ),
+                      ),
+                    ),
+                    if (branch.isMain) ...[
+                      const SizedBox(width: 8),
+                      const AppPill(
+                        label: 'Default',
+                        tone: AppPillTone.warning,
+                        showDot: false,
+                      ),
+                    ],
                   ],
                 ),
-              ),
-              Text(
-                branch.isActive ? 'Active' : 'Inactive',
-                style: AppTypography.subtitleMuted,
+                if (location.isNotEmpty) ...[
+                  const SizedBox(height: 4),
+                  Text(
+                    location,
+                    style: AppTypography.footnote.copyWith(color: lum.g500),
+                  ),
+                ],
+                const SizedBox(height: 3),
+                Text(
+                  '${branch.code}  ·  ${branch.currency}  ·  ${branch.timezone}',
+                  style: AppTypography.monoValue.copyWith(
+                    fontSize: 12,
+                    color: lum.g400,
+                  ),
+                ),
+              ],
+            ),
+          ),
+          const SizedBox(width: 12),
+          Column(
+            crossAxisAlignment: CrossAxisAlignment.end,
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              AppPill(
+                label: branch.isActive ? 'Active' : 'Inactive',
+                tone: branch.isActive
+                    ? AppPillTone.success
+                    : AppPillTone.neutral,
               ),
               if (canEdit) ...[
-                const SizedBox(width: AppSpacing.sm),
-                const Icon(Icons.chevron_right,
-                    size: 20, color: AppColors.textMuted),
+                const SizedBox(height: 8),
+                Icon(LucideIcons.chevronRight, size: 20, color: lum.g300),
               ],
             ],
-          ),
-          if (location.isNotEmpty) ...[
-            const SizedBox(height: AppSpacing.sm),
-            _InfoRow(icon: Icons.location_on_outlined, text: location),
-          ],
-          const SizedBox(height: AppSpacing.sm),
-          _InfoRow(
-            icon: Icons.payments_outlined,
-            text: '${branch.currency} · ${branch.timezone}',
           ),
         ],
       ),
     );
-
-    if (onTap == null) return card;
-    return InkWell(onTap: onTap, child: card);
   }
 }
 
-class _InfoRow extends StatelessWidget {
-  const _InfoRow({required this.icon, required this.text});
+/// The branch create/edit form shared by both sheets.
+class _BranchForm extends StatelessWidget {
+  const _BranchForm({
+    required this.title,
+    required this.subtitle,
+    required this.name,
+    required this.city,
+    required this.country,
+    required this.currency,
+    required this.timezone,
+    required this.isActive,
+    required this.saving,
+    required this.nameError,
+    required this.saveLabel,
+    required this.onNameChanged,
+    required this.onCountry,
+    required this.onCurrency,
+    required this.onTimezone,
+    required this.onActive,
+    required this.onCancel,
+    required this.onSave,
+    this.error,
+  });
 
-  final IconData icon;
-  final String text;
+  final String title;
+  final String subtitle;
+  final TextEditingController name;
+  final TextEditingController city;
+  final String country;
+  final String currency;
+  final String timezone;
+  final bool isActive;
+  final bool saving;
+  final bool nameError;
+  final String? error;
+  final String saveLabel;
+  final ValueChanged<String> onNameChanged;
+  final ValueChanged<String> onCountry;
+  final ValueChanged<String> onCurrency;
+  final ValueChanged<String> onTimezone;
+  final ValueChanged<bool> onActive;
+  final VoidCallback onCancel;
+  final VoidCallback? onSave;
 
   @override
   Widget build(BuildContext context) {
-    return Row(
+    final lum = context.lum;
+
+    return Column(
+      mainAxisSize: MainAxisSize.min,
+      crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
-        Icon(icon, size: 16, color: AppColors.textMuted),
-        const SizedBox(width: 6),
-        Expanded(child: Text(text, style: AppTypography.subtitleMuted)),
+        AppSheetHeader(title: title, subtitle: subtitle),
+        AppTextField(
+          controller: name,
+          label: 'Branch name',
+          prefixIcon: LucideIcons.store,
+          onChanged: onNameChanged,
+          errorText: nameError ? 'A branch name is required.' : null,
+        ),
+        const SizedBox(height: AppSpacing.base),
+        AppTextField(
+          controller: city,
+          label: 'City',
+          prefixIcon: LucideIcons.building2,
+        ),
+        const SizedBox(height: AppSpacing.base),
+        LayoutBuilder(
+          builder: (context, constraints) {
+            final countryField = _LabelledDropdown(
+              label: 'Country',
+              value: country,
+              options: _countries,
+              onSelected: onCountry,
+            );
+            final currencyField = _LabelledDropdown(
+              label: 'Currency',
+              value: currency,
+              options: _currencies,
+              onSelected: onCurrency,
+            );
+            if (constraints.maxWidth < 420) {
+              return Column(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  countryField,
+                  const SizedBox(height: AppSpacing.base),
+                  currencyField,
+                ],
+              );
+            }
+            return Row(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Expanded(child: countryField),
+                const SizedBox(width: AppSpacing.base),
+                Expanded(child: currencyField),
+              ],
+            );
+          },
+        ),
+        const SizedBox(height: AppSpacing.base),
+        _LabelledDropdown(
+          label: 'Timezone',
+          value: timezone,
+          options: _timezones,
+          onSelected: onTimezone,
+        ),
+        const SizedBox(height: AppSpacing.base),
+        Container(
+          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+          decoration: BoxDecoration(
+            color: lum.surface2,
+            borderRadius: BorderRadius.circular(AppRadius.md),
+          ),
+          child: Row(
+            children: [
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Text(
+                      'Active',
+                      style: AppTypography.body.copyWith(
+                        fontWeight: FontWeight.w600,
+                        color: lum.textPrimary,
+                      ),
+                    ),
+                    Text(
+                      'Inactive branches are hidden from the POS.',
+                      style: AppTypography.caption.copyWith(color: lum.g500),
+                    ),
+                  ],
+                ),
+              ),
+              const SizedBox(width: 12),
+              AppToggle(
+                value: isActive,
+                enabled: !saving,
+                semanticLabel: 'Active',
+                onChanged: onActive,
+              ),
+            ],
+          ),
+        ),
+        if (error != null) ...[
+          const SizedBox(height: AppSpacing.base),
+          AppInlineBanner(message: error!, type: BannerType.error),
+        ],
+        const SizedBox(height: AppSpacing.xl),
+        Row(
+          children: [
+            Expanded(
+              child: AppButton(
+                label: 'Cancel',
+                variant: AppButtonVariant.tinted,
+                fullWidth: true,
+                onPressed: saving ? null : onCancel,
+              ),
+            ),
+            const SizedBox(width: 12),
+            Expanded(
+              child: AppButton(
+                label: saveLabel,
+                loading: saving,
+                fullWidth: true,
+                onPressed: onSave,
+              ),
+            ),
+          ],
+        ),
+      ],
+    );
+  }
+}
+
+class _LabelledDropdown extends StatelessWidget {
+  const _LabelledDropdown({
+    required this.label,
+    required this.value,
+    required this.options,
+    required this.onSelected,
+  });
+
+  final String label;
+  final String value;
+  final List<AppDropdownOption<String>> options;
+  final ValueChanged<String> onSelected;
+
+  @override
+  Widget build(BuildContext context) {
+    final lum = context.lum;
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        Padding(
+          padding: const EdgeInsets.only(left: 2, bottom: 8),
+          child: Text(
+            label,
+            style: AppTypography.fieldLabel.copyWith(color: lum.g700),
+          ),
+        ),
+        AppDropdown<String>(
+          value: value,
+          options: options,
+          onSelected: onSelected,
+        ),
       ],
     );
   }

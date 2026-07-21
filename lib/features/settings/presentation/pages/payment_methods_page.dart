@@ -1,16 +1,22 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:lucide_icons_flutter/lucide_icons.dart';
 import '../../../../core/design/app_colors.dart';
 import '../../../../core/design/app_radius.dart';
 import '../../../../core/design/app_spacing.dart';
 import '../../../../core/design/app_typography.dart';
 import '../../../../core/design/widgets/app_card.dart';
+import '../../../../core/design/widgets/app_detail_scaffold.dart';
+import '../../../../core/design/widgets/app_dropdown.dart';
 import '../../../../core/design/widgets/app_inline_banner.dart';
+import '../../../../core/design/widgets/app_pill.dart';
+import '../../../../core/design/widgets/app_toggle.dart';
 import '../../../auth/presentation/controllers/permission_controller.dart';
 import '../../domain/entities/bank_account_ref.dart';
 import '../../domain/entities/payment_method_config.dart';
 import '../../domain/failures/settings_failure.dart';
 import '../controllers/payment_methods_controller.dart';
+import '../widgets/settings_note.dart';
 
 /// Friendly label for a resolved GL account code (unlinked methods → Cash 1000).
 String _glLabel(String? code) => switch (code) {
@@ -19,6 +25,24 @@ String _glLabel(String? code) => switch (code) {
       null => 'Cash (1000)',
       _ => 'GL $code',
     };
+
+/// Sentinel for "no bank linked" — the dropdown reserves null for "unset".
+const _noBank = '';
+
+/// Glyph for a method, keyed off its code. Anything unrecognised falls back to
+/// a generic wallet rather than guessing at a payment rail.
+IconData _methodIcon(String code) {
+  final c = code.toUpperCase();
+  if (c.contains('CASH')) return LucideIcons.banknote;
+  if (c.contains('CARD')) return LucideIcons.creditCard;
+  if (c.contains('BANK') || c.contains('TRANSFER')) return LucideIcons.landmark;
+  if (c.contains('WALLET') || c.contains('JAZZ') || c.contains('EASYPAISA')) {
+    return LucideIcons.smartphone;
+  }
+  if (c.contains('CREDIT')) return LucideIcons.fileText;
+  if (c.contains('CHEQUE') || c.contains('CHECK')) return LucideIcons.fileText;
+  return LucideIcons.wallet;
+}
 
 class PaymentMethodsPage extends ConsumerWidget {
   const PaymentMethodsPage({super.key});
@@ -42,52 +66,58 @@ class PaymentMethodsPage extends ConsumerWidget {
             ) ??
         false;
 
-    return Scaffold(
-      backgroundColor: AppColors.background,
-      appBar: AppBar(
-        backgroundColor: AppColors.background,
-        surfaceTintColor: AppColors.background,
-        title: Text('Payment methods', style: AppTypography.headline),
-      ),
-      body: SafeArea(
-        child: methodsState.when(
-          loading: () => const Center(child: CircularProgressIndicator()),
-          error: (e, _) => Padding(
-            padding: const EdgeInsets.all(AppSpacing.screenPadding),
-            child: AppInlineBanner(
-              message: e is SettingsFailure ? e.message : e.toString(),
-            ),
-          ),
-          data: (methods) {
-            final banks = banksState.value ?? const <BankAccountRef>[];
-            return ListView.separated(
-              padding: const EdgeInsets.all(AppSpacing.screenPadding),
-              itemCount: methods.length,
-              separatorBuilder: (_, _) =>
-                  const SizedBox(height: AppSpacing.md),
-              itemBuilder: (_, i) => _MethodCard(
-                method: methods[i],
-                banks: banks,
-                canEdit: canEdit,
-                onToggleActive: (v) => _run(context,
-                    () => ref.read(paymentMethodsProvider.notifier).edit(
-                          methods[i].id,
-                          isActive: v,
-                        )),
-                onToggleRef: (v) => _run(context,
-                    () => ref.read(paymentMethodsProvider.notifier).edit(
-                          methods[i].id,
-                          requiresReference: v,
-                        )),
-                onLinkBank: (bankId) => _run(context,
-                    () => ref.read(paymentMethodsProvider.notifier).linkBankAccount(
-                          methods[i].id,
-                          bankId,
-                        )),
-              ),
-            );
-          },
+    return AppDetailScaffold(
+      eyebrow: 'Settings',
+      title: 'Payment methods',
+      description: 'How customers can pay and where it posts.',
+      child: methodsState.when(
+        loading: () => const Padding(
+          padding: EdgeInsets.all(AppSpacing.xxl),
+          child: Center(child: CircularProgressIndicator()),
         ),
+        error: (e, _) => AppInlineBanner(
+          message: e is SettingsFailure ? e.message : e.toString(),
+        ),
+        data: (methods) {
+          final banks = banksState.value ?? const <BankAccountRef>[];
+          return Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              for (var i = 0; i < methods.length; i++) ...[
+                if (i > 0) const SizedBox(height: AppSpacing.md),
+                _MethodCard(
+                  method: methods[i],
+                  banks: banks,
+                  canEdit: canEdit,
+                  onToggleActive: (v) => _run(context,
+                      () => ref.read(paymentMethodsProvider.notifier).edit(
+                            methods[i].id,
+                            isActive: v,
+                          )),
+                  onToggleRef: (v) => _run(context,
+                      () => ref.read(paymentMethodsProvider.notifier).edit(
+                            methods[i].id,
+                            requiresReference: v,
+                          )),
+                  onLinkBank: (bankId) => _run(
+                      context,
+                      () => ref
+                          .read(paymentMethodsProvider.notifier)
+                          .linkBankAccount(
+                            methods[i].id,
+                            bankId,
+                          )),
+                ),
+              ],
+              const SizedBox(height: AppSpacing.base),
+              const SettingsNote(
+                "Adding or removing a payment method isn't available from this "
+                'screen yet — the methods above are configured for your '
+                'business.',
+              ),
+            ],
+          );
+        },
       ),
     );
   }
@@ -112,65 +142,101 @@ class _MethodCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final lum = context.lum;
+
     return AppCard(
+      padding: const EdgeInsets.fromLTRB(22, 20, 22, 20),
       child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
+        crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
           Row(
             children: [
+              Container(
+                width: 46,
+                height: 46,
+                decoration: BoxDecoration(
+                  color: lum.g100,
+                  borderRadius: BorderRadius.circular(AppRadius.sm),
+                ),
+                child: Icon(
+                  _methodIcon(method.code),
+                  size: 22,
+                  color: lum.g600,
+                ),
+              ),
+              const SizedBox(width: 14),
               Expanded(
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
+                  mainAxisSize: MainAxisSize.min,
                   children: [
-                    Text(method.name, style: AppTypography.body),
-                    const SizedBox(height: 2),
-                    Text(method.code, style: AppTypography.subtitleMuted),
+                    Row(
+                      children: [
+                        Flexible(
+                          child: Text(
+                            method.name,
+                            style: AppTypography.headline.copyWith(
+                              fontSize: 16,
+                              color: lum.textPrimary,
+                            ),
+                          ),
+                        ),
+                        if (method.isSystem) ...[
+                          const SizedBox(width: 8),
+                          const AppPill(label: 'SYSTEM', showDot: false),
+                        ],
+                      ],
+                    ),
+                    const SizedBox(height: 3),
+                    // Resolved GL account — where this method's money posts
+                    // today. Only the code exists in the payload, so no
+                    // account name is invented alongside it.
+                    Text(
+                      'Posts to ${_glLabel(method.resolvedAccountCode)}',
+                      style: AppTypography.monoValue.copyWith(
+                        fontSize: 12.5,
+                        color: lum.g500,
+                      ),
+                    ),
                   ],
                 ),
               ),
-              if (method.isSystem)
-                Container(
-                  padding: const EdgeInsets.symmetric(
-                      horizontal: AppSpacing.sm, vertical: 2),
-                  decoration: BoxDecoration(
-                    color: AppColors.textMuted.withValues(alpha: 0.12),
-                    borderRadius: BorderRadius.circular(AppRadius.chip),
-                  ),
-                  child: Text('SYSTEM', style: AppTypography.subtitleMuted),
-                ),
             ],
           ),
-          const SizedBox(height: AppSpacing.sm),
-          // Resolved GL account — where this method's money posts today.
-          Row(
-            children: [
-              const Icon(Icons.account_balance_outlined,
-                  size: 16, color: AppColors.textMuted),
-              const SizedBox(width: 6),
-              Text('Posts to ${_glLabel(method.resolvedAccountCode)}',
-                  style: AppTypography.subtitleMuted),
-            ],
+          Divider(height: 33, color: lum.hairline),
+          Text(
+            'Bank account (GL split)',
+            style: AppTypography.fieldLabel.copyWith(color: lum.g700),
           ),
-          const SizedBox(height: AppSpacing.md),
-          _BankDropdown(
-            banks: banks,
-            selectedId: method.bankAccountId,
+          const SizedBox(height: 8),
+          AppDropdown<String>(
+            value: method.bankAccountId ?? _noBank,
             enabled: canEdit,
-            onChanged: onLinkBank,
+            options: [
+              const AppDropdownOption(
+                value: _noBank,
+                label: 'None — Cash (1000)',
+              ),
+              for (final b in banks)
+                AppDropdownOption(value: b.id, label: b.label),
+            ],
+            onSelected: (value) => onLinkBank(value == _noBank ? null : value),
           ),
-          SwitchListTile(
-            contentPadding: EdgeInsets.zero,
-            activeThumbColor: AppColors.accent,
-            title: Text('Active', style: AppTypography.body),
+          const SizedBox(height: 14),
+          _ToggleRow(
+            title: 'Active',
+            description: 'Available at the point of sale.',
             value: method.isActive,
-            onChanged: canEdit ? onToggleActive : null,
+            enabled: canEdit,
+            onChanged: onToggleActive,
           ),
-          SwitchListTile(
-            contentPadding: EdgeInsets.zero,
-            activeThumbColor: AppColors.accent,
-            title: Text('Requires reference', style: AppTypography.body),
+          const SizedBox(height: 14),
+          _ToggleRow(
+            title: 'Requires reference',
+            description: 'Cashier must enter a txn / cheque number.',
             value: method.requiresReference,
-            onChanged: canEdit ? onToggleRef : null,
+            enabled: canEdit,
+            onChanged: onToggleRef,
           ),
         ],
       ),
@@ -178,38 +244,53 @@ class _MethodCard extends StatelessWidget {
   }
 }
 
-class _BankDropdown extends StatelessWidget {
-  const _BankDropdown({
-    required this.banks,
-    required this.selectedId,
+class _ToggleRow extends StatelessWidget {
+  const _ToggleRow({
+    required this.title,
+    required this.description,
+    required this.value,
     required this.enabled,
     required this.onChanged,
   });
 
-  final List<BankAccountRef> banks;
-  final String? selectedId;
+  final String title;
+  final String description;
+  final bool value;
   final bool enabled;
-  final ValueChanged<String?> onChanged;
+  final ValueChanged<bool> onChanged;
 
   @override
   Widget build(BuildContext context) {
-    return DropdownButtonFormField<String?>(
-      initialValue: selectedId,
-      isExpanded: true,
-      decoration: InputDecoration(
-        labelText: 'Bank account (GL split)',
-        border: OutlineInputBorder(
-          borderRadius: BorderRadius.circular(AppRadius.field),
+    final lum = context.lum;
+    return Row(
+      children: [
+        Expanded(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Text(
+                title,
+                style: AppTypography.body.copyWith(
+                  fontWeight: FontWeight.w600,
+                  color: lum.textPrimary,
+                ),
+              ),
+              Text(
+                description,
+                style: AppTypography.caption.copyWith(color: lum.g500),
+              ),
+            ],
+          ),
         ),
-        contentPadding: const EdgeInsets.symmetric(
-            horizontal: AppSpacing.md, vertical: AppSpacing.sm),
-      ),
-      items: [
-        const DropdownMenuItem(value: null, child: Text('None — Cash (1000)')),
-        for (final b in banks)
-          DropdownMenuItem(value: b.id, child: Text(b.label)),
+        const SizedBox(width: 12),
+        AppToggle(
+          value: value,
+          enabled: enabled,
+          semanticLabel: title,
+          onChanged: onChanged,
+        ),
       ],
-      onChanged: enabled ? onChanged : null,
     );
   }
 }

@@ -1,16 +1,23 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../../../core/design/app_colors.dart';
-import '../../../../core/design/app_radius.dart';
 import '../../../../core/design/app_spacing.dart';
 import '../../../../core/design/app_typography.dart';
 import '../../../../core/design/widgets/app_card.dart';
+import '../../../../core/design/widgets/app_detail_scaffold.dart';
+import '../../../../core/design/widgets/app_dropdown.dart';
 import '../../../../core/design/widgets/app_inline_banner.dart';
 import '../../../auth/presentation/controllers/permission_controller.dart';
 import '../../domain/entities/branch_config.dart';
 import '../../domain/failures/settings_failure.dart';
 import '../controllers/branches_controller.dart';
 import '../controllers/preferences_controller.dart';
+import '../widgets/settings_note.dart';
+
+/// Sentinel for "no default branch". The dropdown works in non-null values, so
+/// the absence of a branch needs a value of its own rather than null, which the
+/// control reserves for "nothing picked yet".
+const _noBranch = '';
 
 class PreferencesPage extends ConsumerWidget {
   const PreferencesPage({super.key});
@@ -35,6 +42,7 @@ class PreferencesPage extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
+    final lum = context.lum;
     final state = ref.watch(preferencesProvider);
     final branchesState = ref.watch(branchesProvider);
     final branches = branchesState.value ?? const <BranchConfig>[];
@@ -42,109 +50,145 @@ class PreferencesPage extends ConsumerWidget {
         ref.watch(permissionMatrixProvider).value?.contains('settings:update') ??
             false;
 
-    return Scaffold(
-      backgroundColor: AppColors.background,
-      appBar: AppBar(
-        backgroundColor: AppColors.background,
-        surfaceTintColor: AppColors.background,
-        title: Text('Preferences', style: AppTypography.headline),
-      ),
-      body: SafeArea(
-        child: state.when(
-          loading: () => const Center(child: CircularProgressIndicator()),
-          error: (e, _) => Padding(
-            padding: const EdgeInsets.all(AppSpacing.screenPadding),
-            child: AppInlineBanner(
-              message: e is SettingsFailure ? e.message : e.toString(),
-            ),
-          ),
-          data: (prefs) => SingleChildScrollView(
-            padding: const EdgeInsets.all(AppSpacing.screenPadding),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.stretch,
-              children: [
-                AppCard(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      DropdownButtonFormField<String>(
-                        initialValue: prefs.theme,
-                        isExpanded: true,
-                        decoration: InputDecoration(
-                          labelText: 'Theme',
-                          border: OutlineInputBorder(
-                            borderRadius:
-                                BorderRadius.circular(AppRadius.field),
-                          ),
+    return AppDetailScaffold(
+      eyebrow: 'Settings',
+      title: 'Preferences',
+      description: 'How the app looks and behaves for you.',
+      child: state.when(
+        loading: () => const Padding(
+          padding: EdgeInsets.all(AppSpacing.xxl),
+          child: Center(child: CircularProgressIndicator()),
+        ),
+        error: (e, _) => AppInlineBanner(
+          message: e is SettingsFailure ? e.message : e.toString(),
+        ),
+        data: (prefs) => Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            if (!canEdit) ...[
+              const SettingsNote(
+                'You can view these preferences. Ask an admin to change them '
+                'for this account.',
+                lumen: true,
+              ),
+              const SizedBox(height: AppSpacing.lg),
+            ],
+            AppCard(
+              padding: const EdgeInsets.all(24),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  _PrefRow(
+                    title: 'Theme',
+                    description: 'More themes are on the way.',
+                    control: AppDropdown<String>(
+                      value: prefs.theme,
+                      enabled: canEdit,
+                      options: const [
+                        AppDropdownOption(value: 'light', label: 'Light'),
+                      ],
+                      onSelected: (value) =>
+                          _save(context, ref, theme: value),
+                    ),
+                  ),
+                  Divider(height: 44, color: lum.hairline),
+                  _PrefRow(
+                    title: 'Language',
+                    description: 'Interface language for this account.',
+                    control: AppDropdown<String>(
+                      value: prefs.language,
+                      enabled: canEdit,
+                      options: const [
+                        AppDropdownOption(value: 'en', label: 'English'),
+                        AppDropdownOption(value: 'ur', label: 'اردو · Urdu'),
+                      ],
+                      onSelected: (value) =>
+                          _save(context, ref, language: value),
+                    ),
+                  ),
+                  Divider(height: 44, color: lum.hairline),
+                  _PrefRow(
+                    title: 'Default branch',
+                    description: 'Opens here when you sign in.',
+                    control: AppDropdown<String>(
+                      value: prefs.defaultBranchId ?? _noBranch,
+                      enabled: canEdit,
+                      options: [
+                        const AppDropdownOption(
+                          value: _noBranch,
+                          label: 'None',
                         ),
-                        items: const [
-                          DropdownMenuItem(value: 'light', child: Text('Light')),
-                        ],
-                        onChanged: canEdit
-                            ? (value) {
-                                if (value == null) return;
-                                _save(context, ref, theme: value);
-                              }
-                            : null,
-                      ),
-                      const SizedBox(height: AppSpacing.xs),
-                      Text('Light mode only',
-                          style: AppTypography.subtitleMuted),
-                    ],
-                  ),
-                ),
-                const SizedBox(height: AppSpacing.md),
-                AppCard(
-                  child: DropdownButtonFormField<String>(
-                    initialValue: prefs.language,
-                    isExpanded: true,
-                    decoration: InputDecoration(
-                      labelText: 'Language',
-                      border: OutlineInputBorder(
-                        borderRadius: BorderRadius.circular(AppRadius.field),
+                        for (final b in branches)
+                          AppDropdownOption(value: b.id, label: b.name),
+                      ],
+                      onSelected: (value) => _save(
+                        context,
+                        ref,
+                        defaultBranchId: value == _noBranch ? null : value,
                       ),
                     ),
-                    items: const [
-                      DropdownMenuItem(value: 'en', child: Text('English')),
-                      DropdownMenuItem(value: 'ur', child: Text('Urdu')),
-                    ],
-                    onChanged: canEdit
-                        ? (value) {
-                            if (value == null) return;
-                            _save(context, ref, language: value);
-                          }
-                        : null,
                   ),
-                ),
-                const SizedBox(height: AppSpacing.md),
-                AppCard(
-                  child: DropdownButtonFormField<String?>(
-                    initialValue: prefs.defaultBranchId,
-                    isExpanded: true,
-                    decoration: InputDecoration(
-                      labelText: 'Default branch',
-                      border: OutlineInputBorder(
-                        borderRadius: BorderRadius.circular(AppRadius.field),
-                      ),
-                    ),
-                    items: [
-                      const DropdownMenuItem(value: null, child: Text('None')),
-                      ...branches.map((b) => DropdownMenuItem(
-                            value: b.id,
-                            child: Text(b.name),
-                          )),
-                    ],
-                    onChanged: canEdit
-                        ? (value) =>
-                            _save(context, ref, defaultBranchId: value)
-                        : null,
-                  ),
-                ),
-              ],
+                ],
+              ),
             ),
-          ),
+          ],
         ),
       ),
+    );
+  }
+}
+
+/// Label + description on the left, a 280px control on the right; both stack
+/// when the card is too narrow to hold the pair.
+class _PrefRow extends StatelessWidget {
+  const _PrefRow({
+    required this.title,
+    required this.description,
+    required this.control,
+  });
+
+  final String title;
+  final String description;
+  final Widget control;
+
+  @override
+  Widget build(BuildContext context) {
+    final lum = context.lum;
+    final label = Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        Text(
+          title,
+          style: AppTypography.body.copyWith(
+            fontWeight: FontWeight.w600,
+            color: lum.textPrimary,
+          ),
+        ),
+        const SizedBox(height: 2),
+        Text(
+          description,
+          style: AppTypography.footnote.copyWith(color: lum.g500),
+        ),
+      ],
+    );
+
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        if (constraints.maxWidth < 520) {
+          return Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [label, const SizedBox(height: 12), control],
+          );
+        }
+        return Row(
+          children: [
+            Expanded(child: label),
+            const SizedBox(width: 24),
+            SizedBox(width: 280, child: control),
+          ],
+        );
+      },
     );
   }
 }

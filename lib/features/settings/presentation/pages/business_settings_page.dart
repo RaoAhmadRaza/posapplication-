@@ -1,9 +1,10 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import '../../../../core/design/app_colors.dart';
+import 'package:lucide_icons_flutter/lucide_icons.dart';
 import '../../../../core/design/app_spacing.dart';
-import '../../../../core/design/app_typography.dart';
 import '../../../../core/design/widgets/app_button.dart';
+import '../../../../core/design/widgets/app_card.dart';
+import '../../../../core/design/widgets/app_detail_scaffold.dart';
 import '../../../../core/design/widgets/app_inline_banner.dart';
 import '../../../../core/design/widgets/app_text_field.dart';
 import '../../../auth/presentation/controllers/permission_controller.dart';
@@ -71,72 +72,94 @@ class _BusinessSettingsPageState extends ConsumerState<BusinessSettingsPage> {
         ref.watch(permissionMatrixProvider).value?.contains('settings:update') ??
             false;
 
-    return Scaffold(
-      backgroundColor: AppColors.background,
-      appBar: AppBar(
-        backgroundColor: AppColors.background,
-        surfaceTintColor: AppColors.background,
-        title: Text('Business settings', style: AppTypography.headline),
-      ),
-      body: SafeArea(
-        child: state.when(
-          loading: () => const Center(child: CircularProgressIndicator()),
-          error: (e, _) => Padding(
-            padding: const EdgeInsets.all(AppSpacing.screenPadding),
-            child: AppInlineBanner(
-              message: e is SettingsFailure ? e.message : e.toString(),
-            ),
-          ),
-          data: (s) {
-            _seed(s);
-            return SingleChildScrollView(
-              padding: const EdgeInsets.all(AppSpacing.screenPadding),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.stretch,
-                children: [
-                  AppTextField(
-                    controller: _address,
-                    label: 'Business address',
-                    prefixIcon: Icons.location_on_outlined,
-                  ),
-                  const SizedBox(height: AppSpacing.md),
-                  AppTextField(
-                    controller: _phone,
-                    label: 'Phone',
-                    prefixIcon: Icons.phone_outlined,
-                    keyboardType: TextInputType.phone,
-                  ),
-                  const SizedBox(height: AppSpacing.md),
-                  AppTextField(
-                    controller: _ntn,
-                    label: 'NTN',
-                    prefixIcon: Icons.badge_outlined,
-                  ),
-                  const SizedBox(height: AppSpacing.md),
-                  AppTextField(
-                    controller: _logoUrl,
-                    label: 'Logo URL',
-                    prefixIcon: Icons.image_outlined,
-                  ),
-                  const SizedBox(height: AppSpacing.md),
-                  AppTextField(
-                    controller: _receiptFooter,
-                    label: 'Receipt footer',
-                    prefixIcon: Icons.receipt_long_outlined,
-                  ),
-                  const SizedBox(height: AppSpacing.xl),
-                  if (canEdit)
-                    AppButton(
-                      label: 'Save',
-                      loading: _saving,
-                      fullWidth: true,
-                      onPressed: _saving ? null : _save,
-                    ),
-                ],
-              ),
-            );
-          },
+    return AppDetailScaffold(
+      eyebrow: 'Settings',
+      title: 'Business settings',
+      description: 'Details shown on receipts and invoices.',
+      child: state.when(
+        loading: () => const Padding(
+          padding: EdgeInsets.all(AppSpacing.xxl),
+          child: Center(child: CircularProgressIndicator()),
         ),
+        error: (e, _) => AppInlineBanner(
+          message: e is SettingsFailure ? e.message : e.toString(),
+        ),
+        data: (s) {
+          _seed(s);
+          return AppCard(
+            padding: const EdgeInsets.all(24),
+            child: LayoutBuilder(
+              builder: (context, constraints) {
+                // Phone and NTN pair up only when the card is wide enough to
+                // keep both wells legible.
+                final twoUp = constraints.maxWidth >= 520;
+                final phone = AppTextField(
+                  controller: _phone,
+                  label: 'Phone',
+                  prefixIcon: LucideIcons.phone,
+                  keyboardType: TextInputType.phone,
+                );
+                final ntn = AppTextField(
+                  controller: _ntn,
+                  label: 'NTN (tax number)',
+                  prefixIcon: LucideIcons.receipt,
+                );
+
+                return Column(
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: [
+                    AppTextField(
+                      controller: _address,
+                      label: 'Registered address',
+                      prefixIcon: LucideIcons.mapPin,
+                    ),
+                    const SizedBox(height: AppSpacing.fieldGap),
+                    if (twoUp)
+                      Row(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Expanded(child: phone),
+                          const SizedBox(width: AppSpacing.base),
+                          Expanded(child: ntn),
+                        ],
+                      )
+                    else ...[
+                      phone,
+                      const SizedBox(height: AppSpacing.fieldGap),
+                      ntn,
+                    ],
+                    const SizedBox(height: AppSpacing.fieldGap),
+                    AppTextField(
+                      controller: _logoUrl,
+                      label: 'Logo URL',
+                      prefixIcon: LucideIcons.image,
+                      helperText: 'Shown on receipts and invoices.',
+                    ),
+                    const SizedBox(height: AppSpacing.fieldGap),
+                    AppTextField(
+                      controller: _receiptFooter,
+                      label: 'Receipt footer',
+                      prefixIcon: LucideIcons.fileText,
+                      maxLines: 3,
+                      helperText: 'Printed at the bottom of every receipt.',
+                    ),
+                    if (canEdit) ...[
+                      const SizedBox(height: AppSpacing.xl),
+                      Align(
+                        alignment: Alignment.centerRight,
+                        child: AppButton(
+                          label: 'Save changes',
+                          loading: _saving,
+                          onPressed: _saving ? null : _save,
+                        ),
+                      ),
+                    ],
+                  ],
+                );
+              },
+            ),
+          );
+        },
       ),
     );
   }
