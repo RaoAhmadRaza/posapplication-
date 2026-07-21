@@ -4,6 +4,7 @@ import 'dart:io' show File;
 import 'package:csv/csv.dart';
 import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart' show PlatformException;
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../../core/design/app_colors.dart';
@@ -55,11 +56,23 @@ class _ImportProductsPageState extends ConsumerState<ImportProductsPage> {
   // --- Pick ---
 
   Future<void> _pickFile() async {
-    final result = await FilePicker.pickFiles(
-      type: FileType.custom,
-      allowedExtensions: ['csv'],
-      withData: true,
-    );
+    final FilePickerResult? result;
+    try {
+      result = await FilePicker.pickFiles(
+        type: FileType.custom,
+        allowedExtensions: ['csv'],
+        withData: true,
+      );
+    } on PlatformException catch (e) {
+      // The picker can refuse before it ever opens — on macOS it rejects the
+      // call outright when the sandbox entitlement is missing. Surface that
+      // instead of looking like nothing happened.
+      if (!mounted) return;
+      setState(
+        () => _error = "Couldn't open the file picker. ${e.message ?? e.code}",
+      );
+      return;
+    }
     if (result == null || result.files.isEmpty) return;
 
     final f = result.files.first;

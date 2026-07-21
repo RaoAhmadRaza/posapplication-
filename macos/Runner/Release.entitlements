@@ -4,6 +4,12 @@
 <dict>
 	<key>com.apple.security.app-sandbox</key>
 	<true/>
+	<!-- Required by file_picker: under App Sandbox its macOS handler checks for
+	     this entitlement and refuses to open NSOpenPanel without it. Read-write
+	     rather than read-only because the printing/share flows also write a
+	     user-selected destination. -->
+	<key>com.apple.security.files.user-selected.read-write</key>
+	<true/>
 	<key>com.apple.security.network.client</key>
 	<true/>
 </dict>
