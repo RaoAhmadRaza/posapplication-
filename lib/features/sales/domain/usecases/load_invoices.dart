@@ -12,6 +12,7 @@ class LoadInvoices {
     String? branchId,
     String? status,
     String? customerId,
+    String? search,
     int limit = 50,
     int offset = 0,
   }) async {
@@ -19,6 +20,7 @@ class LoadInvoices {
       branchId: branchId,
       status: status,
       customerId: customerId,
+      search: search,
       limit: limit,
       offset: offset,
     );

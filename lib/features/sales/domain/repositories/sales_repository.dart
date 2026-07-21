@@ -27,6 +27,7 @@ abstract class SalesRepository {
     String? branchId,
     String? status,
     String? customerId,
+    String? search,
     int limit = 50,
     int offset = 0,
   });

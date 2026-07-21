@@ -152,6 +152,7 @@ class SalesRepositoryImpl implements SalesRepository {
     String? branchId,
     String? status,
     String? customerId,
+    String? search,
     int limit = 50,
     int offset = 0,
   }) async {
@@ -160,6 +161,7 @@ class SalesRepositoryImpl implements SalesRepository {
         branchId: branchId,
         status: status,
         customerId: customerId,
+        search: search,
         limit: limit,
         offset: offset,
       );

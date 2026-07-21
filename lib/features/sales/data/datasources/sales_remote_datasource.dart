@@ -89,6 +89,7 @@ class SalesRemoteDataSource {
     String? branchId,
     String? status,
     String? customerId,
+    String? search,
     int limit = 50,
     int offset = 0,
   }) async {
@@ -98,6 +99,10 @@ class SalesRemoteDataSource {
     if (branchId != null) query = query.eq('branch_id', branchId);
     if (status != null) query = query.eq('status', status);
     if (customerId != null) query = query.eq('customer_id', customerId);
+    final term = search?.trim();
+    if (term != null && term.isNotEmpty) {
+      query = query.ilike('invoice_number', '%$term%');
+    }
     return query.order('created_at', ascending: false).limit(limit).range(offset, offset + limit - 1);
   }
 
