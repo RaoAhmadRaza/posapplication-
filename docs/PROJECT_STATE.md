@@ -108,6 +108,49 @@ controller/provider binding byte-identical.
 - Pre-existing bug seen in run log, untouched: LoginThrottleService.reset still throws -34018 from
   FlutterSecureStorage.delete on macOS despite the MacOsOptions fix. Needs its own slice.
 
+## UI Redesign — sales module (DONE 2026-07-21; detail in DECISIONS)
+Third design export, SAME design-system UUID again → tokens/theme/clay untouched; consumer-side reskin
+of all 11 sales screens per docs/UI_REDESIGN_PLAYBOOK.md. No router/domain/data/supabase edits; every
+controller/provider binding byte-identical. Sales was the last module still on light-only static
+`AppColors` — it now has **zero** static-colour references and works in Counter mode.
+- **Nav is module-aware.** Inside `/sales/*` bottom_nav_shell.dart renders the design's sales rail
+  (Point of sale / Sales history / Returns / Session) above a hairline, with the other modules below it;
+  narrow layouts get the same 4 tabs plus a Modules tab opening a sheet (the export has no way back out
+  of sales — that escape is ours). Same file/class/ctor, so router.dart is untouched.
+- **POS rebuilt**: 932-line page → composition root + `presentation/widgets/pos/` (product grid, search
+  bar, cart panel, cart sheet, banners). Catalogue is now a card grid (LayoutBuilder-derived aspect
+  ratio, never hand-picked) with category chips fed by the existing `categoriesProvider`; chips are
+  **hidden offline** because `CachedProduct` has no category. Desktop = grid + 360px cart column;
+  mobile = grid + floating View-cart bar → sheet. Offline gating, autosave, scan, stale-session badge
+  and every provider read lifted verbatim.
+- **Honest data**: close-session shows only what `close_cashier_session` returns (opening float / total
+  sales / transactions → expected in drawer + variance strip) — the design's cash/card/wallet split
+  does not exist in the backend and was NOT fabricated. History rows drop the design's "n items"
+  (not in the list query); invoice items render `description` + price × qty (invoice_items has no SKU
+  or product name); the return screen keeps its reason chips (the RPC requires a reason, the design has
+  none). Sync chip, bell and avatar are wired to the real widgets, not the export's hardcoded values.
+- New shared widgets: `app_qty_stepper.dart`, `app_filter_chips.dart`, `app_section_card.dart`,
+  `app_money_field.dart`. New sales widgets: `sales_scaffold.dart` (header + SalesHeader + avatar),
+  `sales_rise.dart`, `sales_empty_state.dart`. No new dependencies.
+- **Sales routes cross-fade** (2026-07-21, user-requested router edit): all 8 in-shell sales routes plus
+  `/sales/invoice/:invoiceId` moved to `pageBuilder` + the existing fade helper (renamed
+  `_authFadePage` → `_fadePage`, now shared with auth). The rail and header are the same on every sales
+  screen, so the default slide made static chrome appear to travel. Paths/builders/extra contracts
+  unchanged.
+- **Product-tile fixes after user screenshot review**: tile overflowed by 9px (guessed height constant),
+  the placeholder slot shrink-wrapped into a pill (`crossAxisAlignment.start` on a width-less
+  Container), and a missing `StockLevel` read as "Stock not cached" even online. Tile height is now the
+  literal sum of named row constants scaled by `MediaQuery.textScalerOf`; stock semantics split by
+  connectivity (online → out of stock + untappable, offline → uncached + still sellable). Covered by
+  `test/sales/product_tile_layout_test.dart` (8 tests; verified to fail 7/8 when the shortfall is
+  reintroduced).
+- GATE: `flutter analyze` 10 issues (was 13 — the 3 POS infos died with the rewrite), **0 new**; macOS
+  debug builds clean; `flutter test` = the same 2 failures as clean HEAD, re-proven in a detached
+  worktree this session.
+- **VERIFY OWED (on-device eyeball)**: 900px rail/bottom-bar boundary, grid column counts, dark mode on
+  all 11 screens, the offline pass (chips hidden, cash-only payment), cart sheet on a phone, and a
+  screenshot diff against the reference renders.
+
 ## Auth UX pass — Phases 1–4 DONE (2026-07-20)
 Interaction/UX depth pass on top of the LUMINA reskin (plan: friction→feedback→flow→a11y; delight
 Phase 5 deferred). Frontend + minimal flow/routing (user-approved exception to UI-only guardrail).
