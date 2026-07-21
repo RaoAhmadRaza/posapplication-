@@ -1,9 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
-import '../../../../core/design/app_colors.dart';
-import '../../../../core/design/app_spacing.dart';
-import '../../../../core/design/app_typography.dart';
+import '../../../../core/design/app_radius.dart';
+import '../../../../core/design/widgets/app_pill.dart';
 import '../controllers/connectivity_controller.dart';
 import '../controllers/sync_controller.dart';
 import 'sync_status_sheet.dart';
@@ -28,24 +27,21 @@ class SyncStatusWidget extends ConsumerWidget {
     final pending =
         ref.watch(outboxCountProvider).maybeWhen(data: (n) => n, orElse: () => 0);
 
-    final (IconData icon, String label, Color color) = !online
-        ? (Icons.cloud_off_rounded, 'Offline', AppColors.warning)
+    final (String label, AppPillTone tone) = !online
+        ? ('Offline', AppPillTone.neutral)
         : pending > 0
-            ? (Icons.cloud_upload_rounded, 'Pending($pending)', AppColors.accent)
-            : (Icons.cloud_done_rounded, 'Synced', AppColors.success);
+            ? ('$pending queued', AppPillTone.warning)
+            : ('Synced', AppPillTone.success);
 
-    return InkWell(
-      onTap: () => showSyncStatusSheet(context),
-      borderRadius: BorderRadius.circular(AppSpacing.sm),
-      child: Padding(
-        padding: const EdgeInsets.symmetric(horizontal: AppSpacing.sm),
-        child: Row(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Icon(icon, size: 16, color: color),
-            const SizedBox(width: AppSpacing.xs),
-            Text(label, style: AppTypography.caption.copyWith(color: color)),
-          ],
+    return Tooltip(
+      message: 'Sync status',
+      child: Semantics(
+        button: true,
+        label: 'Sync status: $label',
+        child: InkWell(
+          onTap: () => showSyncStatusSheet(context),
+          borderRadius: BorderRadius.circular(AppRadius.pill),
+          child: AppPill(label: label, tone: tone),
         ),
       ),
     );
