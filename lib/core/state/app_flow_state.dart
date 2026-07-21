@@ -2,7 +2,12 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import '../error/auth_failure.dart';
 
-const _storage = FlutterSecureStorage();
+// macOS: legacy keychain (not data-protection) so writes work under the sandbox
+// without a keychain-access-groups entitlement. Must match the other secure-
+// storage sites (see pin_service.dart). Fixes -34018.
+const _storage = FlutterSecureStorage(
+  mOptions: MacOsOptions(usesDataProtectionKeychain: false),
+);
 const _branchIdKey = 'current_branch_id';
 
 class EnvCheckState extends ChangeNotifier {

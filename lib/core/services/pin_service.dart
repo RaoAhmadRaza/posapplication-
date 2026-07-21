@@ -8,7 +8,14 @@ import '../../features/auth/data/repositories/pin_repository_impl.dart';
 import '../../features/auth/domain/repositories/pin_repository.dart';
 import '../supabase.dart';
 
-const _storage = FlutterSecureStorage();
+// macOS: use the legacy keychain, not the data-protection keychain, so writes
+// work under the app sandbox without a keychain-access-groups entitlement (that
+// entitlement needs a real signing cert — ad-hoc local builds reject it). This
+// is what fixes the -34018 "required entitlement isn't present" failures.
+// Keep this identical across all secure-storage sites or data splits keychains.
+const _storage = FlutterSecureStorage(
+  mOptions: MacOsOptions(usesDataProtectionKeychain: false),
+);
 const _pinHashBase = 'pin_hash';
 const _pinSaltBase = 'pin_salt';
 const _biometricsBase = 'biometrics_enabled';

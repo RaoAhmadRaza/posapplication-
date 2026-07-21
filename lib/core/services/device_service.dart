@@ -9,7 +9,12 @@ import '../../features/auth/data/repositories/device_repository_impl.dart';
 import '../../features/auth/domain/repositories/device_repository.dart';
 import '../supabase.dart';
 
-const _storage = FlutterSecureStorage();
+// macOS: legacy keychain (not data-protection) so writes work under the sandbox
+// without a keychain-access-groups entitlement. Must match the other secure-
+// storage sites (see pin_service.dart). Fixes -34018.
+const _storage = FlutterSecureStorage(
+  mOptions: MacOsOptions(usesDataProtectionKeychain: false),
+);
 const _deviceUuidKey = 'device_uuid';
 
 class DeviceService {
