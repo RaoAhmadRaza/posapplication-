@@ -3,28 +3,45 @@ import 'dart:typed_data';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
+import 'package:lucide_icons_flutter/lucide_icons.dart';
 import 'package:printing/printing.dart';
 import '../../../../core/design/app_colors.dart';
 import '../../../../core/design/app_radius.dart';
-import '../../../../core/design/app_spacing.dart';
-import '../../data/services/repair_label_pdf_service.dart';
 import '../../../../core/design/app_typography.dart';
 import '../../../../core/design/format.dart';
 import '../../../../core/design/widgets/app_button.dart';
 import '../../../../core/design/widgets/app_card.dart';
+import '../../../../core/design/widgets/app_checkbox.dart';
 import '../../../../core/design/widgets/app_inline_banner.dart';
+import '../../../../core/design/widgets/app_money_text.dart';
+import '../../../../core/design/widgets/app_pill.dart';
 import '../../../../core/design/widgets/app_text_field.dart';
+import '../../../../core/widgets/module_scaffold.dart';
 import '../../../../core/widgets/permission_gate.dart';
 import '../../../../core/widgets/signature_pad.dart';
-import '../../domain/usecases/signature_usecases.dart';
+import '../../data/services/repair_label_pdf_service.dart';
 import '../../domain/entities/repair_job.dart';
 import '../../domain/entities/repair_part.dart';
-import '../../domain/entities/repair_status_history.dart';
 import '../../domain/entities/repair_results.dart';
-import '../controllers/repair_jobs_controller.dart';
+import '../../domain/entities/repair_status_history.dart';
+import '../../domain/usecases/signature_usecases.dart';
 import '../controllers/repair_detail_provider.dart';
+import '../controllers/repair_jobs_controller.dart';
+import '../widgets/repair_job_card.dart';
 import '../widgets/repair_product_picker.dart';
+import '../widgets/repair_sheet.dart';
 import '../widgets/repair_status_ui.dart';
+import '../widgets/repair_timeline.dart';
+
+part 'repair_detail_cards.dart';
+part 'repair_detail_dialogs.dart';
+
+/// Body measure + gutters from the design export.
+const _kMaxContentWidth = 940.0;
+const _kGapWide = 16.0;
+const _kGapNarrow = 12.0;
+const _kCardPadWide = 22.0;
+const _kCardPadNarrow = 16.0;
 
 class RepairDetailPage extends ConsumerWidget {
   const RepairDetailPage({super.key, required this.repairId});
@@ -35,41 +52,49 @@ class RepairDetailPage extends ConsumerWidget {
     final async = ref.watch(repairJobDetailProvider(repairId));
     final techs = ref.watch(techniciansProvider).value ?? const <Technician>[];
     final techNames = {for (final t in techs) t.id: t.name};
+    final isWide = ModuleScaffold.isWideOf(context);
 
-    return Scaffold(
-      backgroundColor: AppColors.background,
-      appBar: AppBar(
-        backgroundColor: AppColors.background,
-        surfaceTintColor: AppColors.background,
-        leading: IconButton(
-          icon: const Icon(Icons.arrow_back_ios,
-              color: AppColors.accent, size: 20),
+    return ModuleScaffold(
+      title: 'Repair Job',
+      maxContentWidth: _kMaxContentWidth,
+      padding: EdgeInsets.fromLTRB(
+        isWide ? 28 : 14,
+        isWide ? 22 : 14,
+        isWide ? 28 : 14,
+        isWide ? 28 : 20,
+      ),
+      leading: Semantics(
+        button: true,
+        label: 'Back',
+        child: IconButton(
+          constraints: const BoxConstraints(minWidth: 44, minHeight: 44),
+          tooltip: 'Back',
+          icon: Icon(LucideIcons.arrowLeft, size: 20, color: context.lum.accent),
           onPressed: () => Navigator.of(context).pop(),
         ),
-        title: Text('Repair Job', style: AppTypography.headline),
       ),
-      body: SafeArea(
-        child: async.when(
-          loading: () => const Center(child: CircularProgressIndicator()),
-          error: (e, _) => Center(
-            child: Padding(
-              padding: const EdgeInsets.all(AppSpacing.screenPadding),
-              child: AppInlineBanner(
-                  message: 'Could not load this job.',
-                  type: BannerType.error),
-            ),
+      child: async.when(
+        loading: () => const Center(child: CircularProgressIndicator()),
+        error: (e, _) => const Center(
+          child: AppInlineBanner(
+            message: 'Could not load this job.',
+            type: BannerType.error,
           ),
-          data: (detail) =>
-              _Body(detail: detail, techs: techs, techNames: techNames),
         ),
+        data: (detail) =>
+            _Body(detail: detail, techs: techs, techNames: techNames),
       ),
     );
   }
 }
 
 class _Body extends ConsumerWidget {
-  const _Body(
-      {required this.detail, required this.techs, required this.techNames});
+  const _Body({
+    required this.detail,
+    required this.techs,
+    required this.techNames,
+  });
+
   final RepairDetail detail;
   final List<Technician> techs;
   final Map<String, String> techNames;
@@ -78,1197 +103,133 @@ class _Body extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
+    final isWide = ModuleScaffold.isWideOf(context);
+    final gap = isWide ? _kGapWide : _kGapNarrow;
     final closed = job.status == RepairStatus.delivered ||
         job.status == RepairStatus.cancelled;
-    return ListView(
-      padding: const EdgeInsets.all(AppSpacing.screenPadding),
-      children: [
-        _HeaderCard(job: job, techNames: techNames),
-        const SizedBox(height: AppSpacing.md),
-        if (detail.original != null || detail.claims.isNotEmpty) ...[
-          _WarrantyLinkCard(detail: detail),
-          const SizedBox(height: AppSpacing.md),
-        ],
-        if (!closed) _ActionsRow(job: job, techs: techs),
-        if (!closed) const SizedBox(height: AppSpacing.md),
-        _DiagnosisCard(job: job),
-        const SizedBox(height: AppSpacing.md),
-        _PartsCard(detail: detail, editable: !closed),
-        const SizedBox(height: AppSpacing.md),
-        _CostSummaryCard(detail: detail),
-        const SizedBox(height: AppSpacing.md),
-        _HistoryCard(history: detail.history),
-        const SizedBox(height: AppSpacing.xl),
-        // READY close: warranty claims close with NO charge (close_warranty_claim);
-        // normal jobs go through Close & Invoice. Branch on originalRepairId.
-        if (job.status == RepairStatus.ready)
-          PermissionGate(
-            module: 'repair',
-            action: 'update',
-            child: job.isWarrantyClaim
-                ? AppButton(
-                    label: 'Close (Warranty — no charge)',
-                    onPressed: () =>
-                        _openWarrantyCloseDialog(context, ref, detail),
-                    fullWidth: true,
-                  )
-                : AppButton(
-                    label: 'Close & Invoice',
-                    onPressed: () => _openCloseDialog(context, ref, detail),
-                    fullWidth: true,
-                  ),
-          ),
-        // Warranty claim: only on a DELIVERED job still within warranty.
-        if (job.status == RepairStatus.delivered &&
-            _inWarranty(job.warrantyExpiresAt))
-          PermissionGate(
-            module: 'repair',
-            action: 'create',
-            child: AppButton(
-              label: 'Warranty Claim',
-              variant: AppButtonVariant.tinted,
-              icon: Icons.verified_outlined,
-              onPressed: () => _openWarrantyClaimDialog(context, ref, job),
-              fullWidth: true,
-            ),
-          ),
-        if (job.invoiceId != null)
-          Padding(
-            padding: const EdgeInsets.only(top: AppSpacing.md),
-            child: Text('Invoiced • delivered',
-                textAlign: TextAlign.center,
-                style: AppTypography.footnote
-                    .copyWith(color: AppColors.success)),
-          ),
-        if (job.customerSignatureUrl != null)
-          Padding(
-            padding: const EdgeInsets.only(top: AppSpacing.sm),
-            child: AppButton(
-              label: 'View Signature',
-              variant: AppButtonVariant.tinted,
-              icon: Icons.draw_outlined,
-              onPressed: () =>
-                  _viewSignature(context, ref, job.customerSignatureUrl!),
-              fullWidth: true,
-            ),
-          ),
-      ],
-    );
-  }
-}
 
-/// Fetches a fresh short-lived signed URL for the stored signature path and
-/// renders it (never a public link). Read is gated by the storage RLS policy.
-Future<void> _viewSignature(
-    BuildContext context, WidgetRef ref, String path) async {
-  final (url, failure) =
-      await ref.read(repairSignatureUrlUseCaseProvider).call(path);
-  if (!context.mounted) return;
-  if (failure != null || url == null) {
-    ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-        content: Text(failure?.message ?? 'Could not load signature.')));
-    return;
-  }
-  await showDialog<void>(
-    context: context,
-    builder: (ctx) => AlertDialog(
-      backgroundColor: AppColors.background,
-      title: const Text('Customer Signature'),
-      content: Image.network(url, fit: BoxFit.contain),
-      actions: [
-        TextButton(
-            onPressed: () => Navigator.of(ctx).pop(),
-            child: const Text('Close')),
-      ],
-    ),
-  );
-}
-
-// ---- Header ----
-
-class _HeaderCard extends StatelessWidget {
-  const _HeaderCard({required this.job, required this.techNames});
-  final RepairJob job;
-  final Map<String, String> techNames;
-
-  @override
-  Widget build(BuildContext context) {
-    final device = [job.deviceBrand, job.deviceModel]
-        .where((e) => e != null && e.isNotEmpty)
-        .join(' ');
-    return AppCard(
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Row(
-            children: [
-              Expanded(
-                child: Text(job.jobNumber, style: AppTypography.title2),
-              ),
-              IconButton(
-                icon: const Icon(Icons.qr_code_2, color: AppColors.accent),
-                tooltip: 'Print device label',
-                onPressed: () => Printing.layoutPdf(
-                  onLayout: (_) => RepairLabelPdfService().generate(job),
-                ),
-              ),
-              RepairStatusBadge(status: job.status),
-            ],
-          ),
-          const SizedBox(height: AppSpacing.xs),
-          RepairPriorityChip(priority: job.priority),
-          const SizedBox(height: AppSpacing.md),
-          _kv('Device',
-              device.isEmpty ? job.deviceType : '${job.deviceType} · $device'),
-          if (job.serialNo != null) _kv('Serial', job.serialNo!),
-          if (job.imei != null) _kv('IMEI', job.imei!),
-          if (job.customerName != null) _kv('Customer', job.customerName!),
-          _kv(
-              'Technician',
-              job.technicianId == null
-                  ? 'Unassigned'
-                  : (techNames[job.technicianId] ?? 'Assigned')),
-          const SizedBox(height: AppSpacing.sm),
-          Text('Reported issue',
-              style: AppTypography.caption
-                  .copyWith(color: AppColors.textMuted)),
-          const SizedBox(height: 2),
-          Text(job.reportedIssue, style: AppTypography.body),
-        ],
-      ),
-    );
-  }
-
-  Widget _kv(String k, String v) => Padding(
-        padding: const EdgeInsets.symmetric(vertical: 2),
-        child: Row(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            SizedBox(
-              width: 90,
-              child: Text(k,
-                  style: AppTypography.footnote
-                      .copyWith(color: AppColors.textMuted)),
-            ),
-            Expanded(child: Text(v, style: AppTypography.footnote)),
-          ],
+    final left = <Widget>[
+      _HeaderCard(job: job, techNames: techNames),
+      if (closed)
+        _ClosedStrip(job: job)
+      else
+        _ActionsRow(detail: detail, techs: techs),
+      if (job.customerSignatureUrl != null)
+        AppButton(
+          label: 'View signature',
+          variant: AppButtonVariant.tinted,
+          size: AppButtonSize.sm,
+          icon: LucideIcons.signature,
+          onPressed: () =>
+              _viewSignature(context, ref, job.customerSignatureUrl!),
         ),
+      _DiagnosisCard(job: job),
+      _PartsCard(detail: detail, editable: !closed),
+    ];
+
+    final right = <Widget>[
+      _CostCard(detail: detail),
+      _WarrantyCard(detail: detail),
+      if (detail.original != null || detail.claims.isNotEmpty)
+        _WarrantyLinkCard(detail: detail),
+      _HistoryCard(history: detail.history, techNames: techNames),
+    ];
+
+    if (!isWide) {
+      return ListView(
+        children: _spaced([...left, ...right], gap),
       );
-}
+    }
 
-// ---- Actions (status + assign) ----
-
-class _ActionsRow extends ConsumerWidget {
-  const _ActionsRow({required this.job, required this.techs});
-  final RepairJob job;
-  final List<Technician> techs;
-
-  @override
-  Widget build(BuildContext context, WidgetRef ref) {
-    return Row(
-      children: [
-        Expanded(
-          child: PermissionGate(
-            module: 'repair',
-            action: 'update',
-            child: AppButton(
-              label: 'Change Status',
-              variant: AppButtonVariant.tinted,
-              onPressed: () => _openStatusSheet(context, ref, job),
-            ),
-          ),
-        ),
-        const SizedBox(width: AppSpacing.md),
-        Expanded(
-          child: PermissionGate(
-            module: 'repair',
-            action: 'update',
-            child: AppButton(
-              label: 'Assign',
-              variant: AppButtonVariant.tinted,
-              onPressed: () => _openAssignSheet(context, ref, job, techs),
-            ),
-          ),
-        ),
-      ],
-    );
-  }
-}
-
-Future<void> _openStatusSheet(
-    BuildContext context, WidgetRef ref, RepairJob job) async {
-  final target = await showModalBottomSheet<RepairStatus>(
-    context: context,
-    builder: (_) => SafeArea(
-      child: Column(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          const SizedBox(height: AppSpacing.md),
-          Text('Move to', style: AppTypography.title2),
-          const SizedBox(height: AppSpacing.sm),
-          for (final s in RepairStatus.values)
-            if (s != job.status)
-              ListTile(
-                title: Text(repairStatusLabels[s]!),
-                onTap: () => Navigator.of(context).pop(s),
-              ),
-        ],
-      ),
-    ),
-  );
-  if (target == null || !context.mounted) return;
-  final failure = await ref
-      .read(repairJobsProvider.notifier)
-      .changeStatus(repairId: job.id, newStatus: target);
-  if (!context.mounted) return;
-  if (failure != null) {
-    ScaffoldMessenger.of(context)
-        .showSnackBar(SnackBar(content: Text(failure.message)));
-  }
-}
-
-Future<void> _openAssignSheet(BuildContext context, WidgetRef ref,
-    RepairJob job, List<Technician> techs) async {
-  final tech = await showModalBottomSheet<Technician>(
-    context: context,
-    builder: (_) => SafeArea(
-      child: techs.isEmpty
-          ? const Padding(
-              padding: EdgeInsets.all(AppSpacing.xl),
-              child: Text('No users available to assign.'),
-            )
-          : Column(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                const SizedBox(height: AppSpacing.md),
-                Text('Assign Technician', style: AppTypography.title2),
-                const SizedBox(height: AppSpacing.sm),
-                for (final t in techs)
-                  ListTile(
-                    leading: const Icon(Icons.build_outlined),
-                    title: Text(t.name),
-                    onTap: () => Navigator.of(context).pop(t),
-                  ),
-              ],
-            ),
-    ),
-  );
-  if (tech == null || !context.mounted) return;
-  final failure = await ref
-      .read(repairJobsProvider.notifier)
-      .assignTechnician(job.id, tech.id);
-  if (!context.mounted) return;
-  if (failure != null) {
-    ScaffoldMessenger.of(context)
-        .showSnackBar(SnackBar(content: Text(failure.message)));
-  }
-}
-
-// ---- Diagnosis ----
-
-class _DiagnosisCard extends ConsumerWidget {
-  const _DiagnosisCard({required this.job});
-  final RepairJob job;
-
-  @override
-  Widget build(BuildContext context, WidgetRef ref) {
-    return AppCard(
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Row(
-            children: [
-              Expanded(
-                child: Text('Diagnosis', style: AppTypography.headline),
-              ),
-              PermissionGate(
-                module: 'repair',
-                action: 'update',
-                child: TextButton(
-                  onPressed: () => _openDiagnosisDialog(context, ref, job),
-                  child: Text(job.diagnosis == null ? 'Add' : 'Edit'),
-                ),
-              ),
-            ],
-          ),
-          Text(
-            job.diagnosis ?? 'No diagnosis recorded.',
-            style: AppTypography.footnote.copyWith(
-                color: job.diagnosis == null
-                    ? AppColors.textMuted
-                    : AppColors.textPrimary),
-          ),
-          if (job.estimatedCost != null) ...[
-            const SizedBox(height: AppSpacing.sm),
-            Text('Estimate: ${formatPkr(job.estimatedCost!)}',
-                style: AppTypography.footnote
-                    .copyWith(color: AppColors.textMuted)),
-          ],
-          if (job.customerApproved == true) ...[
-            const SizedBox(height: 2),
-            Text('Customer approved',
-                style: AppTypography.caption
-                    .copyWith(color: AppColors.success)),
-          ],
-        ],
-      ),
-    );
-  }
-}
-
-Future<void> _openDiagnosisDialog(
-    BuildContext context, WidgetRef ref, RepairJob job) async {
-  final diagCtrl = TextEditingController(text: job.diagnosis ?? '');
-  final estCtrl = TextEditingController(
-      text: job.estimatedCost == null ? '' : job.estimatedCost.toString());
-  var approved = job.customerApproved ?? false;
-
-  final saved = await showDialog<bool>(
-    context: context,
-    builder: (ctx) => StatefulBuilder(
-      builder: (ctx, setState) => AlertDialog(
-        backgroundColor: AppColors.background,
-        title: const Text('Diagnosis'),
-        content: SingleChildScrollView(
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              AppTextField(
-                  controller: diagCtrl,
-                  label: 'Diagnosis',
-                  prefixIcon: Icons.medical_services_outlined),
-              const SizedBox(height: AppSpacing.md),
-              AppTextField(
-                  controller: estCtrl,
-                  label: 'Estimated Cost',
-                  prefixIcon: Icons.attach_money,
-                  keyboardType:
-                      const TextInputType.numberWithOptions(decimal: true)),
-              const SizedBox(height: AppSpacing.sm),
-              CheckboxListTile(
-                contentPadding: EdgeInsets.zero,
-                value: approved,
-                onChanged: (v) => setState(() => approved = v ?? false),
-                title: const Text('Customer approved'),
-              ),
-            ],
-          ),
-        ),
-        actions: [
-          TextButton(
-              onPressed: () => Navigator.of(ctx).pop(false),
-              child: const Text('Cancel')),
-          TextButton(
-              onPressed: () => Navigator.of(ctx).pop(true),
-              child: const Text('Save')),
-        ],
-      ),
-    ),
-  );
-  if (saved != true || !context.mounted) return;
-  final failure =
-      await ref.read(repairJobsProvider.notifier).setDiagnosis(
-            repairId: job.id,
-            diagnosis: diagCtrl.text.trim(),
-            estimatedCost: double.tryParse(estCtrl.text.trim()),
-            customerApproved: approved,
-          );
-  if (!context.mounted) return;
-  if (failure != null) {
-    ScaffoldMessenger.of(context)
-        .showSnackBar(SnackBar(content: Text(failure.message)));
-  }
-}
-
-// ---- Parts ----
-
-class _PartsCard extends ConsumerWidget {
-  const _PartsCard({required this.detail, required this.editable});
-  final RepairDetail detail;
-  final bool editable;
-
-  @override
-  Widget build(BuildContext context, WidgetRef ref) {
-    final parts = detail.parts;
-    return AppCard(
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Row(
-            children: [
-              Expanded(child: Text('Parts', style: AppTypography.headline)),
-              if (editable)
-                PermissionGate(
-                  module: 'repair',
-                  action: 'update',
-                  child: TextButton.icon(
-                    onPressed: () =>
-                        _openAddPart(context, ref, detail.job.id),
-                    icon: const Icon(Icons.add, size: 18),
-                    label: const Text('Add'),
-                  ),
-                ),
-            ],
-          ),
-          if (parts.isEmpty)
-            Text('No parts used.',
-                style: AppTypography.footnote
-                    .copyWith(color: AppColors.textMuted))
-          else
-            for (final p in parts)
-              _PartRow(
-                part: p,
-                editable: editable,
-                onRemove: () => _removePart(context, ref, detail.job.id, p),
-              ),
-        ],
-      ),
-    );
-  }
-}
-
-class _PartRow extends StatelessWidget {
-  const _PartRow(
-      {required this.part, required this.editable, required this.onRemove});
-  final RepairPart part;
-  final bool editable;
-  final VoidCallback onRemove;
-
-  @override
-  Widget build(BuildContext context) {
-    return Padding(
-      padding: const EdgeInsets.symmetric(vertical: AppSpacing.xs),
+    return SingleChildScrollView(
       child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Expanded(
+            flex: 155,
             child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(part.productName ?? 'Part',
-                    style: AppTypography.footnote),
-                Text('${part.qty.toStringAsFixed(0)} × ${formatPkr(part.unitCost)}',
-                    style: AppTypography.caption
-                        .copyWith(color: AppColors.textMuted)),
-              ],
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: _spaced(left, gap),
             ),
           ),
-          Text(formatPkr(part.totalCost), style: AppTypography.footnote),
-          if (editable)
-            IconButton(
-              icon: const Icon(Icons.close,
-                  size: 18, color: AppColors.destructive),
-              onPressed: onRemove,
+          SizedBox(width: gap),
+          Expanded(
+            flex: 100,
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: _spaced(right, gap),
             ),
-        ],
-      ),
-    );
-  }
-}
-
-Future<void> _openAddPart(
-    BuildContext context, WidgetRef ref, String repairId) async {
-  final product = await showRepairProductPicker(context);
-  if (product == null || !context.mounted) return;
-  final qtyCtrl = TextEditingController(text: '1');
-  final confirmed = await showDialog<bool>(
-    context: context,
-    builder: (ctx) => AlertDialog(
-      backgroundColor: AppColors.background,
-      title: Text(product.name),
-      content: AppTextField(
-        controller: qtyCtrl,
-        label: 'Quantity',
-        prefixIcon: Icons.numbers,
-        keyboardType: const TextInputType.numberWithOptions(decimal: true),
-      ),
-      actions: [
-        TextButton(
-            onPressed: () => Navigator.of(ctx).pop(false),
-            child: const Text('Cancel')),
-        TextButton(
-            onPressed: () => Navigator.of(ctx).pop(true),
-            child: const Text('Add')),
-      ],
-    ),
-  );
-  if (confirmed != true || !context.mounted) return;
-  final qty = double.tryParse(qtyCtrl.text.trim()) ?? 0;
-  if (qty <= 0) return;
-  final failure = await ref.read(repairJobsProvider.notifier).addPart(
-        repairId: repairId,
-        productId: product.id,
-        qty: qty,
-      );
-  if (!context.mounted) return;
-  if (failure != null) {
-    ScaffoldMessenger.of(context)
-        .showSnackBar(SnackBar(content: Text(failure.message)));
-  }
-}
-
-Future<void> _removePart(BuildContext context, WidgetRef ref, String repairId,
-    RepairPart part) async {
-  final failure =
-      await ref.read(repairJobsProvider.notifier).removePart(repairId, part.id);
-  if (!context.mounted) return;
-  if (failure != null) {
-    ScaffoldMessenger.of(context)
-        .showSnackBar(SnackBar(content: Text(failure.message)));
-  }
-}
-
-// ---- Cost summary ----
-
-class _CostSummaryCard extends StatelessWidget {
-  const _CostSummaryCard({required this.detail});
-  final RepairDetail detail;
-
-  @override
-  Widget build(BuildContext context) {
-    return AppCard(
-      child: Column(
-        children: [
-          _row('Parts cost', formatPkr(detail.partsCost)),
-          if (detail.job.estimatedCost != null)
-            _row('Estimate', formatPkr(detail.job.estimatedCost!)),
-          if (detail.job.finalCost != null)
-            _row('Final (invoiced)', formatPkr(detail.job.finalCost!),
-                bold: true),
-        ],
-      ),
-    );
-  }
-
-  Widget _row(String k, String v, {bool bold = false}) => Padding(
-        padding: const EdgeInsets.symmetric(vertical: 3),
-        child: Row(
-          mainAxisAlignment: MainAxisAlignment.spaceBetween,
-          children: [
-            Text(k,
-                style: AppTypography.footnote
-                    .copyWith(color: AppColors.textMuted)),
-            Text(v,
-                style: AppTypography.footnote.copyWith(
-                    fontWeight: bold ? FontWeight.w700 : FontWeight.w400)),
-          ],
-        ),
-      );
-}
-
-// ---- History ----
-
-class _HistoryCard extends StatelessWidget {
-  const _HistoryCard({required this.history});
-  final List<RepairStatusHistory> history;
-
-  @override
-  Widget build(BuildContext context) {
-    return AppCard(
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Text('History', style: AppTypography.headline),
-          const SizedBox(height: AppSpacing.sm),
-          if (history.isEmpty)
-            Text('No status changes yet.',
-                style: AppTypography.footnote
-                    .copyWith(color: AppColors.textMuted))
-          else
-            for (final h in history)
-              Padding(
-                padding: const EdgeInsets.symmetric(vertical: 3),
-                child: Row(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    const Icon(Icons.circle, size: 8, color: AppColors.accent),
-                    const SizedBox(width: AppSpacing.sm),
-                    Expanded(
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Text(
-                            h.oldStatus == null
-                                ? repairStatusLabels[h.newStatus]!
-                                : '${repairStatusLabels[h.oldStatus]!} → ${repairStatusLabels[h.newStatus]!}',
-                            style: AppTypography.footnote,
-                          ),
-                          Text(_fmtDate(h.changedAt),
-                              style: AppTypography.caption
-                                  .copyWith(color: AppColors.textMuted)),
-                          if (h.notes != null && h.notes!.isNotEmpty)
-                            Text(h.notes!,
-                                style: AppTypography.caption
-                                    .copyWith(color: AppColors.textMuted)),
-                        ],
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-        ],
-      ),
-    );
-  }
-
-  static String _fmtDate(DateTime d) {
-    String two(int v) => v.toString().padLeft(2, '0');
-    return '${d.year}-${two(d.month)}-${two(d.day)} ${two(d.hour)}:${two(d.minute)}';
-  }
-}
-
-// ---- Close & Invoice ----
-
-Future<void> _openCloseDialog(
-    BuildContext context, WidgetRef ref, RepairDetail detail) async {
-  final labourCtrl = TextEditingController();
-  final taxCtrl = TextEditingController(text: '0');
-  final markupCtrl = TextEditingController(text: '0');
-  final paidCtrl = TextEditingController();
-  final warrantyCtrl = TextEditingController();
-  Uint8List? sigBytes;
-  String? error;
-  var saving = false;
-
-  await showDialog<void>(
-    context: context,
-    barrierDismissible: false,
-    builder: (ctx) => StatefulBuilder(
-      builder: (ctx, setState) => AlertDialog(
-        backgroundColor: AppColors.background,
-        title: const Text('Close & Invoice'),
-        content: SingleChildScrollView(
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              AppTextField(
-                  controller: labourCtrl,
-                  label: 'Labour Price',
-                  prefixIcon: Icons.attach_money,
-                  onChanged: (_) => setState(() {}),
-                  keyboardType:
-                      const TextInputType.numberWithOptions(decimal: true)),
-              const SizedBox(height: AppSpacing.sm),
-              AppTextField(
-                  controller: taxCtrl,
-                  label: 'Labour Tax %',
-                  prefixIcon: Icons.percent,
-                  onChanged: (_) => setState(() {}),
-                  keyboardType:
-                      const TextInputType.numberWithOptions(decimal: true)),
-              const SizedBox(height: AppSpacing.sm),
-              AppTextField(
-                  controller: markupCtrl,
-                  label: 'Parts Markup % (all parts)',
-                  prefixIcon: Icons.percent,
-                  onChanged: (_) => setState(() {}),
-                  keyboardType:
-                      const TextInputType.numberWithOptions(decimal: true)),
-              const SizedBox(height: AppSpacing.sm),
-              AppTextField(
-                  controller: paidCtrl,
-                  label: 'Paid Amount (blank = full)',
-                  prefixIcon: Icons.payments_outlined,
-                  onChanged: (_) => setState(() {}),
-                  keyboardType:
-                      const TextInputType.numberWithOptions(decimal: true)),
-              const SizedBox(height: AppSpacing.sm),
-              AppTextField(
-                  controller: warrantyCtrl,
-                  label: 'Warranty Days (optional)',
-                  prefixIcon: Icons.verified_outlined,
-                  keyboardType: TextInputType.number),
-              const SizedBox(height: AppSpacing.md),
-              _CloseBreakdown(
-                detail: detail,
-                labour: double.tryParse(labourCtrl.text.trim()) ?? 0,
-                labourTaxPct: double.tryParse(taxCtrl.text.trim()) ?? 0,
-                markupPct: double.tryParse(markupCtrl.text.trim()) ?? 0,
-                paidText: paidCtrl.text.trim(),
-              ),
-              const SizedBox(height: AppSpacing.sm),
-              Align(
-                alignment: Alignment.centerLeft,
-                child: TextButton.icon(
-                  onPressed: saving
-                      ? null
-                      : () async {
-                          final bytes = await captureSignature(ctx);
-                          if (bytes != null) {
-                            setState(() => sigBytes = bytes);
-                          }
-                        },
-                  icon: Icon(
-                    sigBytes != null
-                        ? Icons.check_circle
-                        : Icons.draw_outlined,
-                    color: sigBytes != null
-                        ? AppColors.success
-                        : AppColors.accent,
-                  ),
-                  label: Text(sigBytes != null
-                      ? 'Signature captured — tap to re-sign'
-                      : 'Capture customer signature (optional)'),
-                ),
-              ),
-              if (error != null) ...[
-                const SizedBox(height: AppSpacing.sm),
-                AppInlineBanner(message: error!, type: BannerType.error),
-              ],
-            ],
-          ),
-        ),
-        actions: [
-          TextButton(
-              onPressed: saving ? null : () => Navigator.of(ctx).pop(),
-              child: const Text('Cancel')),
-          TextButton(
-            onPressed: saving
-                ? null
-                : () async {
-                    final labour = double.tryParse(labourCtrl.text.trim()) ?? 0;
-                    if (labour < 0) {
-                      setState(() => error = 'Labour price is invalid.');
-                      return;
-                    }
-                    final markupPct =
-                        double.tryParse(markupCtrl.text.trim()) ?? 0;
-                    // p_parts_markup is keyed by product_id; one % → all parts.
-                    final markup = <String, double>{
-                      for (final p in detail.parts) p.productId: markupPct,
-                    };
-                    final paid = paidCtrl.text.trim().isEmpty
-                        ? _estimateGrand(detail, labour, taxCtrl, markupPct)
-                        : double.tryParse(paidCtrl.text.trim()) ?? 0;
-                    setState(() {
-                      saving = true;
-                      error = null;
-                    });
-                    // Upload the signature first (if captured); store its path.
-                    String? sigPath;
-                    if (sigBytes != null) {
-                      final (path, upErr) = await ref
-                          .read(uploadRepairSignatureUseCaseProvider)
-                          .call(detail.job.id, sigBytes!);
-                      if (upErr != null) {
-                        if (!ctx.mounted) return;
-                        setState(() {
-                          saving = false;
-                          error = upErr.message;
-                        });
-                        return;
-                      }
-                      sigPath = path;
-                    }
-                    final (result, failure) = await ref
-                        .read(repairJobsProvider.notifier)
-                        .closeJob(
-                          repairId: detail.job.id,
-                          labourPrice: labour,
-                          labourTaxPct:
-                              double.tryParse(taxCtrl.text.trim()) ?? 0,
-                          partsMarkup: markup,
-                          paidAmount: paid,
-                          warrantyDays:
-                              int.tryParse(warrantyCtrl.text.trim()),
-                          signatureUrl: sigPath,
-                        );
-                    if (!ctx.mounted) return;
-                    if (failure != null) {
-                      setState(() {
-                        saving = false;
-                        error = failure.message;
-                      });
-                      return;
-                    }
-                    Navigator.of(ctx).pop();
-                    _showInvoiced(context, result!);
-                  },
-            child: saving
-                ? const SizedBox(
-                    width: 18,
-                    height: 18,
-                    child: CircularProgressIndicator(strokeWidth: 2))
-                : const Text('Close'),
           ),
         ],
       ),
-    ),
-  );
-}
-
-/// Rough grand-total preview used only to default the Paid field to "full".
-double _estimateGrand(RepairDetail detail, double labour,
-    TextEditingController taxCtrl, double markupPct) {
-  final labourTax = labour * (double.tryParse(taxCtrl.text.trim()) ?? 0) / 100;
-  final partsSell = detail.parts
-      .fold<double>(0, (sum, p) => sum + p.unitCost * (1 + markupPct / 100) * p.qty);
-  return labour + labourTax + partsSell;
-}
-
-/// True when a delivered job is still under warranty (expiry date >= today).
-bool _inWarranty(DateTime? expiry) {
-  if (expiry == null) return false;
-  final now = DateTime.now();
-  return !expiry.isBefore(DateTime(now.year, now.month, now.day));
-}
-
-// ---- Warranty linkage (Task D) ----
-
-class _WarrantyLinkCard extends StatelessWidget {
-  const _WarrantyLinkCard({required this.detail});
-  final RepairDetail detail;
-
-  @override
-  Widget build(BuildContext context) {
-    return AppCard(
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Text('Warranty', style: AppTypography.headline),
-          const SizedBox(height: AppSpacing.xs),
-          if (detail.original != null)
-            _linkTile(context, 'Warranty claim of', detail.original!),
-          for (final c in detail.claims)
-            _linkTile(context, 'Warranty claim', c),
-        ],
-      ),
     );
   }
 
-  Widget _linkTile(BuildContext context, String label, RepairLink link) {
-    return InkWell(
-      onTap: () => context.push('/repair/${link.id}'),
-      child: Padding(
-        padding: const EdgeInsets.symmetric(vertical: AppSpacing.xs),
-        child: Row(
-          children: [
-            const Icon(Icons.link, size: 16, color: AppColors.accent),
-            const SizedBox(width: AppSpacing.sm),
-            Expanded(
-              child: Text('$label ${link.jobNumber}',
-                  style: AppTypography.footnote
-                      .copyWith(color: AppColors.accent)),
+  /// Inserts a fixed gap between children without trailing whitespace.
+  static List<Widget> _spaced(List<Widget> items, double gap) => [
+        for (var i = 0; i < items.length; i++) ...[
+          if (i > 0) SizedBox(height: gap),
+          items[i],
+        ],
+      ];
+}
+
+/// Clay card with the design's display-face title and an optional right control.
+class _ActionsRow extends ConsumerWidget {
+  const _ActionsRow({required this.detail, required this.techs});
+  final RepairDetail detail;
+  final List<Technician> techs;
+
+  RepairJob get job => detail.job;
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    // READY close: warranty claims close with NO charge (close_warranty_claim);
+    // normal jobs go through Close & Invoice. Branch on originalRepairId.
+    final canCloseAndInvoice =
+        job.status == RepairStatus.ready && !job.isWarrantyClaim;
+
+    return Wrap(
+      spacing: 10,
+      runSpacing: 10,
+      children: [
+        if (canCloseAndInvoice)
+          PermissionGate(
+            module: 'repair',
+            action: 'update',
+            child: AppButton(
+              label: 'Close & invoice',
+              icon: LucideIcons.receipt,
+              size: AppButtonSize.sm,
+              onPressed: () => _openCloseDialog(context, ref, detail),
             ),
-            const Icon(Icons.chevron_right,
-                size: 18, color: AppColors.separator),
-          ],
-        ),
-      ),
-    );
-  }
-}
-
-// ---- Live close breakdown (Task A) ----
-
-class _CloseBreakdown extends StatelessWidget {
-  const _CloseBreakdown({
-    required this.detail,
-    required this.labour,
-    required this.labourTaxPct,
-    required this.markupPct,
-    required this.paidText,
-  });
-  final RepairDetail detail;
-  final double labour;
-  final double labourTaxPct;
-  final double markupPct;
-  final String paidText;
-
-  @override
-  Widget build(BuildContext context) {
-    final partsSell = detail.parts.fold<double>(
-        0, (sum, p) => sum + p.unitCost * (1 + markupPct / 100) * p.qty);
-    final labourTax = labour * labourTaxPct / 100;
-    // Client estimate excludes parts output tax (resolved server-side at close).
-    final estTotal = labour + partsSell + labourTax;
-    final paid = paidText.isEmpty ? estTotal : (double.tryParse(paidText) ?? 0);
-    final balance = estTotal - paid;
-
-    return Container(
-      padding: const EdgeInsets.all(AppSpacing.md),
-      decoration: BoxDecoration(
-        color: AppColors.fieldFill,
-        borderRadius: BorderRadius.circular(AppRadius.card),
-      ),
-      child: Column(
-        children: [
-          _row('Labour', formatPkr(labour)),
-          _row('Parts (with markup)', formatPkr(partsSell)),
-          _row('Labour tax', formatPkr(labourTax)),
-          const Divider(height: AppSpacing.md),
-          _row('Estimated total', formatPkr(estTotal), bold: true),
-          if (balance > 0.005)
-            _row('Balance (to A/R)', formatPkr(balance)),
-          const SizedBox(height: AppSpacing.xs),
-          Align(
-            alignment: Alignment.centerLeft,
-            child: Text('Parts output tax is added at close.',
-                style:
-                    AppTypography.caption.copyWith(color: AppColors.textMuted)),
           ),
-        ],
-      ),
-    );
-  }
-
-  Widget _row(String k, String v, {bool bold = false}) => Padding(
-        padding: const EdgeInsets.symmetric(vertical: 2),
-        child: Row(
-          mainAxisAlignment: MainAxisAlignment.spaceBetween,
-          children: [
-            Text(k,
-                style: AppTypography.footnote
-                    .copyWith(color: AppColors.textMuted)),
-            Text(v,
-                style: AppTypography.footnote.copyWith(
-                    fontWeight: bold ? FontWeight.w700 : FontWeight.w400)),
-          ],
-        ),
-      );
-}
-
-// ---- Warranty claim OPEN (Task C) ----
-
-Future<void> _openWarrantyClaimDialog(
-    BuildContext context, WidgetRef ref, RepairJob job) async {
-  final issueCtrl = TextEditingController();
-  String? error;
-  var saving = false;
-
-  await showDialog<void>(
-    context: context,
-    barrierDismissible: false,
-    builder: (ctx) => StatefulBuilder(
-      builder: (ctx, setState) => AlertDialog(
-        backgroundColor: AppColors.background,
-        title: const Text('Warranty Claim'),
-        content: SingleChildScrollView(
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              Text(
-                  'Opens a new no-charge repair linked to ${job.jobNumber}. '
-                  'This job moves to Warranty Claim.',
-                  style: AppTypography.caption
-                      .copyWith(color: AppColors.textMuted)),
-              const SizedBox(height: AppSpacing.md),
-              AppTextField(
-                  controller: issueCtrl,
-                  label: 'Reported issue',
-                  prefixIcon: Icons.report_problem_outlined),
-              if (error != null) ...[
-                const SizedBox(height: AppSpacing.sm),
-                AppInlineBanner(message: error!, type: BannerType.error),
-              ],
-            ],
+        PermissionGate(
+          module: 'repair',
+          action: 'update',
+          child: AppButton(
+            label: 'Change status',
+            variant: canCloseAndInvoice
+                ? AppButtonVariant.tinted
+                : AppButtonVariant.filled,
+            size: AppButtonSize.sm,
+            onPressed: () => _openStatusSheet(context, ref, job),
           ),
         ),
-        actions: [
-          TextButton(
-              onPressed: saving ? null : () => Navigator.of(ctx).pop(),
-              child: const Text('Cancel')),
-          TextButton(
-            onPressed: saving
-                ? null
-                : () async {
-                    final issue = issueCtrl.text.trim();
-                    if (issue.isEmpty) {
-                      setState(() => error = 'Describe the reported issue.');
-                      return;
-                    }
-                    setState(() {
-                      saving = true;
-                      error = null;
-                    });
-                    final (result, failure) = await ref
-                        .read(repairJobsProvider.notifier)
-                        .openWarrantyClaim(
-                            originalRepairId: job.id, reportedIssue: issue);
-                    if (!ctx.mounted) return;
-                    if (failure != null) {
-                      setState(() {
-                        saving = false;
-                        error = failure.message;
-                      });
-                      return;
-                    }
-                    Navigator.of(ctx).pop();
-                    context.push('/repair/${result!.claimRepairId}');
-                  },
-            child: saving
-                ? const SizedBox(
-                    width: 18,
-                    height: 18,
-                    child: CircularProgressIndicator(strokeWidth: 2))
-                : const Text('Open Claim'),
+        PermissionGate(
+          module: 'repair',
+          action: 'update',
+          child: AppButton(
+            label: job.technicianId == null ? 'Assign' : 'Reassign',
+            variant: AppButtonVariant.tinted,
+            size: AppButtonSize.sm,
+            icon: LucideIcons.userPlus,
+            onPressed: () => _openAssignSheet(context, ref, job, techs),
           ),
-        ],
-      ),
-    ),
-  );
-}
-
-// ---- Warranty claim CLOSE — no charge (Task C) ----
-
-Future<void> _openWarrantyCloseDialog(
-    BuildContext context, WidgetRef ref, RepairDetail detail) async {
-  final warrantyCtrl = TextEditingController();
-  Uint8List? sigBytes;
-  String? error;
-  var saving = false;
-
-  await showDialog<void>(
-    context: context,
-    barrierDismissible: false,
-    builder: (ctx) => StatefulBuilder(
-      builder: (ctx, setState) => AlertDialog(
-        backgroundColor: AppColors.background,
-        title: const Text('Close (Warranty — no charge)'),
-        content: SingleChildScrollView(
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              AppInlineBanner(
-                  message: 'No charge. Parts cost '
-                      '(${formatPkr(detail.partsCost)}) is booked to warranty '
-                      'expense — the customer is not invoiced.',
-                  type: BannerType.info),
-              const SizedBox(height: AppSpacing.md),
-              AppTextField(
-                  controller: warrantyCtrl,
-                  label: 'Warranty Days (optional)',
-                  prefixIcon: Icons.verified_outlined,
-                  keyboardType: TextInputType.number),
-              const SizedBox(height: AppSpacing.sm),
-              Align(
-                alignment: Alignment.centerLeft,
-                child: TextButton.icon(
-                  onPressed: saving
-                      ? null
-                      : () async {
-                          final bytes = await captureSignature(ctx);
-                          if (bytes != null) {
-                            setState(() => sigBytes = bytes);
-                          }
-                        },
-                  icon: Icon(
-                    sigBytes != null
-                        ? Icons.check_circle
-                        : Icons.draw_outlined,
-                    color: sigBytes != null
-                        ? AppColors.success
-                        : AppColors.accent,
-                  ),
-                  label: Text(sigBytes != null
-                      ? 'Signature captured — tap to re-sign'
-                      : 'Capture customer signature (optional)'),
-                ),
-              ),
-              if (error != null) ...[
-                const SizedBox(height: AppSpacing.sm),
-                AppInlineBanner(message: error!, type: BannerType.error),
-              ],
-            ],
-          ),
-        ),
-        actions: [
-          TextButton(
-              onPressed: saving ? null : () => Navigator.of(ctx).pop(),
-              child: const Text('Cancel')),
-          TextButton(
-            onPressed: saving
-                ? null
-                : () async {
-                    setState(() {
-                      saving = true;
-                      error = null;
-                    });
-                    String? sigPath;
-                    if (sigBytes != null) {
-                      final (path, upErr) = await ref
-                          .read(uploadRepairSignatureUseCaseProvider)
-                          .call(detail.job.id, sigBytes!);
-                      if (upErr != null) {
-                        if (!ctx.mounted) return;
-                        setState(() {
-                          saving = false;
-                          error = upErr.message;
-                        });
-                        return;
-                      }
-                      sigPath = path;
-                    }
-                    final (result, failure) = await ref
-                        .read(repairJobsProvider.notifier)
-                        .closeWarrantyClaim(
-                          repairId: detail.job.id,
-                          warrantyDays:
-                              int.tryParse(warrantyCtrl.text.trim()),
-                          signatureUrl: sigPath,
-                        );
-                    if (!ctx.mounted) return;
-                    if (failure != null) {
-                      setState(() {
-                        saving = false;
-                        error = failure.message;
-                      });
-                      return;
-                    }
-                    Navigator.of(ctx).pop();
-                    if (!context.mounted) return;
-                    ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-                        content: Text(
-                            'Warranty repair delivered — no charge (cost '
-                            '${formatPkr(result!.warrantyCost)}).')));
-                    context.go('/repair');
-                  },
-            child: saving
-                ? const SizedBox(
-                    width: 18,
-                    height: 18,
-                    child: CircularProgressIndicator(strokeWidth: 2))
-                : const Text('Close (no charge)'),
-          ),
-        ],
-      ),
-    ),
-  );
-}
-
-void _showInvoiced(BuildContext context, RepairCloseResult result) {
-  showDialog<void>(
-    context: context,
-    builder: (ctx) => AlertDialog(
-      backgroundColor: AppColors.background,
-      title: const Text('Job Delivered'),
-      content: Column(
-        mainAxisSize: MainAxisSize.min,
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Text('Invoice ${result.invoiceNumber}',
-              style: AppTypography.headline),
-          const SizedBox(height: AppSpacing.xs),
-          Text('Total ${formatPkr(result.grandTotal)}',
-              style: AppTypography.footnote
-                  .copyWith(color: AppColors.textMuted)),
-        ],
-      ),
-      actions: [
-        TextButton(
-          onPressed: () {
-            Navigator.of(ctx).pop();
-            context.go('/repair');
-          },
-          child: const Text('Done'),
-        ),
-        TextButton(
-          onPressed: () {
-            Navigator.of(ctx).pop();
-            context.go('/sales/invoice/${result.invoiceId}');
-          },
-          child: const Text('View Invoice'),
         ),
       ],
-    ),
-  );
+    );
+  }
 }
+
+/// Replaces the actions row once the job can no longer move.
