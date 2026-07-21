@@ -95,6 +95,9 @@ class LumColors extends ThemeExtension<LumColors> {
     required this.danger,
     required this.dangerSoft,
     required this.dangerText,
+    required this.transit,
+    required this.transitSoft,
+    required this.transitText,
     required this.g100,
     required this.g200,
     required this.g300,
@@ -129,6 +132,11 @@ class LumColors extends ThemeExtension<LumColors> {
   final Color danger;
   final Color dangerSoft;
   final Color dangerText;
+
+  /// Violet "in transit" family — transfers, shipments, warranty repairs.
+  final Color transit;
+  final Color transitSoft;
+  final Color transitText;
   final Color g100;
   final Color g200;
   final Color g300;
@@ -163,6 +171,9 @@ class LumColors extends ThemeExtension<LumColors> {
     danger: Color(0xFFFF453A),
     dangerSoft: Color(0xFFFFE7E4),
     dangerText: Color(0xFFD32B26),
+    transit: Color(0xFF8B5CF6),
+    transitSoft: Color(0xFFEEE9FE),
+    transitText: Color(0xFF6A34E0),
     g100: Color(0xFFF1F1F5),
     g200: Color(0xFFE7E5DD),
     g300: Color(0xFFD6D3C9),
@@ -199,6 +210,9 @@ class LumColors extends ThemeExtension<LumColors> {
     danger: Color(0xFFFF6961),
     dangerSoft: Color(0x26FF6961),
     dangerText: Color(0xFFFF9A94),
+    transit: Color(0xFFA07CFF),
+    transitSoft: Color(0x26A07CFF),
+    transitText: Color(0xFFC5AEFF),
     g100: Color(0xFF1F2535),
     g200: Color(0xFF2A3142),
     g300: Color(0xFF38415A),

@@ -5,7 +5,7 @@ import '../app_typography.dart';
 
 /// Semantic tone of an [AppPill]. Maps to a (background, foreground) pair from
 /// the active theme — see the LUMINA design system's Pill tone table.
-enum AppPillTone { neutral, lumen, success, warning, danger }
+enum AppPillTone { neutral, lumen, success, warning, danger, transit }
 
 /// Small status pill: a dot plus a label on a soft tinted background.
 ///
@@ -32,6 +32,7 @@ class AppPill extends StatelessWidget {
       AppPillTone.success => (lum.successSoft, lum.successText),
       AppPillTone.warning => (lum.warningSoft, lum.warningText),
       AppPillTone.danger => (lum.dangerSoft, lum.dangerText),
+      AppPillTone.transit => (lum.transitSoft, lum.transitText),
     };
 
     return Container(
