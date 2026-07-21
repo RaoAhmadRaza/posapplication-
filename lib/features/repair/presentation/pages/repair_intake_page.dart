@@ -1,18 +1,25 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
+import 'package:lucide_icons_flutter/lucide_icons.dart';
 import '../../../../core/design/app_colors.dart';
-import '../../../../core/design/app_spacing.dart';
+import '../../../../core/design/app_motion.dart';
+import '../../../../core/design/app_radius.dart';
 import '../../../../core/design/app_typography.dart';
+import '../../../../core/design/clay.dart';
 import '../../../../core/design/widgets/app_button.dart';
 import '../../../../core/design/widgets/app_inline_banner.dart';
+import '../../../../core/design/widgets/app_money_field.dart';
+import '../../../../core/design/widgets/app_section_card.dart';
 import '../../../../core/design/widgets/app_text_field.dart';
+import '../../../../core/widgets/module_scaffold.dart';
 import '../../../auth/presentation/controllers/branch_controller.dart';
 import '../../../customers/domain/entities/customer.dart';
 import '../../domain/entities/repair_job.dart';
 import '../../data/models/repair_job_model.dart';
 import '../controllers/repair_jobs_controller.dart';
 import '../widgets/repair_customer_picker.dart';
+import '../widgets/repair_job_card.dart';
 import '../widgets/repair_status_ui.dart';
 
 class RepairIntakePage extends ConsumerStatefulWidget {
@@ -56,6 +63,13 @@ class _RepairIntakePageState extends ConsumerState<RepairIntakePage> {
     final c = await showRepairCustomerPicker(context);
     if (c != null) setState(() => _customer = c);
   }
+
+  /// The three inputs the submit path insists on; gates the primary button so
+  /// the failure is visible before the tap rather than after it.
+  bool get _canSubmit =>
+      _customer != null &&
+      _deviceTypeCtrl.text.trim().isNotEmpty &&
+      _issueCtrl.text.trim().isNotEmpty;
 
   Future<void> _submit() async {
     final branch = ref.read(currentBranchProvider);
@@ -112,165 +126,423 @@ class _RepairIntakePageState extends ConsumerState<RepairIntakePage> {
 
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
-      backgroundColor: AppColors.background,
-      appBar: AppBar(
-        backgroundColor: AppColors.background,
-        surfaceTintColor: AppColors.background,
-        leading: IconButton(
-          icon: const Icon(Icons.arrow_back_ios,
-              color: AppColors.accent, size: 20),
-          onPressed: () => Navigator.of(context).pop(),
-        ),
-        title: Text('New Repair Job', style: AppTypography.headline),
+    final isWide = ModuleScaffold.isWideOf(context);
+
+    return ModuleScaffold(
+      title: 'New Repair Job',
+      leading: _BackButton(onTap: () => Navigator.of(context).maybePop()),
+      maxContentWidth: 620,
+      padding: EdgeInsets.symmetric(
+        horizontal: isWide ? 28 : 16,
+        vertical: isWide ? 24 : 16,
       ),
-      body: SafeArea(
-        child: ListView(
-          padding: const EdgeInsets.all(AppSpacing.screenPadding),
-          children: [
-            _label('Customer'),
-            const SizedBox(height: AppSpacing.xs),
-            InkWell(
-              onTap: _pickCustomer,
-              borderRadius: BorderRadius.circular(12),
-              child: Container(
-                padding: const EdgeInsets.all(AppSpacing.base),
-                decoration: BoxDecoration(
-                  color: AppColors.fieldFill,
-                  borderRadius: BorderRadius.circular(12),
-                  border: Border.all(color: AppColors.separator, width: 0.5),
+      child: ListView(
+        children: [
+          _FieldLabel(text: 'Customer'),
+          _CustomerControl(customer: _customer, onPick: _pickCustomer),
+          const SizedBox(height: 16),
+          AppSectionCard(
+            eyebrow: 'Device',
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                AppTextField(
+                  controller: _deviceTypeCtrl,
+                  label: 'Device type',
+                  prefixIcon: LucideIcons.smartphone,
+                  hint: 'e.g. Smartphone, Laptop',
+                  onChanged: (_) => setState(() {}),
                 ),
-                child: Row(
-                  children: [
-                    const Icon(Icons.person_outline,
-                        color: AppColors.textMuted),
-                    const SizedBox(width: AppSpacing.md),
-                    Expanded(
-                      child: Text(
-                        _customer?.name ?? 'Select customer',
-                        style: AppTypography.body.copyWith(
-                          color: _customer == null
-                              ? AppColors.textMuted
-                              : AppColors.textPrimary,
-                        ),
-                      ),
-                    ),
-                    const Icon(Icons.chevron_right, color: AppColors.textMuted),
-                  ],
+                const SizedBox(height: 16),
+                AppTextField(
+                  controller: _brandCtrl,
+                  label: 'Brand (optional)',
+                  prefixIcon: LucideIcons.tag,
                 ),
-              ),
+                const SizedBox(height: 16),
+                AppTextField(
+                  controller: _modelCtrl,
+                  label: 'Model (optional)',
+                  prefixIcon: LucideIcons.cpu,
+                ),
+                const SizedBox(height: 16),
+                AppTextField(
+                  controller: _serialCtrl,
+                  label: 'Serial no. (optional)',
+                  prefixIcon: LucideIcons.hash,
+                ),
+                const SizedBox(height: 16),
+                AppTextField(
+                  controller: _imeiCtrl,
+                  label: 'IMEI (optional)',
+                  prefixIcon: LucideIcons.barcode,
+                ),
+              ],
             ),
-            const SizedBox(height: AppSpacing.md),
-            AppTextField(
-                controller: _deviceTypeCtrl,
-                label: 'Device Type',
-                prefixIcon: Icons.devices_other,
-                hint: 'e.g. Smartphone, Laptop'),
-            const SizedBox(height: AppSpacing.md),
-            AppTextField(
-                controller: _brandCtrl,
-                label: 'Brand (optional)',
-                prefixIcon: Icons.branding_watermark_outlined),
-            const SizedBox(height: AppSpacing.md),
-            AppTextField(
-                controller: _modelCtrl,
-                label: 'Model (optional)',
-                prefixIcon: Icons.phone_iphone),
-            const SizedBox(height: AppSpacing.md),
-            AppTextField(
-                controller: _serialCtrl,
-                label: 'Serial No. (optional)',
-                prefixIcon: Icons.tag),
-            const SizedBox(height: AppSpacing.md),
-            AppTextField(
-                controller: _imeiCtrl,
-                label: 'IMEI (optional)',
-                prefixIcon: Icons.qr_code),
-            const SizedBox(height: AppSpacing.md),
-            AppTextField(
-                controller: _issueCtrl,
-                label: 'Reported Issue',
-                prefixIcon: Icons.report_problem_outlined),
-            const SizedBox(height: AppSpacing.md),
-            _label('Priority'),
-            const SizedBox(height: AppSpacing.xs),
-            _PrioritySelector(
-              value: _priority,
-              onChanged: (p) => setState(() => _priority = p),
+          ),
+          const SizedBox(height: 16),
+          AppSectionCard(
+            eyebrow: 'Issue',
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                _MultilineField(
+                  controller: _issueCtrl,
+                  label: 'Reported issue',
+                  hint: 'What the customer reports',
+                  onChanged: (_) => setState(() {}),
+                ),
+                const SizedBox(height: 16),
+                _FieldLabel(text: 'Priority'),
+                _PrioritySelector(
+                  value: _priority,
+                  onChanged: (p) => setState(() => _priority = p),
+                ),
+              ],
             ),
-            const SizedBox(height: AppSpacing.md),
-            AppTextField(
-                controller: _estimateCtrl,
-                label: 'Estimated Cost (optional)',
-                prefixIcon: Icons.attach_money,
-                keyboardType:
-                    const TextInputType.numberWithOptions(decimal: true)),
-            const SizedBox(height: AppSpacing.md),
-            // ponytail: signature captured as a URL only; on-device capture pad
-            // deferred until a repair signature widget is requested.
-            AppTextField(
-                controller: _signatureCtrl,
-                label: 'Signature URL (optional)',
-                prefixIcon: Icons.draw_outlined),
-            const SizedBox(height: AppSpacing.md),
-            AppTextField(
-                controller: _notesCtrl,
-                label: 'Notes (optional)',
-                prefixIcon: Icons.notes),
-            if (_error != null) ...[
-              const SizedBox(height: AppSpacing.md),
-              AppInlineBanner(message: _error!, type: BannerType.error),
-            ],
-            const SizedBox(height: AppSpacing.xl),
-            AppButton(
-              label: 'Create Job',
-              onPressed: _saving ? null : _submit,
-              loading: _saving,
-              fullWidth: true,
+          ),
+          const SizedBox(height: 16),
+          AppSectionCard(
+            eyebrow: 'Estimate & notes',
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                AppMoneyField(
+                  controller: _estimateCtrl,
+                  label: 'Estimated cost (optional)',
+                ),
+                const SizedBox(height: 16),
+                // ponytail: signature captured as a URL only; on-device capture
+                // pad deferred until a repair signature widget is requested.
+                AppTextField(
+                  controller: _signatureCtrl,
+                  label: 'Signature URL (optional)',
+                  prefixIcon: LucideIcons.penLine,
+                ),
+                const SizedBox(height: 16),
+                _MultilineField(
+                  controller: _notesCtrl,
+                  label: 'Notes (optional)',
+                  hint: 'Anything the technician should know',
+                ),
+              ],
             ),
+          ),
+          if (_error != null) ...[
+            const SizedBox(height: 16),
+            AppInlineBanner(message: _error!, type: BannerType.error),
           ],
-        ),
+          const SizedBox(height: 20),
+          _Footer(
+            isWide: isWide,
+            saving: _saving,
+            canSubmit: _canSubmit,
+            onCancel: () => Navigator.of(context).maybePop(),
+            onSubmit: _submit,
+          ),
+          const SizedBox(height: 24),
+        ],
       ),
     );
   }
-
-  Widget _label(String text) => Text(text,
-      style: AppTypography.footnote.copyWith(
-          color: AppColors.textMuted, fontWeight: FontWeight.w600));
 }
 
+/// Cancel + Create job: side by side on wide, primary stacked on top of the
+/// secondary (column-reverse) on narrow.
+class _Footer extends StatelessWidget {
+  const _Footer({
+    required this.isWide,
+    required this.saving,
+    required this.canSubmit,
+    required this.onCancel,
+    required this.onSubmit,
+  });
+
+  final bool isWide;
+  final bool saving;
+  final bool canSubmit;
+  final VoidCallback onCancel;
+  final VoidCallback onSubmit;
+
+  @override
+  Widget build(BuildContext context) {
+    final cancel = AppButton(
+      label: 'Cancel',
+      variant: AppButtonVariant.tinted,
+      fullWidth: !isWide,
+      onPressed: saving ? null : onCancel,
+    );
+    final create = AppButton(
+      label: 'Create job',
+      icon: LucideIcons.check,
+      loading: saving,
+      fullWidth: !isWide,
+      onPressed: canSubmit && !saving ? onSubmit : null,
+    );
+
+    if (isWide) {
+      return Row(
+        children: [
+          Expanded(child: cancel),
+          const SizedBox(width: 12),
+          Expanded(child: create),
+        ],
+      );
+    }
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [create, const SizedBox(height: 12), cancel],
+    );
+  }
+}
+
+/// The design's field label: 13/w600, g700, 8px above its control.
+class _FieldLabel extends StatelessWidget {
+  const _FieldLabel({required this.text});
+
+  final String text;
+
+  @override
+  Widget build(BuildContext context) => Padding(
+        padding: const EdgeInsets.only(left: 2, bottom: 8),
+        child: Text(
+          text,
+          style: AppTypography.fieldLabel.copyWith(color: context.lum.g700),
+        ),
+      );
+}
+
+/// Empty → a full-width inset "Select a customer" well. Picked → a soft clay
+/// tile with the customer's initials, name and a ghost Change button.
+class _CustomerControl extends StatelessWidget {
+  const _CustomerControl({required this.customer, required this.onPick});
+
+  final Customer? customer;
+  final VoidCallback onPick;
+
+  @override
+  Widget build(BuildContext context) {
+    final lum = context.lum;
+    final picked = customer;
+
+    if (picked == null) {
+      return Semantics(
+        button: true,
+        label: 'Select a customer',
+        child: InkWell(
+          onTap: onPick,
+          borderRadius: BorderRadius.circular(AppRadius.md),
+          child: ClayContainer(
+            variant: ClayVariant.inset,
+            color: lum.surface2,
+            borderRadius: AppRadius.md,
+            isDark: lum.isDark,
+            height: 50,
+            padding: const EdgeInsets.symmetric(horizontal: 14),
+            child: Row(
+              children: [
+                Icon(LucideIcons.userPlus, size: 18, color: lum.g400),
+                const SizedBox(width: 10),
+                Expanded(
+                  child: Text(
+                    'Select a customer',
+                    style: AppTypography.fieldText.copyWith(color: lum.g500),
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ),
+      );
+    }
+
+    return ClayContainer(
+      variant: ClayVariant.soft,
+      color: lum.surface,
+      borderRadius: AppRadius.md,
+      isDark: lum.isDark,
+      height: 56,
+      padding: const EdgeInsets.symmetric(horizontal: 12),
+      child: Row(
+        children: [
+          RepairTechAvatar(name: picked.name, size: 36),
+          const SizedBox(width: 12),
+          Expanded(
+            child: Text(
+              picked.name,
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              style: AppTypography.label.copyWith(
+                fontSize: 15,
+                color: lum.textPrimary,
+              ),
+            ),
+          ),
+          AppButton(
+            label: 'Change',
+            variant: AppButtonVariant.plain,
+            size: AppButtonSize.sm,
+            onPressed: onPick,
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+/// Four equal 44-high priority chips. Selected reads as an accent-soft pill
+/// inside an accent ring; the rest sit in inset wells.
 class _PrioritySelector extends StatelessWidget {
   const _PrioritySelector({required this.value, required this.onChanged});
+
   final RepairPriority value;
   final ValueChanged<RepairPriority> onChanged;
 
   @override
   Widget build(BuildContext context) {
-    return Wrap(
-      spacing: AppSpacing.sm,
+    final lum = context.lum;
+    return Row(
       children: [
-        for (final p in RepairPriority.values)
-          GestureDetector(
-            onTap: () => onChanged(p),
-            child: Container(
-              padding: const EdgeInsets.symmetric(
-                  horizontal: AppSpacing.base, vertical: AppSpacing.xs),
-              decoration: BoxDecoration(
-                color: value == p
-                    ? repairPriorityColor(p)
-                    : repairPriorityColor(p).withValues(alpha: 0.10),
-                borderRadius: BorderRadius.circular(999),
-              ),
-              child: Text(
-                repairPriorityLabels[p]!,
-                style: AppTypography.footnote.copyWith(
-                  color: value == p ? Colors.white : repairPriorityColor(p),
-                  fontWeight: FontWeight.w600,
-                ),
+        for (final p in RepairPriority.values) ...[
+          if (p != RepairPriority.values.first) const SizedBox(width: 8),
+          Expanded(
+            child: Semantics(
+              button: true,
+              selected: value == p,
+              label: '${repairPriorityLabels[p]!} priority',
+              child: InkWell(
+                onTap: () => onChanged(p),
+                borderRadius: BorderRadius.circular(AppRadius.sm),
+                child: value == p
+                    ? Container(
+                        height: 44,
+                        alignment: Alignment.center,
+                        decoration: BoxDecoration(
+                          color: lum.accentSoft,
+                          borderRadius: BorderRadius.circular(AppRadius.sm),
+                          border: Border.all(color: lum.accent, width: 1.5),
+                        ),
+                        child: _chipLabel(p, lum.accentPress),
+                      )
+                    : ClayContainer(
+                        variant: ClayVariant.inset,
+                        color: lum.surface2,
+                        borderRadius: AppRadius.sm,
+                        isDark: lum.isDark,
+                        height: 44,
+                        child: Center(child: _chipLabel(p, lum.g600)),
+                      ),
               ),
             ),
           ),
+        ],
       ],
+    );
+  }
+
+  Widget _chipLabel(RepairPriority p, Color color) => Text(
+        repairPriorityLabels[p]!,
+        maxLines: 1,
+        overflow: TextOverflow.ellipsis,
+        style: AppTypography.label.copyWith(fontSize: 13.5, color: color),
+      );
+}
+
+/// Multi-line twin of [AppTextField] — same label + well, no leading icon.
+/// Local because the shared field is single-line by contract.
+class _MultilineField extends StatefulWidget {
+  const _MultilineField({
+    required this.controller,
+    required this.label,
+    this.hint,
+    this.onChanged,
+  });
+
+  final TextEditingController controller;
+  final String label;
+  final String? hint;
+  final ValueChanged<String>? onChanged;
+
+  @override
+  State<_MultilineField> createState() => _MultilineFieldState();
+}
+
+class _MultilineFieldState extends State<_MultilineField> {
+  late final FocusNode _focus = FocusNode()..addListener(() => setState(() {}));
+
+  @override
+  void dispose() {
+    _focus.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final lum = context.lum;
+    final focused = _focus.hasFocus;
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        _FieldLabel(text: widget.label),
+        AnimatedContainer(
+          duration: AppMotion.fast,
+          constraints: const BoxConstraints(minHeight: 50),
+          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+          decoration: BoxDecoration(
+            color: focused ? lum.surface : lum.surface2,
+            borderRadius: BorderRadius.circular(AppRadius.md),
+            border: Border.all(
+              color: focused ? lum.accent : Colors.transparent,
+              width: 1.5,
+            ),
+          ),
+          child: TextField(
+            controller: widget.controller,
+            focusNode: _focus,
+            minLines: 3,
+            maxLines: 6,
+            keyboardType: TextInputType.multiline,
+            onChanged: widget.onChanged,
+            cursorColor: lum.accent,
+            style: AppTypography.fieldText.copyWith(color: lum.textPrimary),
+            decoration: InputDecoration(
+              isCollapsed: true,
+              filled: false,
+              border: InputBorder.none,
+              enabledBorder: InputBorder.none,
+              focusedBorder: InputBorder.none,
+              hintText: widget.hint,
+              hintStyle:
+                  AppTypography.fieldHint.copyWith(color: lum.textTertiary),
+            ),
+          ),
+        ),
+      ],
+    );
+  }
+}
+
+class _BackButton extends StatelessWidget {
+  const _BackButton({required this.onTap});
+
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    final lum = context.lum;
+    return Semantics(
+      button: true,
+      label: 'Back',
+      child: InkWell(
+        onTap: onTap,
+        borderRadius: BorderRadius.circular(AppRadius.pill),
+        child: SizedBox(
+          width: 40,
+          height: 44,
+          child: Icon(LucideIcons.arrowLeft, size: 20, color: lum.g600),
+        ),
+      ),
     );
   }
 }
