@@ -1,15 +1,27 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:lucide_icons_flutter/lucide_icons.dart';
 import '../../../../core/design/app_colors.dart';
-import '../../../../core/design/app_spacing.dart';
+import '../../../../core/design/app_radius.dart';
 import '../../../../core/design/app_typography.dart';
+import '../../../../core/design/clay.dart';
 import '../../../../core/design/widgets/app_button.dart';
+import '../../../../core/design/widgets/app_card.dart';
+import '../../../../core/design/widgets/app_dropdown.dart';
 import '../../../../core/design/widgets/app_inline_banner.dart';
 import '../../../../core/design/widgets/app_text_field.dart';
+import '../../../../core/design/widgets/app_toast.dart';
+import '../../../../core/widgets/module_scaffold.dart';
 import '../../domain/entities/supplier.dart';
 import '../../domain/usecases/load_supplier.dart';
 import '../../data/models/supplier_model.dart';
 import '../controllers/suppliers_controller.dart';
+
+const _statusLabels = {
+  SupplierStatus.active: 'Active',
+  SupplierStatus.inactive: 'Inactive',
+  SupplierStatus.blacklisted: 'Blacklisted',
+};
 
 class SupplierFormPage extends ConsumerStatefulWidget {
   const SupplierFormPage({super.key, this.supplierId});
@@ -44,6 +56,10 @@ class _SupplierFormPageState extends ConsumerState<SupplierFormPage> {
   String? _error;
   bool _saving = false;
   bool _loadingExisting = false;
+
+  /// Per-field messages, so the design's inline errors can sit on the field
+  /// that is actually wrong rather than only in the banner.
+  final _fieldErrors = <String, String>{};
 
   bool get _isEditing => widget.supplierId != null;
 
@@ -121,30 +137,34 @@ class _SupplierFormPageState extends ConsumerState<SupplierFormPage> {
   }
 
   Future<void> _save() async {
+    final errors = <String, String>{};
     final name = _name.text.trim();
-    if (name.isEmpty) {
-      setState(() => _error = 'Name is required.');
-      return;
-    }
+    if (name.isEmpty) errors['name'] = 'Enter a supplier name.';
+
     final terms = int.tryParse(_paymentTerms.text.trim());
     if (terms == null || terms < 0) {
-      setState(() => _error = 'Payment terms must be a non-negative number.');
-      return;
+      errors['terms'] = 'Whole number of days, 0 or more.';
     }
     final opening = double.tryParse(_openingBalance.text.trim());
-    if (opening == null) {
-      setState(() => _error = 'Opening balance must be a number.');
-      return;
-    }
+    if (opening == null) errors['opening'] = 'Enter a number.';
+
     final currency = _currency.text.trim();
-    if (currency.isEmpty) {
-      setState(() => _error = 'Currency is required.');
+    if (currency.isEmpty) errors['currency'] = 'Currency is required.';
+
+    if (errors.isNotEmpty) {
+      setState(() {
+        _fieldErrors
+          ..clear()
+          ..addAll(errors);
+        _error = 'Please fix the highlighted fields before saving.';
+      });
       return;
     }
 
     setState(() {
       _saving = true;
       _error = null;
+      _fieldErrors.clear();
     });
 
     final tags = _tags.text
@@ -188,200 +208,337 @@ class _SupplierFormPageState extends ConsumerState<SupplierFormPage> {
       });
       return;
     }
+    showAppToast(
+      context,
+      _isEditing ? 'Changes saved.' : 'Supplier created.',
+      type: BannerType.success,
+    );
     Navigator.of(context).pop();
+  }
+
+  /// Clears a field's error as soon as it is edited, per the design.
+  void _clearFieldError(String key) {
+    if (_fieldErrors.remove(key) != null) setState(() {});
   }
 
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
-      backgroundColor: AppColors.background,
-      appBar: AppBar(
-        backgroundColor: AppColors.background,
-        surfaceTintColor: AppColors.background,
-        leading: IconButton(
-          icon: const Icon(Icons.arrow_back_ios,
-              color: AppColors.accent, size: 20),
-          onPressed: () => Navigator.of(context).pop(),
-        ),
-        title: Text(_isEditing ? 'Edit Supplier' : 'New Supplier',
-            style: AppTypography.headline),
-      ),
-      body: _loadingExisting
+    final isWide = ModuleScaffold.isWideOf(context);
+
+    return ModuleScaffold(
+      title: _isEditing ? 'Edit supplier' : 'New supplier',
+      maxContentWidth: 860,
+      leading: _FormBackButton(),
+      child: _loadingExisting
           ? const Center(child: CircularProgressIndicator())
-          : SafeArea(
-              child: LayoutBuilder(
-                builder: (context, c) => SingleChildScrollView(
-                  padding: const EdgeInsets.symmetric(
-                      horizontal: AppSpacing.screenPadding),
-                  child: Center(
-                    child: ConstrainedBox(
-                      constraints: const BoxConstraints(maxWidth: 560),
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.stretch,
-                        children: [
-                          const SizedBox(height: AppSpacing.lg),
-                          if (_error != null) ...[
-                            AppInlineBanner(
-                                message: _error!, type: BannerType.error),
-                            const SizedBox(height: AppSpacing.lg),
+          : ListView(
+              padding: EdgeInsets.fromLTRB(
+                  isWide ? 32 : 16, 12, isWide ? 32 : 16, 40),
+              children: [
+                if (_error != null) ...[
+                  AppInlineBanner(message: _error!, type: BannerType.error),
+                  const SizedBox(height: 16),
+                ],
+                _Section(
+                  title: 'Identity',
+                  child: _Grid(columns: isWide ? 2 : 1, children: [
+                    _Span(_field(_name, 'Name', LucideIcons.building2,
+                        key: 'name')),
+                    _field(_contactPerson, 'Contact person', LucideIcons.user,
+                        hint: 'Full name'),
+                    _field(_taxNumber, 'Tax number', LucideIcons.receipt,
+                        hint: 'NTN / STRN'),
+                  ]),
+                ),
+                const SizedBox(height: 16),
+                _Section(
+                  title: 'Contact',
+                  child: _Grid(columns: isWide ? 2 : 1, children: [
+                    _field(_phone, 'Phone', LucideIcons.phone,
+                        hint: '+92 …', keyboardType: TextInputType.phone),
+                    _field(_email, 'Email', LucideIcons.mail,
+                        hint: 'name@company.pk',
+                        keyboardType: TextInputType.emailAddress),
+                  ]),
+                ),
+                const SizedBox(height: 16),
+                _Section(
+                  title: 'Address',
+                  child: _Grid(columns: isWide ? 2 : 1, children: [
+                    _Span(_field(_address1, 'Address line 1',
+                        LucideIcons.mapPin,
+                        hint: 'Street, plot')),
+                    _Span(_field(_address2, 'Address line 2',
+                        LucideIcons.mapPin,
+                        hint: 'Area, landmark (optional)')),
+                    _field(_city, 'City', LucideIcons.building),
+                    _field(_state, 'State / province', LucideIcons.map),
+                    _field(_postalCode, 'Postal code', LucideIcons.mailbox),
+                    _field(_country, 'Country', LucideIcons.globe),
+                  ]),
+                ),
+                const SizedBox(height: 16),
+                _Section(
+                  title: 'Financial',
+                  child: _Grid(columns: isWide ? 2 : 1, children: [
+                    _field(_paymentTerms, 'Payment terms (days)',
+                        LucideIcons.clock,
+                        key: 'terms',
+                        keyboardType: TextInputType.number,
+                        helper: 'Net days, defaults to 30'),
+                    _field(_currency, 'Currency', LucideIcons.coins,
+                        key: 'currency'),
+                    _field(_openingBalance, 'Opening balance',
+                        LucideIcons.wallet,
+                        key: 'opening',
+                        helper: 'Amount you owe them today',
+                        keyboardType: const TextInputType.numberWithOptions(
+                            decimal: true, signed: true)),
+                    const SizedBox.shrink(),
+                    _field(_bankName, 'Bank name', LucideIcons.landmark),
+                    _field(_bankAccount, 'Bank account', LucideIcons.hash),
+                  ]),
+                ),
+                const SizedBox(height: 16),
+                _Section(
+                  title: 'Classification',
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      _Label('Status'),
+                      const SizedBox(height: 8),
+                      ConstrainedBox(
+                        constraints: BoxConstraints(
+                            maxWidth: isWide ? 280 : double.infinity),
+                        child: AppDropdown<SupplierStatus>(
+                          value: _status,
+                          options: [
+                            for (final s in SupplierStatus.values)
+                              AppDropdownOption(
+                                  value: s, label: _statusLabels[s]!),
                           ],
-                          _group('Identity'),
-                          AppTextField(
-                              controller: _name,
-                              label: 'Name',
-                              prefixIcon: Icons.business),
-                          _gap(),
-                          AppTextField(
-                              controller: _contactPerson,
-                              label: 'Contact Person',
-                              prefixIcon: Icons.person,
-                              hint: 'Optional'),
-                          _gap(),
-                          AppTextField(
-                              controller: _taxNumber,
-                              label: 'Tax Number',
-                              prefixIcon: Icons.receipt_long,
-                              hint: 'Optional'),
-                          _sectionGap(),
-                          _group('Contact'),
-                          AppTextField(
-                              controller: _phone,
-                              label: 'Phone',
-                              prefixIcon: Icons.phone,
-                              keyboardType: TextInputType.phone,
-                              hint: 'Optional'),
-                          _gap(),
-                          AppTextField(
-                              controller: _email,
-                              label: 'Email',
-                              prefixIcon: Icons.email,
-                              keyboardType: TextInputType.emailAddress,
-                              hint: 'Optional'),
-                          _sectionGap(),
-                          _group('Address'),
-                          AppTextField(
-                              controller: _address1,
-                              label: 'Address Line 1',
-                              prefixIcon: Icons.location_on,
-                              hint: 'Optional'),
-                          _gap(),
-                          AppTextField(
-                              controller: _address2,
-                              label: 'Address Line 2',
-                              prefixIcon: Icons.location_on_outlined,
-                              hint: 'Optional'),
-                          _gap(),
-                          AppTextField(
-                              controller: _city,
-                              label: 'City',
-                              prefixIcon: Icons.location_city,
-                              hint: 'Optional'),
-                          _gap(),
-                          AppTextField(
-                              controller: _state,
-                              label: 'State / Province',
-                              prefixIcon: Icons.map,
-                              hint: 'Optional'),
-                          _gap(),
-                          AppTextField(
-                              controller: _postalCode,
-                              label: 'Postal Code',
-                              prefixIcon: Icons.local_post_office,
-                              hint: 'Optional'),
-                          _gap(),
-                          AppTextField(
-                              controller: _country,
-                              label: 'Country',
-                              prefixIcon: Icons.public),
-                          _sectionGap(),
-                          _group('Financial'),
-                          AppTextField(
-                              controller: _paymentTerms,
-                              label: 'Payment Terms (days)',
-                              prefixIcon: Icons.schedule,
-                              keyboardType: TextInputType.number),
-                          _gap(),
-                          AppTextField(
-                              controller: _currency,
-                              label: 'Currency',
-                              prefixIcon: Icons.attach_money),
-                          _gap(),
-                          AppTextField(
-                              controller: _openingBalance,
-                              label: 'Opening Balance',
-                              prefixIcon: Icons.account_balance_wallet,
-                              keyboardType: const TextInputType.numberWithOptions(
-                                  decimal: true, signed: true)),
-                          _gap(),
-                          AppTextField(
-                              controller: _bankName,
-                              label: 'Bank Name',
-                              prefixIcon: Icons.account_balance,
-                              hint: 'Optional'),
-                          _gap(),
-                          AppTextField(
-                              controller: _bankAccount,
-                              label: 'Bank Account Number',
-                              prefixIcon: Icons.numbers,
-                              hint: 'Optional'),
-                          _sectionGap(),
-                          _group('Status'),
-                          DropdownButtonFormField<SupplierStatus>(
-                            initialValue: _status,
-                            decoration: const InputDecoration(
-                                border: OutlineInputBorder()),
-                            items: SupplierStatus.values
-                                .map((s) => DropdownMenuItem(
-                                      value: s,
-                                      child: Text(switch (s) {
-                                        SupplierStatus.active => 'Active',
-                                        SupplierStatus.inactive => 'Inactive',
-                                        SupplierStatus.blacklisted =>
-                                          'Blacklisted',
-                                      }),
-                                    ))
-                                .toList(),
-                            onChanged: (v) => setState(
-                                () => _status = v ?? SupplierStatus.active),
-                          ),
-                          _sectionGap(),
-                          _group('Other'),
-                          AppTextField(
-                              controller: _tags,
-                              label: 'Tags',
-                              prefixIcon: Icons.label,
-                              hint: 'Comma-separated, optional'),
-                          _gap(),
-                          AppTextField(
-                              controller: _notes,
-                              label: 'Notes',
-                              prefixIcon: Icons.notes,
-                              hint: 'Optional'),
-                          const SizedBox(height: AppSpacing.xxl),
-                          AppButton(
-                            label: _isEditing ? 'Update' : 'Create',
-                            loading: _saving,
-                            onPressed: _save,
-                            fullWidth: true,
-                          ),
-                          const SizedBox(height: AppSpacing.xxl),
-                        ],
+                          onSelected: (v) => setState(() => _status = v),
+                        ),
                       ),
-                    ),
+                      const SizedBox(height: 16),
+                      _field(_tags, 'Tags', LucideIcons.tag,
+                          hint: 'comma, separated'),
+                      const SizedBox(height: 16),
+                      _field(_notes, 'Notes', LucideIcons.notebookPen,
+                          hint: 'Anything the team should know…', maxLines: 3),
+                    ],
                   ),
                 ),
-              ),
+                const SizedBox(height: 20),
+                _Footer(
+                  isWide: isWide,
+                  saving: _saving,
+                  primaryLabel:
+                      _isEditing ? 'Save changes' : 'Create supplier',
+                  onSave: _save,
+                ),
+              ],
             ),
     );
   }
 
-  Widget _gap() => const SizedBox(height: AppSpacing.fieldGap);
-  Widget _sectionGap() => const SizedBox(height: AppSpacing.xl);
+  Widget _field(
+    TextEditingController controller,
+    String label,
+    IconData icon, {
+    String? key,
+    String? hint,
+    String? helper,
+    TextInputType? keyboardType,
+    int maxLines = 1,
+  }) {
+    final error = key == null ? null : _fieldErrors[key];
+    return AppTextField(
+      controller: controller,
+      label: label,
+      prefixIcon: icon,
+      hint: hint,
+      helperText: error == null ? helper : null,
+      errorText: error,
+      keyboardType: keyboardType,
+      maxLines: maxLines,
+      onChanged: key == null ? null : (_) => _clearFieldError(key),
+    );
+  }
+}
 
-  Widget _group(String label) => Padding(
-        padding: const EdgeInsets.only(bottom: AppSpacing.sm),
-        child: Text(label.toUpperCase(),
-            style: AppTypography.footnote.copyWith(
-                color: AppColors.textMuted, fontWeight: FontWeight.w600)),
-      );
+/// Marks a field that spans the full grid width on wide layouts.
+class _Span extends StatelessWidget {
+  const _Span(this.child);
+  final Widget child;
+
+  @override
+  Widget build(BuildContext context) => child;
+}
+
+/// Two-column form grid. Column count comes from the caller's width check;
+/// [_Span] children always take a whole row.
+class _Grid extends StatelessWidget {
+  const _Grid({required this.columns, required this.children});
+  final int columns;
+  final List<Widget> children;
+
+  @override
+  Widget build(BuildContext context) {
+    final rows = <Widget>[];
+    var buffer = <Widget>[];
+
+    void flush() {
+      if (buffer.isEmpty) return;
+      rows.add(Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          for (var c = 0; c < columns; c++) ...[
+            if (c > 0) const SizedBox(width: 16),
+            Expanded(
+              child: c < buffer.length ? buffer[c] : const SizedBox.shrink(),
+            ),
+          ],
+        ],
+      ));
+      buffer = <Widget>[];
+    }
+
+    for (final child in children) {
+      if (child is _Span || columns == 1) {
+        flush();
+        rows.add(child);
+        continue;
+      }
+      buffer.add(child);
+      if (buffer.length == columns) flush();
+    }
+    flush();
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        for (var i = 0; i < rows.length; i++) ...[
+          if (i > 0) const SizedBox(height: 16),
+          rows[i],
+        ],
+      ],
+    );
+  }
+}
+
+class _Section extends StatelessWidget {
+  const _Section({required this.title, required this.child});
+  final String title;
+  final Widget child;
+
+  @override
+  Widget build(BuildContext context) {
+    final lum = context.lum;
+    return AppCard(
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          Text(
+            title,
+            style: AppTypography.title2
+                .copyWith(fontSize: 16, color: lum.textPrimary),
+          ),
+          const SizedBox(height: 16),
+          child,
+        ],
+      ),
+    );
+  }
+}
+
+class _Label extends StatelessWidget {
+  const _Label(this.text);
+  final String text;
+
+  @override
+  Widget build(BuildContext context) {
+    final lum = context.lum;
+    return Text(
+      text,
+      style: AppTypography.fieldLabel.copyWith(fontSize: 13, color: lum.g700),
+    );
+  }
+}
+
+class _Footer extends StatelessWidget {
+  const _Footer({
+    required this.isWide,
+    required this.saving,
+    required this.primaryLabel,
+    required this.onSave,
+  });
+
+  final bool isWide;
+  final bool saving;
+  final String primaryLabel;
+  final VoidCallback onSave;
+
+  @override
+  Widget build(BuildContext context) {
+    final primary = AppButton(
+      label: primaryLabel,
+      icon: LucideIcons.check,
+      loading: saving,
+      fullWidth: !isWide,
+      onPressed: onSave,
+    );
+
+    if (!isWide) return primary;
+
+    return Row(
+      mainAxisAlignment: MainAxisAlignment.end,
+      children: [
+        AppButton(
+          label: 'Cancel',
+          variant: AppButtonVariant.tinted,
+          onPressed: () => Navigator.of(context).maybePop(),
+        ),
+        const SizedBox(width: 12),
+        primary,
+      ],
+    );
+  }
+}
+
+class _FormBackButton extends StatelessWidget {
+  @override
+  Widget build(BuildContext context) {
+    final lum = context.lum;
+    return Padding(
+      padding: const EdgeInsets.only(right: 12),
+      child: Semantics(
+        button: true,
+        label: 'Back',
+        child: InkWell(
+          onTap: () => Navigator.of(context).maybePop(),
+          borderRadius: BorderRadius.circular(AppRadius.sm),
+          // 44dp target around the design's 40px clay tile.
+          child: SizedBox(
+            width: 44,
+            height: 44,
+            child: Center(
+              child: ClayContainer(
+                variant: ClayVariant.soft,
+                color: lum.surface,
+                borderRadius: AppRadius.sm,
+                isDark: lum.isDark,
+                width: 40,
+                height: 40,
+                child: Center(
+                  child: Icon(LucideIcons.arrowLeft,
+                      size: 20, color: lum.textPrimary),
+                ),
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+  }
 }
