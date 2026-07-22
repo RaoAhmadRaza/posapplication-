@@ -269,11 +269,25 @@ class AccountingRemoteDataSource {
   Future<Map<String, dynamic>> insertBankAccount(
     Map<String, dynamic> data,
   ) async {
-    final payload = {...data, 'tenant_id': await _tenantId()};
+    // Route through the RPC so the opening balance seeds current_balance and posts
+    // its GL entry atomically (tenant is stamped server-side). See migration
+    // 20260722120000_create_bank_account_opening_gl.
+    final res = await _client.rpc('create_bank_account', params: {
+      'p_account_name': data['account_name'],
+      'p_bank_name': data['bank_name'],
+      'p_account_number': data['account_number'],
+      'p_iban': data['iban'],
+      'p_swift_code': data['swift_code'],
+      'p_currency': data['currency'],
+      'p_opening_balance': data['opening_balance'],
+      'p_chart_account_id': data['chart_account_id'],
+      'p_is_active': data['is_active'],
+    });
+    final id = (res as Map)['bank_account_id'];
     final list = await _client
         .from('bank_accounts')
-        .insert(payload)
-        .select(_bankCols);
+        .select(_bankCols)
+        .eq('id', id);
     return list.first;
   }
 

@@ -496,6 +496,8 @@ resolve_payment_account SOLE resolver in 7 money paths; close_repair_job keeps l
 Deferral A). tax_rules CONSUMED (S4): resolve_tax_rate defaults product/POS tax (create_sale untouched, caller p_tax_pct
 authoritative). A6 UI: `lib/features/accounting/` clean-arch — hub, CoA tree, ledger, journal list+detail (reverse gated),
 manual voucher, expenses, bank/tax-rule CRUD, Reports (export gated), fiscal periods + bank reconciliation.
+Bank create now goes through create_bank_account RPC (was raw client insert): seeds current_balance=opening_balance
+AND posts the opening GL entry (Dr chart account / Cr Owner Equity 3000); direct insert RLS policy dropped.
 
 ## Settings / M12 — S1–S8 COMPLETE (backend gated settings:update; per-phase detail in DECISIONS)
 UI (S6): `lib/features/settings/` clean-arch, ONE datasource, typed SettingsFailure. SettingsHubPage = bottom-nav
