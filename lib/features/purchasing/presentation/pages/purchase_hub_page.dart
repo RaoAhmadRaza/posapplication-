@@ -35,7 +35,7 @@ class PurchaseHubPage extends StatelessWidget {
                 icon: Icons.local_shipping,
                 title: 'Suppliers',
                 subtitle: 'Vendor master, balances, and ledger',
-                onTap: () => context.push('/suppliers'),
+                onTap: () => context.go('/suppliers'),
               ),
               const SizedBox(height: AppSpacing.md),
               _HubRow(

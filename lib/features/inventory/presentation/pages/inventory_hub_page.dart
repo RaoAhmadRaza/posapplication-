@@ -108,7 +108,7 @@ class InventoryHubPage extends ConsumerWidget {
                 icon: Icons.local_shipping,
                 title: 'Suppliers',
                 subtitle: 'Vendor master, balances, and ledger',
-                onTap: () => context.push('/suppliers'),
+                onTap: () => context.go('/suppliers'),
               ),
               const SizedBox(height: AppSpacing.xxl),
               // NOTE: Customers CRM lives here alongside Suppliers until a
