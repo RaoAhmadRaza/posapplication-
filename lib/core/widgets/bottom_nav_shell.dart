@@ -37,6 +37,7 @@ const _allItems = [
 ];
 
 /// Shell branch indices, per the router's branch order.
+const _kPurchaseBranch = 2;
 const _kSalesBranch = 3;
 const _kRepairBranch = 5;
 
@@ -62,6 +63,15 @@ const _salesDests = [
   _ModuleDest('Session', 'Session', LucideIcons.lock, '/sales/open'),
 ];
 
+// Only routes that actually live inside the purchasing branch belong here — a
+// destination outside it would leave the shell and the rail would vanish
+// mid-module. Orders / invoices / returns / reorder are still root routes and
+// stay reachable from the hub.
+const _purchasingDests = [
+  _ModuleDest('Purchasing', 'Hub', LucideIcons.truck, '/purchasing'),
+  _ModuleDest('Suppliers', 'Suppliers', LucideIcons.building2, '/suppliers'),
+];
+
 const _repairDests = [
   _ModuleDest('Repair jobs', 'Jobs', LucideIcons.wrench, '/repair'),
   _ModuleDest('Workload', 'Workload', LucideIcons.users, '/repair/workload'),
@@ -78,6 +88,11 @@ int _salesIndexFor(String path) {
   }
   return 0;
 }
+
+/// Which purchasing destination owns [path]. Every /suppliers screen keeps
+/// Suppliers lit; everything else in the branch is the hub.
+int _purchasingIndexFor(String path) =>
+    path.startsWith('/suppliers') ? 1 : 0;
 
 /// Which repair destination owns [path]. Intake and job detail are both part of
 /// working the board, so they keep Repair jobs lit.
@@ -122,6 +137,11 @@ class BottomNavShell extends ConsumerWidget {
     final path = GoRouterState.of(context).uri.path;
     final (List<_ModuleDest> dests, int destIndex, String moduleLabel) =
         switch (branch) {
+      _kPurchaseBranch => (
+          _purchasingDests,
+          _purchasingIndexFor(path),
+          'Purchase',
+        ),
       _kSalesBranch => (_salesDests, _salesIndexFor(path), 'Sales'),
       _kRepairBranch => (_repairDests, _repairIndexFor(path), 'Repair'),
       _ => (const <_ModuleDest>[], -1, ''),
