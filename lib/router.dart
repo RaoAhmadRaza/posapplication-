@@ -543,28 +543,6 @@ final appRouter = GoRouter(
       redirect: (context, state) => '/notifications',
     ),
     GoRoute(
-      path: '/suppliers',
-      builder: (context, state) => const SuppliersPage(),
-    ),
-    GoRoute(
-      path: '/suppliers/create',
-      builder: (context, state) => const SupplierFormPage(),
-    ),
-    GoRoute(
-      path: '/suppliers/:supplierId',
-      builder: (context, state) {
-        final id = state.pathParameters['supplierId']!;
-        return SupplierDetailPage(supplierId: id);
-      },
-    ),
-    GoRoute(
-      path: '/suppliers/:supplierId/edit',
-      builder: (context, state) {
-        final id = state.pathParameters['supplierId']!;
-        return SupplierFormPage(supplierId: id);
-      },
-    ),
-    GoRoute(
       path: '/customers',
       builder: (context, state) => const CustomersPage(),
     ),
@@ -965,6 +943,33 @@ final appRouter = GoRouter(
             GoRoute(
               path: '/purchasing',
               builder: (context, state) => const PurchaseHubPage(),
+            ),
+            // Suppliers lives INSIDE the purchasing branch so it keeps the
+            // rail/bottom bar, as the design draws it. Same chrome on every
+            // one of these, so they cross-fade rather than slide.
+            GoRoute(
+              path: '/suppliers',
+              pageBuilder: (context, state) =>
+                  _fadePage(state, const SuppliersPage()),
+            ),
+            GoRoute(
+              path: '/suppliers/create',
+              pageBuilder: (context, state) =>
+                  _fadePage(state, const SupplierFormPage()),
+            ),
+            GoRoute(
+              path: '/suppliers/:supplierId',
+              pageBuilder: (context, state) {
+                final id = state.pathParameters['supplierId']!;
+                return _fadePage(state, SupplierDetailPage(supplierId: id));
+              },
+            ),
+            GoRoute(
+              path: '/suppliers/:supplierId/edit',
+              pageBuilder: (context, state) {
+                final id = state.pathParameters['supplierId']!;
+                return _fadePage(state, SupplierFormPage(supplierId: id));
+              },
             ),
           ],
         ),
