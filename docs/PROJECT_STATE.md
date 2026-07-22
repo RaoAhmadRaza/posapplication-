@@ -216,6 +216,33 @@ light-only static `AppColors` (31 refs, 0 `context.lum`) — now zero, works in 
 - **VERIFY OWED (on-device eyeball)**: 900px rail/bottom-bar boundary, dark mode on all 7 screens,
   both branch sheets, every dropdown menu, the toggles, and a screenshot diff vs the renders.
 
+## UI Redesign — suppliers module (DONE 2026-07-22; detail in DECISIONS)
+Sixth design export, SAME design-system UUID (5cd3f8f0-…) → tokens untouched; consumer-side reskin of
+all 3 suppliers screens. Suppliers was the last module on light-only static `AppColors` — now zero,
+works in Counter mode.
+- **Moved INSIDE the nav shell** (user-approved router edit): the four `/suppliers*` routes left the
+  top-level list and became siblings of `/purchasing` in the existing purchasing `StatefulShellBranch`
+  (index 2), on `pageBuilder` + the shared `_fadePage`. Paths/classes/ctor args byte-identical, no
+  branch index moved. `bottom_nav_shell.dart` gained `_purchasingDests` (Purchasing + Suppliers) wired
+  into the switch that already served sales and repair. The rail carries **only in-branch routes** —
+  orders/invoices/returns/reorder are still root routes and would drop out of the shell; moving them
+  in is a deferred slice. The 2 inbound links (purchase hub, inventory hub) switched `push` → `go`;
+  the list has no back button because it is a rail destination now.
+- **Two promotions to the design system**: `repair_states.dart` → `core/design/widgets/app_states.dart`
+  (`AppEmptyState`/`AppErrorState`, repair keeps 2 typedefs; `AppErrorState` gained additive `icon` +
+  `retryLabel`), and new `app_search_field.dart` (48px inset well + clear button).
+- **Honest data**: the opening-balance ledger row is synthesised from the RPC's scalar and shows an
+  em-dash where the mock puts a date; `Settled` renders only once `payablesAgingProvider` resolves;
+  amounts follow `supplier.currency`; the ledger card always renders, with an in-card empty state. A
+  second **Details** card surfaces tax/currency/bank/address/tags/notes, which the form wrote but no
+  screen showed. Mock chrome dropped: fake ⌘K search, static sync chip/bell/avatar (real ones come
+  from `ModuleHeader`), dead nav items, unsortable ledger headers. `Record payment` keeps the real
+  push to `/purchasing/payments/create`. Delete moved to `showAppConfirm` + `showAppToast`.
+- New module widgets: `supplier_card.dart`, `supplier_ledger_card.dart`. No new deps.
+- GATE: analyze **8 issues, 0 new** (baseline 8); `flutter test` = the same 2 pre-existing failures.
+- **VERIFY OWED (on-device eyeball)**: 900px rail/bottom-bar boundary, all 4 list states, dark mode on
+  all 3 screens, ledger with and without entries, screenshot diff vs renders.
+
 ## Auth UX pass — Phases 1–4 DONE (2026-07-20)
 Interaction/UX depth pass on top of the LUMINA reskin (plan: friction→feedback→flow→a11y; delight
 Phase 5 deferred). Frontend + minimal flow/routing (user-approved exception to UI-only guardrail).
@@ -436,7 +463,8 @@ proper required field that highlights red ("Product required") on save when unse
 `lib/features/suppliers/` full clean-arch: Supplier/SupplierStatus + SupplierLedger/PayablesAging entities; sealed
 SupplierFailure; 7 usecases; SuppliersRemoteDataSource (ILIKE search, status filter, ledger/aging RPCs); controller +
 ledger/aging providers. Pages: list (search, status chips, payable hint, FAB purchase:create), form (purchase:update/
-delete), detail (ledger balance/timeline + Record Payment TODO). Routes /suppliers[/create|/:id|/:id/edit]; hub row. Verified vs live RLS.
+delete), detail (ledger balance/timeline + Record Payment). Routes /suppliers[/create|/:id|/:id/edit] — now inside the purchasing shell branch (see the
+suppliers reskin section). Verified vs live RLS.
 
 ### Customers CRM (Flutter) — COMPLETE (parity with suppliers)
 `lib/features/customers/` full clean-arch mirroring suppliers (Customer moved from sales — old paths re-export).
