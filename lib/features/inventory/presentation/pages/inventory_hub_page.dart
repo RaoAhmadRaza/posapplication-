@@ -184,7 +184,7 @@ class InventoryHubPage extends ConsumerWidget {
                       icon: Icons.groups_outlined,
                       title: 'Employees',
                       subtitle: 'Employees, shifts, payroll',
-                      onTap: () => context.push('/hr'),
+                      onTap: () => context.go('/hr'),
                     ),
                     const SizedBox(height: AppSpacing.xxl),
                   ],

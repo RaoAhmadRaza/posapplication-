@@ -26,9 +26,8 @@ class _NavItem {
 }
 
 // Indexed by shell branch: 0 Dashboard, 1 Inventory, 2 Purchase, 3 Sales,
-// 4 Settings, 5 Repair, 6 Customers, 7 Reports, 8 Accounting, 9 Approvals.
-// Repair, Customers, Reports, Accounting and Approvals are appended so the
-// earlier indices never shift.
+// 4 Settings, 5 Repair, 6 Customers, 7 Reports, 8 Accounting, 9 Approvals,
+// 10 HR. Repair onward are appended so the earlier indices never shift.
 const _allItems = [
   _NavItem('Dashboard', LucideIcons.layoutGrid),
   _NavItem('Inventory', LucideIcons.box),
@@ -40,6 +39,7 @@ const _allItems = [
   _NavItem('Reports', LucideIcons.barChart3),
   _NavItem('Accounting', LucideIcons.calculator),
   _NavItem('Approvals', LucideIcons.checkSquare2),
+  _NavItem('HR', LucideIcons.contactRound),
 ];
 
 /// Shell branch indices, per the router's branch order.
@@ -50,6 +50,7 @@ const _kCustomersBranch = 6;
 const _kReportsBranch = 7;
 const _kAccountingBranch = 8;
 const _kApprovalsBranch = 9;
+const _kHrBranch = 10;
 
 /// A destination inside a module's own branch. These navigate with `go` —
 /// `goBranch` is only for switching module.
@@ -96,6 +97,18 @@ const _customersDests = [
       'Receivables', 'Aging', LucideIcons.receiptText, '/receivables'),
 ];
 
+// The four primary HR destinations. Shifts (admin config) and Clock
+// (self-service) are push drill-downs from the Employees hub, not rail dests —
+// this keeps the mobile bottom bar at 4 + Modules = 5 tabs. Employee and
+// payroll detail screens keep their owning destination lit.
+const _hrDests = [
+  _ModuleDest('Employees', 'Team', LucideIcons.contactRound, '/hr'),
+  _ModuleDest(
+      'Attendance', 'Days', LucideIcons.calendarCheck, '/hr/attendance'),
+  _ModuleDest('Leaves', 'Leaves', LucideIcons.plane, '/hr/leaves'),
+  _ModuleDest('Payroll', 'Payroll', LucideIcons.wallet, '/hr/payroll'),
+];
+
 /// Which sales destination owns [path]. Checkout (payment/success/receipt) is
 /// part of selling, so it keeps Point of sale lit.
 int _salesIndexFor(String path) {
@@ -125,6 +138,16 @@ int _repairIndexFor(String path) {
 int _customersIndexFor(String path) =>
     path.startsWith('/receivables') ? 1 : 0;
 
+/// Which HR destination owns [path]. Employee screens keep Employees lit;
+/// Shifts and Clock are drill-downs off the Employees hub, so they too keep
+/// Employees lit.
+int _hrIndexFor(String path) {
+  if (path.startsWith('/hr/attendance')) return 1;
+  if (path.startsWith('/hr/leaves')) return 2;
+  if (path.startsWith('/hr/payroll')) return 3;
+  return 0;
+}
+
 class BottomNavShell extends ConsumerWidget {
   const BottomNavShell({super.key, required this.navigationShell});
 
@@ -140,6 +163,7 @@ class BottomNavShell extends ConsumerWidget {
     final hasReports = matrix.contains('reports:read');
     final hasAccounting = matrix.contains('accounting:read');
     final hasApprovals = matrix.contains('approvals:read');
+    final hasHr = matrix.contains('hr:read');
 
     // Settings stays last (it sits below the rail divider); Reports slots in
     // just before it. Reports has no in-branch destinations of its own, so it
@@ -154,6 +178,7 @@ class BottomNavShell extends ConsumerWidget {
       if (hasReports) _kReportsBranch,
       if (hasAccounting) _kAccountingBranch,
       if (hasApprovals) _kApprovalsBranch,
+      if (hasHr) _kHrBranch,
       4,
     ];
     final items = [for (final b in branchMap) _allItems[b]];
@@ -183,6 +208,7 @@ class BottomNavShell extends ConsumerWidget {
           _customersIndexFor(path),
           'Customers',
         ),
+      _kHrBranch => (_hrDests, _hrIndexFor(path), 'HR'),
       _ => (const <_ModuleDest>[], -1, ''),
     };
 

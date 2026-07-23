@@ -544,49 +544,8 @@ final appRouter = GoRouter(
     ),
     // Customers (CRM) moved INSIDE the nav shell as its own branch — see the
     // StatefulShellBranch below. /customers*, /receivables now carry the rail.
-    GoRoute(
-      path: '/hr',
-      builder: (context, state) => const EmployeesPage(),
-    ),
-    GoRoute(
-      path: '/hr/shifts',
-      builder: (context, state) => const ShiftsPage(),
-    ),
-    GoRoute(
-      path: '/hr/attendance',
-      builder: (context, state) => const AttendanceGridPage(),
-    ),
-    GoRoute(
-      path: '/hr/leaves',
-      builder: (context, state) => const LeavesPage(),
-    ),
-    GoRoute(
-      path: '/hr/clock',
-      builder: (context, state) => const ClockInOutPage(),
-    ),
-    GoRoute(
-      path: '/hr/payroll',
-      builder: (context, state) => const PayrollRunsPage(),
-    ),
-    GoRoute(
-      path: '/hr/payroll/:id',
-      builder: (context, state) =>
-          PayrollRunDetailPage(runId: state.pathParameters['id']!),
-    ),
-    GoRoute(
-      path: '/hr/employees/new',
-      builder: (context, state) => const EmployeeFormPage(),
-    ),
-    GoRoute(
-      path: '/hr/employees/:id/edit',
-      builder: (context, state) =>
-          EmployeeFormPage(employee: state.extra as Employee?),
-    ),
-    GoRoute(
-      path: '/hr/employees/:id',
-      builder: (context, state) =>
-          EmployeeProfilePage(employeeId: state.pathParameters['id']!),
-    ),
+    // HR moved INSIDE the nav shell as its own branch (index 10) — see the
+    // StatefulShellBranch below. All /hr* routes now carry the rail.
     GoRoute(
       path: '/sync/exceptions',
       builder: (context, state) => const SyncExceptionCentrePage(),
@@ -1189,6 +1148,66 @@ final appRouter = GoRouter(
               pageBuilder: (context, state) => _fadePage(
                   state,
                   ApprovalDetailPage(requestId: state.pathParameters['id']!)),
+            ),
+          ],
+        ),
+        // HR (branch index 10). Employees / Attendance / Leaves / Payroll are
+        // the rail destinations; Shifts, Clock and the employee/payroll detail
+        // screens are push drill-downs within the branch. Order keeps
+        // /hr/employees/new before /hr/employees/:id and /hr/payroll/:id after
+        // /hr/payroll so neither is swallowed.
+        StatefulShellBranch(
+          routes: [
+            GoRoute(
+              path: '/hr',
+              pageBuilder: (context, state) =>
+                  _fadePage(state, const EmployeesPage()),
+            ),
+            GoRoute(
+              path: '/hr/attendance',
+              pageBuilder: (context, state) =>
+                  _fadePage(state, const AttendanceGridPage()),
+            ),
+            GoRoute(
+              path: '/hr/leaves',
+              pageBuilder: (context, state) =>
+                  _fadePage(state, const LeavesPage()),
+            ),
+            GoRoute(
+              path: '/hr/payroll',
+              pageBuilder: (context, state) =>
+                  _fadePage(state, const PayrollRunsPage()),
+            ),
+            GoRoute(
+              path: '/hr/payroll/:id',
+              pageBuilder: (context, state) => _fadePage(
+                  state,
+                  PayrollRunDetailPage(runId: state.pathParameters['id']!)),
+            ),
+            GoRoute(
+              path: '/hr/shifts',
+              pageBuilder: (context, state) =>
+                  _fadePage(state, const ShiftsPage()),
+            ),
+            GoRoute(
+              path: '/hr/clock',
+              pageBuilder: (context, state) =>
+                  _fadePage(state, const ClockInOutPage()),
+            ),
+            GoRoute(
+              path: '/hr/employees/new',
+              pageBuilder: (context, state) =>
+                  _fadePage(state, const EmployeeFormPage()),
+            ),
+            GoRoute(
+              path: '/hr/employees/:id/edit',
+              pageBuilder: (context, state) => _fadePage(
+                  state, EmployeeFormPage(employee: state.extra as Employee?)),
+            ),
+            GoRoute(
+              path: '/hr/employees/:id',
+              pageBuilder: (context, state) => _fadePage(state,
+                  EmployeeProfilePage(employeeId: state.pathParameters['id']!)),
             ),
           ],
         ),

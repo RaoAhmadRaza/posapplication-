@@ -421,6 +421,48 @@ DropdownButton/FAB — now **zero** static-colour refs, works in Counter mode.
   sub-page → hub, pending filter chips + empty/error/loading, detail ladder/timeline + Approve/Reject/
   Cancel, history search, workflow toggle + form create/edit/level-reorder, and a screenshot diff vs renders.
 
+## UI Redesign — HR module (DONE 2026-07-23; detail in DECISIONS)
+Twelfth design export ("HR Module Design Prototype"), SAME design-system UUID (5cd3f8f0-…) →
+tokens untouched; consumer-side reskin of all 10 HR pages. HR was the **LAST** feature on
+light-only static `AppColors` (142 refs, 0 `context.lum`) + raw Material Scaffold/AppBar per page —
+now zero static-colour refs, works in Counter mode. The whole app is now on LUMINA.
+- **Promoted to a nav-shell branch (index 10) WITH an internal sub-rail** (user choice via
+  AskUserQuestion, mirrors sales/repair/purchasing). The 10 `/hr*` routes moved from top-level
+  GoRoutes into a new `StatefulShellBranch` after approvals=9 (no index shifts) on pageBuilder +
+  `_fadePage`; `/hr` is the branch root. `bottom_nav_shell.dart` gained `_allItems[10]` = HR
+  (`LucideIcons.contactRound`), `_kHrBranch=10`, `if (hasHr) _kHrBranch` gated `hr:read` before the
+  pinned Settings, and a `_hrDests` **sub-rail** (Employees/Attendance/Leaves/Payroll — 4, so the
+  mobile bar stays 4 + Modules = 5). **Deviation:** Shifts (admin config) + Clock (self-service)
+  are NOT rail dests — they're push drill-downs off two subtle header-action icons on the Employees
+  hub, keeping the mobile bar uncrowded (matches the design's own 4-primaries+More mobile nav).
+  Only the branch-root `inventory_hub_page:187` `/hr` flipped push→go; `/hr/payroll/:id` deep-links
+  (approvals, notifications) stay push (a go'd sub-page has a dead back).
+- **Chrome**: rail dests = `ModuleScaffold` (no back): employees/attendance/leaves/payroll-runs.
+  Drill-downs = `AppDetailScaffold` (clay back): employee form/profile, payroll detail, shifts, clock.
+- **Honest data** — every mock value maps to a real field: employees list (code/name/designation/
+  department/status/baseSalary+salaryType); profile 4 tabs (attendanceMonthProvider, leavesProvider,
+  employeeAdvancesProvider with a recovery bar = (amount−balance)/amount); attendance grid =
+  branchEmployeesProvider × attendanceMonthProvider; payroll detail items reuse the current
+  derivations verbatim (basic, overtimeAmount, deductions['advance'], netSalary). Money→GL paths
+  (advance/payroll disburse, terminate) are backend RPCs — reskinned around, untouched.
+- New `widgets/hr_ui.dart` (label maps + `AppPillTone` mappers + `attendanceCellColors` +
+  `salaryUnitLabels` + `hrInitials`); `hr_status_ui.dart` (module's last AppColors) **deleted**.
+  New module widgets: `employee_card.dart`, `leave_request_card.dart` (shared by leaves + profile).
+  Attendance cell geometry uses named constants (30px square, no hand-picked ratio); payroll 3-tile
+  summary collapses to a column at narrow widths (no dropped tile); `_DashedBorderPainter` for the
+  draft panel. Forms → AppDropdown/AppToggle/showAppSheet/showAppConfirm/showAppToast/AppSearchField/
+  AppFilterChips. 10 pages reskinned in parallel via 7 subagents; no new deps. All provider/usecase/
+  route-param/PermissionGate (`hr:create/update/approve`, `users:create`) bindings byte-identical.
+- Side effect: pull-to-refresh dropped on the AppDetailScaffold/ModuleScaffold drill-down lists
+  (autoDispose providers refetch on revisit).
+- GATE: `flutter analyze` **8 issues, 0 new** (baseline 8); macOS debug build succeeds (exit 0);
+  `flutter test` = the same 2 pre-existing failures as clean HEAD (widget_test smoke + kpi_layout).
+- **VERIFY OWED (on-device eyeball)** — agent env can't foreground/screenshot: all 9 screens + sheets
+  in light + dark, the HR nav tab + 900px rail/bottom-bar boundary + 4-dest sub-rail for an `hr:read`
+  user, Shifts/Clock header drill-downs + back, `/hr/payroll/:id` push deep-links return to origin,
+  attendance grid + mark sheet, leave approve/reject, clock in/out, payroll calculate/approve/disburse,
+  the advance recovery bar, and a screenshot diff vs the export renders.
+
 ## Auth UX pass — Phases 1–4 DONE (2026-07-20)
 Interaction/UX depth pass on top of the LUMINA reskin (plan: friction→feedback→flow→a11y; delight
 Phase 5 deferred). Frontend + minimal flow/routing (user-approved exception to UI-only guardrail).
