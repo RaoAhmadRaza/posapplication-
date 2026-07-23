@@ -1,11 +1,13 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
+import 'package:lucide_icons_flutter/lucide_icons.dart';
 import '../../../../core/design/app_colors.dart';
-import '../../../../core/design/app_spacing.dart';
+import '../../../../core/design/app_radius.dart';
 import '../../../../core/design/app_typography.dart';
+import '../../../../core/design/clay.dart';
 import '../../../../core/design/widgets/app_button.dart';
-import '../../../../core/design/widgets/app_card.dart';
+import '../../../../core/design/widgets/app_detail_scaffold.dart';
 import '../../../../core/design/widgets/app_inline_banner.dart';
 import '../../../../core/design/widgets/app_text_field.dart';
 import '../../data/repositories/staff_repository_impl.dart';
@@ -46,9 +48,8 @@ class _JoinRedeemPageState extends ConsumerState<JoinRedeemPage> {
   }
 
   Future<void> _submit() async {
-    final email = _emailLocked
-        ? (widget.validation.email ?? '')
-        : _emailCtrl.text.trim();
+    final email =
+        _emailLocked ? (widget.validation.email ?? '') : _emailCtrl.text.trim();
     final password = _passwordCtrl.text.trim();
     if (email.isEmpty || password.isEmpty) {
       setState(() => _error = 'Email and password are required.');
@@ -89,93 +90,133 @@ class _JoinRedeemPageState extends ConsumerState<JoinRedeemPage> {
   @override
   Widget build(BuildContext context) {
     final v = widget.validation;
-    return Scaffold(
-      backgroundColor: AppColors.background,
-      appBar: AppBar(
-        backgroundColor: AppColors.background,
-        surfaceTintColor: AppColors.background,
-        leading: IconButton(
-          icon: const Icon(Icons.arrow_back_ios, color: AppColors.accent, size: 20),
-          onPressed: () => Navigator.of(context).pop(),
-        ),
-        title: Text('Join team', style: AppTypography.headline),
-      ),
-      body: SafeArea(
-        child: ListView(
-          padding: const EdgeInsets.all(AppSpacing.screenPadding),
-          children: [
-            AppCard(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text('You are joining', style: AppTypography.footnote.copyWith(color: AppColors.textMuted)),
-                  const SizedBox(height: 2),
-                  Text(v.businessName ?? 'a business', style: AppTypography.headline),
-                  const SizedBox(height: 4),
-                  Text('as ${v.roleName ?? 'staff'}',
-                      style: AppTypography.body.copyWith(color: AppColors.accent)),
-                ],
-              ),
-            ),
-            const SizedBox(height: AppSpacing.lg),
+    return AppDetailScaffold(
+      eyebrow: 'Join',
+      title: 'Create your login',
+      maxContentWidth: 520,
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          _JoinSummary(businessName: v.businessName, roleName: v.roleName),
+          const SizedBox(height: 22),
+          AppTextField(
+            controller: _nameCtrl,
+            label: 'Your name',
+            prefixIcon: Icons.person_outline,
+          ),
+          const SizedBox(height: 16),
+          if (_emailLocked)
+            _LockedField(value: widget.validation.email ?? '')
+          else
             AppTextField(
-              controller: _nameCtrl,
-              label: 'Your name',
-              prefixIcon: Icons.person_outline,
+              controller: _emailCtrl,
+              label: 'Email',
+              prefixIcon: Icons.mail_outline,
+              keyboardType: TextInputType.emailAddress,
             ),
-            const SizedBox(height: AppSpacing.md),
-            if (_emailLocked)
-              _LockedField(label: 'Email (set by your invite)', value: widget.validation.email ?? '')
-            else
-              AppTextField(
-                controller: _emailCtrl,
-                label: 'Email',
-                prefixIcon: Icons.mail_outline,
-                keyboardType: TextInputType.emailAddress,
-              ),
-            const SizedBox(height: AppSpacing.md),
-            AppTextField(
-              controller: _passwordCtrl,
-              label: 'Choose a password',
-              prefixIcon: Icons.lock_outline,
-              obscure: true,
-            ),
-            if (_error != null) ...[
-              const SizedBox(height: AppSpacing.md),
-              AppInlineBanner(message: _error!, type: BannerType.error),
-            ],
-            const SizedBox(height: AppSpacing.lg),
-            AppButton(
-              label: 'Create my login',
-              fullWidth: true,
-              loading: _saving,
-              onPressed: _saving ? null : _submit,
-            ),
+          const SizedBox(height: 16),
+          AppTextField(
+            controller: _passwordCtrl,
+            label: 'Choose a password',
+            prefixIcon: Icons.lock_outline,
+            obscure: true,
+          ),
+          if (_error != null) ...[
+            const SizedBox(height: 16),
+            AppInlineBanner(message: _error!, type: BannerType.error),
           ],
-        ),
+          const SizedBox(height: 24),
+          AppButton(
+            label: 'Create my login',
+            fullWidth: true,
+            loading: _saving,
+            onPressed: _saving ? null : _submit,
+          ),
+        ],
       ),
     );
   }
 }
 
+/// The "you are joining {business} as {role}" clay summary at the top.
+class _JoinSummary extends StatelessWidget {
+  const _JoinSummary({this.businessName, this.roleName});
+  final String? businessName;
+  final String? roleName;
+
+  @override
+  Widget build(BuildContext context) {
+    final lum = context.lum;
+    return ClayContainer(
+      variant: ClayVariant.soft,
+      color: lum.surface,
+      borderRadius: AppRadius.lg,
+      isDark: lum.isDark,
+      padding: const EdgeInsets.all(18),
+      child: Row(
+        children: [
+          ClayContainer(
+            variant: ClayVariant.soft,
+            color: lum.accentSoft,
+            borderRadius: AppRadius.md,
+            isDark: lum.isDark,
+            width: 44,
+            height: 44,
+            child: Icon(LucideIcons.building2, size: 20, color: lum.accent),
+          ),
+          const SizedBox(width: 14),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text('You are joining',
+                    style: AppTypography.footnote.copyWith(color: lum.g500)),
+                const SizedBox(height: 2),
+                Text(businessName ?? 'a business',
+                    style: AppTypography.headline
+                        .copyWith(fontSize: 16, color: lum.textPrimary)),
+                const SizedBox(height: 2),
+                Text('as ${roleName ?? 'staff'}',
+                    style: AppTypography.footnote.copyWith(color: lum.accentPress)),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+/// Read-only email field when the invite locked it to a specific address.
 class _LockedField extends StatelessWidget {
-  const _LockedField({required this.label, required this.value});
-  final String label;
+  const _LockedField({required this.value});
   final String value;
 
   @override
   Widget build(BuildContext context) {
+    final lum = context.lum;
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Text(label, style: AppTypography.footnote.copyWith(color: AppColors.textMuted)),
-        const SizedBox(height: 4),
-        Row(
-          children: [
-            const Icon(Icons.lock_outline, size: 16, color: AppColors.textMuted),
-            const SizedBox(width: 6),
-            Expanded(child: Text(value, style: AppTypography.body)),
-          ],
+        Text('Email (set by your invite)',
+            style: AppTypography.label.copyWith(color: lum.g700)),
+        const SizedBox(height: 8),
+        Container(
+          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 14),
+          decoration: BoxDecoration(
+            color: lum.surface2,
+            borderRadius: BorderRadius.circular(AppRadius.md),
+          ),
+          child: Row(
+            children: [
+              Icon(LucideIcons.lock, size: 16, color: lum.g500),
+              const SizedBox(width: 8),
+              Expanded(
+                child: Text(value,
+                    style: AppTypography.body.copyWith(color: lum.textPrimary)),
+              ),
+            ],
+          ),
         ),
       ],
     );

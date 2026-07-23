@@ -1,12 +1,15 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:lucide_icons_flutter/lucide_icons.dart';
 import 'package:qr_flutter/qr_flutter.dart';
 import '../../../../core/design/app_colors.dart';
 import '../../../../core/design/app_radius.dart';
-import '../../../../core/design/app_spacing.dart';
 import '../../../../core/design/app_typography.dart';
+import '../../../../core/design/clay.dart';
 import '../../../../core/design/widgets/app_button.dart';
+import '../../../../core/design/widgets/app_detail_scaffold.dart';
 import '../../../../core/design/widgets/app_inline_banner.dart';
+import '../../../../core/design/widgets/app_states.dart';
 import '../../domain/entities/staff_entities.dart';
 
 /// Shows the invite QR + raw token ONCE. The token is never persisted or
@@ -19,64 +22,73 @@ class InviteQrPage extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
-      backgroundColor: AppColors.background,
-      appBar: AppBar(
-        backgroundColor: AppColors.background,
-        surfaceTintColor: AppColors.background,
-        leading: IconButton(
-          icon: const Icon(Icons.close, color: AppColors.accent),
-          onPressed: () => Navigator.of(context).pop(),
-        ),
-        title: Text('Staff invite', style: AppTypography.headline),
-      ),
-      body: SafeArea(
-        child: invite == null ? _expired(context) : _qr(context, invite!),
-      ),
+    final inv = invite;
+    return AppDetailScaffold(
+      eyebrow: 'Invites',
+      title: inv == null ? 'Code unavailable' : 'Invite ready',
+      maxContentWidth: 560,
+      child: inv == null ? _expired(context) : _qr(context, inv),
     );
   }
 
-  Widget _expired(BuildContext context) => Center(
-        child: Padding(
-          padding: const EdgeInsets.all(AppSpacing.screenPadding),
-          child: AppInlineBanner(
-            message:
-                'This code is shown only once and is no longer available. Regenerate the invite to get a new one.',
-            type: BannerType.info,
-          ),
+  Widget _expired(BuildContext context) => AppEmptyState(
+        icon: LucideIcons.eyeOff,
+        title: 'This code was shown once',
+        body: "For safety we don't store the code after it's revealed. It's no "
+            'longer available here — regenerate a fresh one from the invite.',
+        action: AppButton(
+          label: 'Back to invites',
+          variant: AppButtonVariant.tinted,
+          onPressed: () => Navigator.of(context).maybePop(),
         ),
       );
 
   Widget _qr(BuildContext context, CreatedInvite inv) {
-    return ListView(
-      padding: const EdgeInsets.all(AppSpacing.screenPadding),
+    final lum = context.lum;
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
         AppInlineBanner(
-          message: 'Shown once — show it to your staff now. Leaving this screen loses it.',
+          message: 'Shown only once. If you leave this screen you\'ll need to '
+              'regenerate it — nothing is lost, just re-issued.',
           type: BannerType.error,
         ),
-        const SizedBox(height: AppSpacing.lg),
-        Center(
-          child: Container(
-            padding: const EdgeInsets.all(AppSpacing.md),
-            decoration: BoxDecoration(
-              color: Colors.white,
-              borderRadius: BorderRadius.circular(AppRadius.card),
-              border: Border.all(color: AppColors.separator, width: 0.5),
-            ),
-            child: QrImageView(
-              data: inv.qrPayload,
-              version: QrVersions.auto,
-              size: 260,
-            ),
+        const SizedBox(height: 20),
+        ClayContainer(
+          variant: ClayVariant.soft,
+          color: lum.surface,
+          borderRadius: AppRadius.lg,
+          isDark: lum.isDark,
+          padding: const EdgeInsets.all(20),
+          child: Column(
+            children: [
+              // QR stays on white in every theme so scanners read it.
+              Container(
+                padding: const EdgeInsets.all(16),
+                decoration: BoxDecoration(
+                  color: Colors.white,
+                  borderRadius: BorderRadius.circular(AppRadius.md),
+                ),
+                child: QrImageView(
+                  data: inv.qrPayload,
+                  version: QrVersions.auto,
+                  size: 220,
+                ),
+              ),
+              const SizedBox(height: 16),
+              Text(
+                'Have your teammate open the LUMINA app → "Join with QR", '
+                'or share the code below.',
+                textAlign: TextAlign.center,
+                style: AppTypography.footnote.copyWith(color: lum.g500, height: 1.5),
+              ),
+              const SizedBox(height: 8),
+              Text('Expires ${_fmtExpiry(inv.expiresAt)}',
+                  style: AppTypography.caption.copyWith(color: lum.g400)),
+            ],
           ),
         ),
-        const SizedBox(height: AppSpacing.lg),
-        Center(
-          child: Text('Expires ${_fmtExpiry(inv.expiresAt)}',
-              style: AppTypography.footnote.copyWith(color: AppColors.textMuted)),
-        ),
-        const SizedBox(height: AppSpacing.lg),
+        const SizedBox(height: 20),
         _TokenRow(token: inv.token),
       ],
     );
@@ -90,32 +102,53 @@ class InviteQrPage extends StatelessWidget {
   }
 }
 
-class _TokenRow extends StatelessWidget {
+class _TokenRow extends StatefulWidget {
   const _TokenRow({required this.token});
   final String token;
 
   @override
+  State<_TokenRow> createState() => _TokenRowState();
+}
+
+class _TokenRowState extends State<_TokenRow> {
+  bool _copied = false;
+
+  Future<void> _copy() async {
+    await Clipboard.setData(ClipboardData(text: widget.token));
+    if (!mounted) return;
+    setState(() => _copied = true);
+    await Future<void>.delayed(const Duration(seconds: 2));
+    if (mounted) setState(() => _copied = false);
+  }
+
+  @override
   Widget build(BuildContext context) {
+    final lum = context.lum;
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Text('Or enter this code manually:',
-            style: AppTypography.footnote.copyWith(color: AppColors.textMuted)),
-        const SizedBox(height: AppSpacing.sm),
-        SelectableText(token,
-            style: AppTypography.body.copyWith(fontFamily: 'monospace')),
-        const SizedBox(height: AppSpacing.md),
+        Text('Invite code',
+            style: AppTypography.label.copyWith(color: lum.g700)),
+        const SizedBox(height: 8),
+        Container(
+          width: double.infinity,
+          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 14),
+          decoration: BoxDecoration(
+            color: lum.surface2,
+            borderRadius: BorderRadius.circular(AppRadius.md),
+          ),
+          child: SelectableText(
+            widget.token,
+            style: AppTypography.monoValue.copyWith(color: lum.textPrimary),
+          ),
+        ),
+        const SizedBox(height: 12),
         AppButton(
-          label: 'Copy code',
+          label: _copied ? 'Code copied' : 'Copy code',
           variant: AppButtonVariant.tinted,
-          icon: Icons.copy,
-          onPressed: () async {
-            await Clipboard.setData(ClipboardData(text: token));
-            if (context.mounted) {
-              ScaffoldMessenger.of(context)
-                  .showSnackBar(const SnackBar(content: Text('Code copied.')));
-            }
-          },
+          fullWidth: true,
+          icon: _copied ? LucideIcons.check : LucideIcons.copy,
+          onPressed: _copy,
         ),
       ],
     );
