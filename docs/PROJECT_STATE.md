@@ -1,6 +1,6 @@
 # PROJECT STATE — Lumina POS
 
-Last updated: 2026-07-21
+Last updated: 2026-07-23
 
 ## Stack & Architecture
 
@@ -274,6 +274,37 @@ of all 5 customers screens. Customers was the last module on light-only static `
 - **VERIFY OWED (on-device eyeball)**: agent env can't foreground/screenshot — 900px rail/bottom-bar
   boundary, all 5 screens in light + dark, list empty/error/no-results, delete confirm, overpayment
   guard, and a screenshot diff vs the 3 reference renders (list, detail).
+
+## UI Redesign — staff module (DONE 2026-07-23; detail in DECISIONS)
+Eighth design export ("Staff wizard and roles prototype"), SAME design-system UUID (5cd3f8f0-…)
+→ tokens untouched; consumer-side reskin of all 8 staff screens. Staff was the last feature on
+light-only static `AppColors` + hand-rolled Material chrome — now zero static-colour refs, works
+in Counter mode.
+- **Push-based, router untouched** (user choice — NOT promoted to a nav branch). router.dart +
+  bottom_nav_shell.dart byte-identical; staff stays reached by push from Settings/HR/login. The 6
+  admin screens use `AppDetailScaffold` (clay eyebrow/title/back header) with an honest breadcrumb
+  eyebrow (Invites/Roles/Members) — the mock's "STEP N OF 3" is dropped (no wizard object exists).
+- **Both invitee join screens included** (join_scan, join_redeem, pre-auth). join_redeem uses
+  AppDetailScaffold; join_scan keeps a bespoke Scaffold (camera needs full bleed). MobileScanner,
+  extractInviteToken, staffRepositoryProvider calls and the `go('/otp')`/`go('/')` targets identical.
+- **Honest data** — every mock value is backed: `TenantRole.permissionCount/userCount/hierarchyLevel/
+  isSystemRole/description` drive the role card; `StaffInvite.effectiveStatus` maps 1:1 to AppPill
+  tones (PENDING→lumen, AWAITING_CONFIRMATION→warning, REDEEMED→success, EXPIRED→neutral,
+  REVOKED→danger); role-picker perms count + QR token/expiry are real. Generic `shield` role icon
+  (mock hard-maps per role id → arbitrary); "Active/Empty/Loading" demo tabs omitted.
+- **New module widgets** (`presentation/widgets/`): staff_ui.dart (status/initials/relative-time
+  helpers), staff_invite_card, staff_role_card, staff_member_row, staff_option_card (selectable
+  clay card), staff_segmented (pill tab/segment). Material dropdowns→option cards, checkboxes→
+  AppCheckbox tiles, expiry dropdown + Roles/Members TabBar→StaffSegmented. No core/design edits,
+  no new deps. All PermissionGate keys unchanged (users:create/update, settings:create).
+- **Side effect**: pull-to-refresh dropped on the invites/roles lists (AppDetailScaffold has no
+  RefreshIndicator slot); lists still refresh after every StaffActions mutation. Pre-existing
+  out-of-scope: /join/redeem route `extra` is an unguarded record cast (router.dart), left untouched.
+- GATE: `flutter analyze` **8 issues, 0 new** (baseline 8); macOS debug build succeeds; `flutter
+  test` = the same 2 pre-existing failures as clean HEAD (widget_test smoke + kpi_layout).
+- **VERIFY OWED (on-device eyeball)** — agent env can't foreground/screenshot: all 8 screens in
+  light + dark, invites empty/error, the permission matrix, QR copy-flip + shown-once path, the
+  branch/role selection cards, and a screenshot diff vs the export renders.
 
 ## Auth UX pass — Phases 1–4 DONE (2026-07-20)
 Interaction/UX depth pass on top of the LUMINA reskin (plan: friction→feedback→flow→a11y; delight
