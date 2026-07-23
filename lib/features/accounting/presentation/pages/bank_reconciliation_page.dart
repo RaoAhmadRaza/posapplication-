@@ -46,7 +46,18 @@ class _BankReconciliationPageState
 
   Future<void> _pickAdjustmentAccount() async {
     final accounts = ref.read(chartOfAccountsProvider).value ?? const [];
-    final picked = await showAccountPicker(context, accounts,
+    // Exclude the bank's own chart account: an adjustment posted against it would
+    // cancel itself out (both legs on the same account = no-op).
+    final bankChartId = ref
+        .read(bankAccountsProvider)
+        .value
+        ?.where((a) => a.id == widget.bankAccountId)
+        .cast<BankAccount?>()
+        .firstOrNull
+        ?.chartAccountId;
+    final options =
+        accounts.where((a) => a.id != bankChartId).toList(growable: false);
+    final picked = await showAccountPicker(context, options,
         title: 'Adjustment account');
     if (picked != null) setState(() => _adjustmentAccount = picked);
   }

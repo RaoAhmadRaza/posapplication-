@@ -13,7 +13,8 @@ class PostJournalResultModel {
 class ReverseJournalResultModel {
   static ReverseJournalResult fromJson(Map<String, dynamic> json) {
     return ReverseJournalResult(
-      journalEntryId: json['journal_entry_id'] as String,
+      // RPC returns `reversal_entry_id`, not `journal_entry_id`.
+      journalEntryId: json['reversal_entry_id'] as String? ?? '',
       entryNumber: json['entry_number'] as String? ?? '',
     );
   }
