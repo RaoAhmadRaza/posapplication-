@@ -105,7 +105,14 @@ class GlobalSearchFieldState extends ConsumerState<GlobalSearchField> {
   void _openHit(SearchHit hit) {
     _controller.clear();
     _dismiss();
-    context.push(hit.route);
+    // Customer hits land in a nav-shell branch; go switches to it (a push from
+    // the shell chrome would duplicate the shell page key). Product/invoice
+    // hits are top-level pages and push cleanly.
+    if (hit.route.startsWith('/customers')) {
+      context.go(hit.route);
+    } else {
+      context.push(hit.route);
+    }
   }
 
   Widget _buildPanel(BuildContext overlayContext) {
