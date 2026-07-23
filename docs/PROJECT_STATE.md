@@ -351,6 +351,39 @@ Material Scaffold/AppBar — now zero static-colour refs, zero raw chrome, works
   stat-card grid at each breakpoint, the schedule sheet (dropdowns/toggle), empty/error states, and a
   screenshot diff vs the export renders.
 
+## UI Redesign — accounting module (DONE 2026-07-23; detail in DECISIONS)
+Tenth design export ("Accounting screens"), SAME design-system UUID (5cd3f8f0-…) → tokens untouched;
+consumer-side reskin of all 19 accounting screens. Accounting was the LAST feature on light-only static
+`AppColors` (~200 refs, 0 `context.lum`) + hand-rolled Scaffold/AppBar + raw Material dropdowns/switches/
+dialogs/snackbars/FABs — now **zero** static-colour refs across the module, works in Counter mode.
+- **Promoted to a nav-shell branch (index 8)** (user choice, mirrors reporting=7). The 22 `/accounting*`
+  routes moved from top-level GoRoutes into a new `StatefulShellBranch` (after reports=7, no index shifts)
+  on pageBuilder + `_fadePage`; hub = branch root. `bottom_nav_shell.dart` gained an Accounting item
+  (`LucideIcons.calculator`, gated `accounting:read`, slotted before the pinned Settings) + `_kAccountingBranch=8`
+  — no sub-rail (like reporting). Only the branch-root inbound `inventory_hub_page:145` flipped push→go;
+  the 9 cross-module deep-links into accounting sub-pages (settings/auth-settings ×2 → tax-rules, payroll
+  → journal, reports-hub ×4 "opens in Accounting", dashboard KPI, drilldown) stay `push` (a go'd sub-page
+  has a dead back). All PermissionGate keys (`accounting` create/update/approve/export) byte-identical.
+- **BACKEND slice (user-approved boundary exception)** — migration `accounting_report_line_items`:
+  `balance_sheet` gains a `by_account` breakdown (P&L already had one); new `list_journal_entries(p_limit)`
+  RPC returns each entry + posted `total`. Entities/models additive: `ProfitLoss`/`BalanceSheet` +=
+  `lines` (revenue/expense/asset/liability/equity getters), `JournalEntry` += `total`, new `ReportLine`.
+  `fromJson` defaults new keys to `[]`/0 so a pre-migration backend degrades gracefully. So P&L + balance
+  sheet now render REAL itemized rows and journal-list rows show a real amount (were the honest-data gaps).
+- **Hub** = `ModuleScaffold` + width-derived 2-up clay tile grid (static design descriptors, no fabricated
+  counts). All 18 sub-pages = `AppDetailScaffold` (clay back → hub). Forms → AppDropdown/AppToggle/
+  AcctDateField (raw DropdownButton/SwitchListTile/showDatePicker retired); voucher account picker →
+  searchable showAppSheet; dialogs → showAppSheet/showAppConfirm; SnackBars → showAppToast. Reports use new
+  module widgets `AcctReportTable`/`AcctStatementSection`+dark `AcctNetRow`/`AcctLedgerCard`; report filters
+  reskinned to clay chips. Decorative header ⌘K search omitted (no accounting search); in-page searches kept.
+- New module widgets (presentation/widgets/): accounting_ui (icon tile/mono/code chip/pill mappers/header
+  helpers), acct_hub_grid, acct_ledger_table, acct_report_table, acct_statement, acct_date_field. No new
+  deps, no core/design edits. Expense-category lock icon dropped (no isSystem field).
+- GATE: `flutter analyze` **8 issues, 0 new** (baseline 8); migration pushed to prod (db push clean).
+- **VERIFY OWED (on-device eyeball)** — agent env can't screenshot: all 19 screens light + dark, the nav
+  tab + 900px rail/bottom-bar boundary, back from every sub-page → hub, the 9 push deep-links return to
+  origin, the itemized P&L/balance-sheet + journal amounts, voucher balance strip, and a screenshot diff.
+
 ## Auth UX pass — Phases 1–4 DONE (2026-07-20)
 Interaction/UX depth pass on top of the LUMINA reskin (plan: friction→feedback→flow→a11y; delight
 Phase 5 deferred). Frontend + minimal flow/routing (user-approved exception to UI-only guardrail).

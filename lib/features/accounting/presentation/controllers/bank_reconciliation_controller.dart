@@ -5,6 +5,8 @@ import '../../domain/failures/accounting_failure.dart';
 import '../../domain/usecases/complete_bank_reconciliation.dart';
 import '../../domain/usecases/create_bank_reconciliation.dart';
 import '../../domain/usecases/load_bank_reconciliations.dart';
+import 'chart_of_accounts_controller.dart';
+import 'journal_controller.dart';
 
 final bankReconciliationsProvider = FutureProvider.autoDispose
     .family<List<BankReconciliation>, String>((ref, bankAccountId) async {
@@ -48,6 +50,7 @@ class BankReconciliationController extends Notifier<void> {
     required String bankAccountId,
     required String reconciliationId,
     required double reconciledBalance,
+    String? adjustmentAccountCode,
     String? notes,
   }) async {
     final (_, failure) = await ref
@@ -55,10 +58,15 @@ class BankReconciliationController extends Notifier<void> {
         .call(
           reconciliationId: reconciliationId,
           reconciledBalance: reconciledBalance,
+          adjustmentAccountCode: adjustmentAccountCode,
           notes: notes,
         );
     if (failure != null) return failure;
     ref.invalidate(bankReconciliationsProvider(bankAccountId));
+    // A posted adjustment moves the bank's chart-account balance and adds a
+    // journal entry, so refresh the ledgers/journal that show them.
+    ref.invalidate(chartOfAccountsProvider);
+    ref.invalidate(journalEntriesProvider);
     return null;
   }
 }

@@ -10,11 +10,13 @@ class CompleteBankReconciliation {
   Future<(bool, AccountingFailure?)> call({
     required String reconciliationId,
     required double reconciledBalance,
+    String? adjustmentAccountCode,
     String? notes,
   }) {
     return _repo.completeBankReconciliation(
       reconciliationId: reconciliationId,
       reconciledBalance: reconciledBalance,
+      adjustmentAccountCode: adjustmentAccountCode,
       notes: notes,
     );
   }

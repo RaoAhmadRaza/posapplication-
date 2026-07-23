@@ -641,12 +641,14 @@ class AccountingRepositoryImpl implements AccountingRepository {
   Future<(bool, AccountingFailure?)> completeBankReconciliation({
     required String reconciliationId,
     required double reconciledBalance,
+    String? adjustmentAccountCode,
     String? notes,
   }) async {
     try {
       await _ds.completeBankReconciliation(
         reconciliationId: reconciliationId,
         reconciledBalance: reconciledBalance,
+        adjustmentAccountCode: adjustmentAccountCode,
         notes: notes,
       );
       return (true, null);

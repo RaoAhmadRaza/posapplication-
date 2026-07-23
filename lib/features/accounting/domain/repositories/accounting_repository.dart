@@ -180,6 +180,7 @@ abstract class AccountingRepository {
   Future<(bool, AccountingFailure?)> completeBankReconciliation({
     required String reconciliationId,
     required double reconciledBalance,
+    String? adjustmentAccountCode,
     String? notes,
   });
 }

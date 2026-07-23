@@ -1,20 +1,29 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:lucide_icons_flutter/lucide_icons.dart';
 import '../../../../core/design/app_colors.dart';
 import '../../../../core/design/app_radius.dart';
-import '../../../../core/design/app_spacing.dart';
 import '../../../../core/design/app_typography.dart';
 import '../../../../core/design/format.dart';
 import '../../../../core/design/widgets/app_button.dart';
 import '../../../../core/design/widgets/app_card.dart';
+import '../../../../core/design/widgets/app_detail_scaffold.dart';
 import '../../../../core/design/widgets/app_inline_banner.dart';
+import '../../../../core/design/widgets/app_money_text.dart';
+import '../../../../core/design/widgets/app_pill.dart';
 import '../../../../core/design/widgets/app_text_field.dart';
+import '../../../../core/design/widgets/app_toast.dart';
 import '../../../../core/widgets/permission_gate.dart';
+import '../../domain/entities/account.dart';
 import '../../domain/entities/bank_account.dart';
 import '../../domain/entities/bank_reconciliation.dart';
 import '../../domain/entities/reconciliation_result.dart';
 import '../controllers/bank_accounts_controller.dart';
 import '../controllers/bank_reconciliation_controller.dart';
+import '../controllers/chart_of_accounts_controller.dart';
+import '../widgets/acct_account_picker.dart';
+import '../widgets/acct_date_field.dart';
+import '../widgets/accounting_ui.dart';
 
 class BankReconciliationPage extends ConsumerStatefulWidget {
   const BankReconciliationPage({super.key, required this.bankAccountId});
@@ -32,7 +41,15 @@ class _BankReconciliationPageState
   final _reconciledBalance = TextEditingController();
   DateTime _statementDate = DateTime.now();
   ReconciliationResult? _result;
+  Account? _adjustmentAccount;
   bool _busy = false;
+
+  Future<void> _pickAdjustmentAccount() async {
+    final accounts = ref.read(chartOfAccountsProvider).value ?? const [];
+    final picked = await showAccountPicker(context, accounts,
+        title: 'Adjustment account');
+    if (picked != null) setState(() => _adjustmentAccount = picked);
+  }
 
   @override
   void dispose() {
@@ -41,23 +58,11 @@ class _BankReconciliationPageState
     super.dispose();
   }
 
-  String _day(DateTime d) => '${d.year}-${d.month.toString().padLeft(2, '0')}'
-      '-${d.day.toString().padLeft(2, '0')}';
-
-  Future<void> _pickDate() async {
-    final picked = await showDatePicker(
-      context: context,
-      initialDate: _statementDate,
-      firstDate: DateTime(2000),
-      lastDate: DateTime(2100),
-    );
-    if (picked != null) setState(() => _statementDate = picked);
-  }
-
   Future<void> _create() async {
     final balance = double.tryParse(_statementBalance.text.trim());
     if (balance == null) {
-      _snack('Enter a valid statement balance.');
+      showAppToast(context, 'Enter a valid statement balance.',
+          type: BannerType.error);
       return;
     }
     setState(() => _busy = true);
@@ -73,7 +78,9 @@ class _BankReconciliationPageState
       _busy = false;
       _result = result;
     });
-    if (failure != null) _snack(failure.message);
+    if (failure != null) {
+      showAppToast(context, failure.message, type: BannerType.error);
+    }
   }
 
   Future<void> _complete() async {
@@ -81,7 +88,16 @@ class _BankReconciliationPageState
     if (result == null) return;
     final balance = double.tryParse(_reconciledBalance.text.trim());
     if (balance == null) {
-      _snack('Enter a valid reconciled balance.');
+      showAppToast(context, 'Enter a valid reconciled balance.',
+          type: BannerType.error);
+      return;
+    }
+    // A difference from the books must be booked somewhere — the RPC posts a
+    // balancing journal against the account the user names (the real cause).
+    final needsAdjustment = (balance - result.ledgerBalance).abs() >= 0.005;
+    if (needsAdjustment && _adjustmentAccount == null) {
+      showAppToast(context, 'Choose an account for the difference.',
+          type: BannerType.error);
       return;
     }
     setState(() => _busy = true);
@@ -91,24 +107,22 @@ class _BankReconciliationPageState
           bankAccountId: widget.bankAccountId,
           reconciliationId: result.reconciliationId,
           reconciledBalance: balance,
+          adjustmentAccountCode: _adjustmentAccount?.code,
         );
     if (!mounted) return;
     setState(() => _busy = false);
     if (failure != null) {
-      _snack(failure.message);
+      showAppToast(context, failure.message, type: BannerType.error);
       return;
     }
     setState(() {
       _result = null;
+      _adjustmentAccount = null;
       _statementBalance.clear();
       _reconciledBalance.clear();
     });
-    _snack('Reconciliation completed');
-  }
-
-  void _snack(String message) {
-    ScaffoldMessenger.of(context)
-        .showSnackBar(SnackBar(content: Text(message)));
+    showAppToast(context, 'Reconciliation completed',
+        type: BannerType.success);
   }
 
   @override
@@ -122,154 +136,98 @@ class _BankReconciliationPageState
             ?.accountName ??
         'Bank Account';
 
-    return Scaffold(
-      backgroundColor: AppColors.background,
-      appBar: AppBar(
-        backgroundColor: AppColors.background,
-        surfaceTintColor: AppColors.background,
-        leading: IconButton(
-          icon: const Icon(Icons.arrow_back_ios,
-              color: AppColors.accent, size: 20),
-          onPressed: () => Navigator.of(context).pop(),
-        ),
-        title: Text('Reconcile', style: AppTypography.headline),
-      ),
-      body: SafeArea(
-        child: ListView(
-          padding: const EdgeInsets.symmetric(
-              horizontal: AppSpacing.screenPadding, vertical: AppSpacing.md),
-          children: [
-            Text(name, style: AppTypography.title2),
-            const SizedBox(height: AppSpacing.xs),
-            Text(
-              'Manual balance reconciliation — snapshot statement vs books, '
-              'not line-by-line matching.',
-              style:
-                  AppTypography.footnote.copyWith(color: AppColors.textMuted),
-            ),
-            const SizedBox(height: AppSpacing.lg),
-            _NewReconciliationForm(
-              statementDateLabel: _day(_statementDate),
-              statementBalance: _statementBalance,
+    return AppDetailScaffold(
+      eyebrow: 'Accounting',
+      title: 'Reconcile',
+      description: name,
+      maxContentWidth: 720,
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          _NewReconciliationCard(
+            statementDate: _statementDate,
+            statementBalance: _statementBalance,
+            busy: _busy,
+            onPickDate: (v) {
+              if (v != null) setState(() => _statementDate = v);
+            },
+            onCreate: _busy ? null : _create,
+          ),
+          if (_result != null) ...[
+            const SizedBox(height: 20),
+            _ResultBlock(result: _result!),
+            const SizedBox(height: 20),
+            _RecordCard(
+              reconciledBalance: _reconciledBalance,
               busy: _busy,
-              onPickDate: _pickDate,
-              onCreate: _create,
+              hasDifference: _result!.difference != 0,
+              adjustmentAccount: _adjustmentAccount,
+              onPickAccount: _pickAdjustmentAccount,
+              onComplete: _busy ? null : _complete,
             ),
-            if (_result != null) ...[
-              const SizedBox(height: AppSpacing.lg),
-              _ResultCard(result: _result!),
-              const SizedBox(height: AppSpacing.lg),
-              AppTextField(
-                controller: _reconciledBalance,
-                label: 'Record reconciled balance',
-                prefixIcon: Icons.check_circle_outline,
-                keyboardType:
-                    const TextInputType.numberWithOptions(decimal: true),
-              ),
-              const SizedBox(height: AppSpacing.md),
-              PermissionGate(
-                module: 'accounting',
-                action: 'approve',
-                child: AppButton(
-                  label: 'Complete',
-                  fullWidth: true,
-                  loading: _busy,
-                  onPressed: _busy ? null : _complete,
-                ),
-              ),
-            ],
-            const SizedBox(height: AppSpacing.xl),
-            Text('Prior reconciliations', style: AppTypography.headline),
-            const SizedBox(height: AppSpacing.md),
-            priors.when(
-              loading: () =>
-                  const Center(child: CircularProgressIndicator()),
-              error: (e, _) => AppInlineBanner(
-                  message: 'Could not load reconciliations.',
-                  type: BannerType.error),
-              data: (items) => items.isEmpty
-                  ? Text('None yet',
-                      style: AppTypography.subhead
-                          .copyWith(color: AppColors.textMuted))
-                  : Column(
-                      children: [
-                        for (final r in items) ...[
-                          _PriorTile(reconciliation: r),
-                          const SizedBox(height: AppSpacing.sm),
-                        ],
-                      ],
-                    ),
-            ),
-            const SizedBox(height: AppSpacing.xxl),
           ],
-        ),
+          const SizedBox(height: 20),
+          _PriorsCard(priors: priors),
+        ],
       ),
     );
   }
 }
 
-class _NewReconciliationForm extends StatelessWidget {
-  const _NewReconciliationForm({
-    required this.statementDateLabel,
+class _NewReconciliationCard extends StatelessWidget {
+  const _NewReconciliationCard({
+    required this.statementDate,
     required this.statementBalance,
     required this.busy,
     required this.onPickDate,
     required this.onCreate,
   });
 
-  final String statementDateLabel;
+  final DateTime statementDate;
   final TextEditingController statementBalance;
   final bool busy;
-  final VoidCallback onPickDate;
-  final VoidCallback onCreate;
+  final ValueChanged<DateTime?> onPickDate;
+  final VoidCallback? onCreate;
 
   @override
   Widget build(BuildContext context) {
     return AppCard(
+      padding: const EdgeInsets.all(20),
       child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
+        crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          Text('New reconciliation', style: AppTypography.headline),
-          const SizedBox(height: AppSpacing.md),
-          Text('Statement date', style: AppTypography.fieldLabel),
-          const SizedBox(height: AppSpacing.xs),
-          InkWell(
-            onTap: onPickDate,
-            borderRadius: BorderRadius.circular(AppRadius.field),
-            child: Container(
-              height: 52,
-              padding: const EdgeInsets.symmetric(horizontal: 12),
-              decoration: BoxDecoration(
-                color: AppColors.fieldFill,
-                borderRadius: BorderRadius.circular(AppRadius.field),
+          const AcctSectionLabel('New reconciliation'),
+          const SizedBox(height: 14),
+          _FieldsGrid(
+            children: [
+              _Labeled(
+                'Statement date',
+                AcctDateField(
+                  value: statementDate,
+                  onChanged: onPickDate,
+                ),
               ),
-              child: Row(
-                children: [
-                  const Icon(Icons.calendar_today,
-                      color: AppColors.textMuted, size: 20),
-                  const SizedBox(width: 10),
-                  Text(statementDateLabel, style: AppTypography.fieldText),
-                ],
+              AppTextField(
+                controller: statementBalance,
+                label: 'Statement balance',
+                prefixIcon: LucideIcons.banknote,
+                hint: '0',
+                keyboardType:
+                    const TextInputType.numberWithOptions(decimal: true),
               ),
-            ),
+            ],
           ),
-          const SizedBox(height: AppSpacing.fieldGap),
-          AppTextField(
-            controller: statementBalance,
-            label: 'Statement balance',
-            prefixIcon: Icons.account_balance,
-            keyboardType:
-                const TextInputType.numberWithOptions(decimal: true),
-          ),
-          const SizedBox(height: AppSpacing.md),
+          const SizedBox(height: 16),
           PermissionGate(
             module: 'accounting',
             action: 'create',
             child: AppButton(
               label: 'Start reconciliation',
+              variant: AppButtonVariant.tinted,
+              icon: LucideIcons.play,
               fullWidth: true,
               loading: busy,
-              onPressed: busy ? null : onCreate,
+              onPressed: onCreate,
             ),
           ),
         ],
@@ -278,102 +236,320 @@ class _NewReconciliationForm extends StatelessWidget {
   }
 }
 
-class _ResultCard extends StatelessWidget {
-  const _ResultCard({required this.result});
+class _ResultBlock extends StatelessWidget {
+  const _ResultBlock({required this.result});
   final ReconciliationResult result;
 
   @override
   Widget build(BuildContext context) {
-    final matched = result.difference.abs() < 0.005;
-    final diffColor = matched ? AppColors.success : AppColors.warning;
-    return AppCard(
+    final lum = context.lum;
+    final matched = result.difference == 0;
+    return Container(
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: lum.surface,
+        borderRadius: BorderRadius.circular(AppRadius.md),
+        border: Border.all(color: lum.hairline),
+      ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          _Row(label: 'Ledger balance', value: result.ledgerBalance),
-          const SizedBox(height: AppSpacing.sm),
-          _Row(label: 'Statement balance', value: result.statementBalance),
-          const Divider(height: AppSpacing.lg, color: AppColors.separator),
-          Text('Difference',
-              style: AppTypography.footnote
-                  .copyWith(color: AppColors.textMuted)),
-          const SizedBox(height: AppSpacing.xs),
-          Text(formatPkr(result.difference),
-              style: AppTypography.title2
-                  .copyWith(color: diffColor, fontWeight: FontWeight.w700)),
+          _ValueRow(label: 'Ledger balance', value: result.ledgerBalance),
+          const SizedBox(height: 12),
+          _ValueRow(label: 'Statement balance', value: result.statementBalance),
+          const SizedBox(height: 12),
+          Container(
+            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
+            decoration: BoxDecoration(
+              color: matched ? lum.successSoft : Colors.transparent,
+              borderRadius: BorderRadius.circular(AppRadius.sm),
+            ),
+            child: matched
+                ? Row(
+                    children: [
+                      Icon(LucideIcons.checkCheck,
+                          size: 17, color: lum.successText),
+                      const SizedBox(width: 8),
+                      Text(
+                        'Matched · ${formatPkr(0)}',
+                        style: AppTypography.subhead.copyWith(
+                          color: lum.successText,
+                          fontWeight: FontWeight.w600,
+                        ),
+                      ),
+                    ],
+                  )
+                : Row(
+                    children: [
+                      Expanded(
+                        child: Text(
+                          'Difference',
+                          style: AppTypography.subhead
+                              .copyWith(color: lum.textSecondary),
+                        ),
+                      ),
+                      AppMoneyText(result.difference,
+                          size: 16, color: lum.danger),
+                    ],
+                  ),
+          ),
         ],
       ),
     );
   }
 }
 
-class _Row extends StatelessWidget {
-  const _Row({required this.label, required this.value});
+class _ValueRow extends StatelessWidget {
+  const _ValueRow({required this.label, required this.value});
   final String label;
   final double value;
 
   @override
   Widget build(BuildContext context) {
+    final lum = context.lum;
     return Row(
       children: [
         Expanded(
-          child: Text(label,
-              style: AppTypography.subhead
-                  .copyWith(color: AppColors.textMuted)),
+          child: Text(
+            label,
+            style: AppTypography.subhead.copyWith(color: lum.textSecondary),
+          ),
         ),
-        Text(formatPkr(value), style: AppTypography.subhead),
+        AppMoneyText(value, size: 16),
       ],
     );
   }
 }
 
-class _PriorTile extends StatelessWidget {
-  const _PriorTile({required this.reconciliation});
-  final BankReconciliation reconciliation;
+class _RecordCard extends StatelessWidget {
+  const _RecordCard({
+    required this.reconciledBalance,
+    required this.busy,
+    required this.hasDifference,
+    required this.adjustmentAccount,
+    required this.onPickAccount,
+    required this.onComplete,
+  });
 
-  String _day(DateTime d) => '${d.year}-${d.month.toString().padLeft(2, '0')}'
-      '-${d.day.toString().padLeft(2, '0')}';
+  final TextEditingController reconciledBalance;
+  final bool busy;
+  final bool hasDifference;
+  final Account? adjustmentAccount;
+  final VoidCallback onPickAccount;
+  final VoidCallback? onComplete;
 
   @override
   Widget build(BuildContext context) {
-    final completed = reconciliation.status.toUpperCase() == 'COMPLETED';
-    final chipColor = completed ? AppColors.success : AppColors.warning;
-    return Container(
-      padding: const EdgeInsets.symmetric(
-          horizontal: AppSpacing.base, vertical: AppSpacing.md),
-      decoration: BoxDecoration(
-        color: AppColors.fieldFill,
-        borderRadius: BorderRadius.circular(AppRadius.field),
-        border: Border.all(color: AppColors.separator),
-      ),
-      child: Row(
+    final lum = context.lum;
+    return AppCard(
+      padding: const EdgeInsets.all(20),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(_day(reconciliation.statementDate),
-                    style: AppTypography.subhead),
-                const SizedBox(height: AppSpacing.xs),
-                Text('Diff ${formatPkr(reconciliation.difference)}',
-                    style: AppTypography.footnote
-                        .copyWith(color: AppColors.textMuted)),
-              ],
-            ),
+          const AcctSectionLabel('Record reconciled balance'),
+          const SizedBox(height: 14),
+          AppTextField(
+            controller: reconciledBalance,
+            label: 'Reconciled balance',
+            prefixIcon: LucideIcons.banknote,
+            hint: '0',
+            keyboardType: const TextInputType.numberWithOptions(decimal: true),
           ),
-          Container(
-            padding: const EdgeInsets.symmetric(
-                horizontal: AppSpacing.sm, vertical: AppSpacing.xs),
-            decoration: BoxDecoration(
-              color: chipColor.withValues(alpha: 0.12),
-              borderRadius: BorderRadius.circular(AppSpacing.sm),
+          if (hasDifference) ...[
+            const SizedBox(height: 14),
+            const AcctSectionLabel('Adjustment account'),
+            const SizedBox(height: 7),
+            Text(
+              'The difference posts a balancing journal to this account.',
+              style: AppTypography.footnote.copyWith(color: lum.g500),
             ),
-            child: Text(reconciliation.status.toUpperCase(),
-                style: AppTypography.caption
-                    .copyWith(color: chipColor, fontWeight: FontWeight.w600)),
+            const SizedBox(height: 8),
+            Semantics(
+              button: true,
+              label: adjustmentAccount == null
+                  ? 'Choose adjustment account'
+                  : '${adjustmentAccount!.code} ${adjustmentAccount!.name}',
+              child: GestureDetector(
+                behavior: HitTestBehavior.opaque,
+                onTap: onPickAccount,
+                child: Container(
+                  height: 46,
+                  padding: const EdgeInsets.symmetric(horizontal: 13),
+                  decoration: BoxDecoration(
+                    color: lum.surface2,
+                    borderRadius: BorderRadius.circular(AppRadius.md),
+                    border: Border.all(color: lum.hairline),
+                  ),
+                  child: Row(
+                    children: [
+                      Icon(LucideIcons.listTree, size: 17, color: lum.g500),
+                      const SizedBox(width: 9),
+                      Expanded(
+                        child: Text(
+                          adjustmentAccount == null
+                              ? 'Choose account'
+                              : '${adjustmentAccount!.code} · ${adjustmentAccount!.name}',
+                          style: AppTypography.subhead.copyWith(
+                            color: adjustmentAccount == null
+                                ? lum.textTertiary
+                                : lum.textPrimary,
+                          ),
+                          overflow: TextOverflow.ellipsis,
+                        ),
+                      ),
+                      Icon(LucideIcons.chevronDown, size: 15, color: lum.g400),
+                    ],
+                  ),
+                ),
+              ),
+            ),
+          ],
+          const SizedBox(height: 16),
+          PermissionGate(
+            module: 'accounting',
+            action: 'approve',
+            child: AppButton(
+              label: 'Complete',
+              icon: LucideIcons.check,
+              fullWidth: true,
+              loading: busy,
+              onPressed: onComplete,
+            ),
           ),
         ],
       ),
+    );
+  }
+}
+
+class _PriorsCard extends StatelessWidget {
+  const _PriorsCard({required this.priors});
+
+  final AsyncValue<List<BankReconciliation>> priors;
+
+  @override
+  Widget build(BuildContext context) {
+    final lum = context.lum;
+    return AppCard(
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          Text('Prior reconciliations', style: AppTypography.headline),
+          const SizedBox(height: 14),
+          priors.when(
+            loading: () => const Center(
+              child: Padding(
+                padding: EdgeInsets.all(8),
+                child: CircularProgressIndicator(),
+              ),
+            ),
+            error: (e, _) => AppInlineBanner(
+              message: 'Could not load reconciliations.',
+              type: BannerType.error,
+            ),
+            data: (items) => items.isEmpty
+                ? Text(
+                    'No reconciliations yet',
+                    style: AppTypography.subhead
+                        .copyWith(color: lum.textTertiary),
+                  )
+                : Column(
+                    children: [
+                      for (var i = 0; i < items.length; i++) ...[
+                        if (i > 0)
+                          Divider(height: 20, color: lum.hairline),
+                        _PriorRow(reconciliation: items[i]),
+                      ],
+                    ],
+                  ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _PriorRow extends StatelessWidget {
+  const _PriorRow({required this.reconciliation});
+  final BankReconciliation reconciliation;
+
+  @override
+  Widget build(BuildContext context) {
+    final lum = context.lum;
+    final completed = reconciliation.status.toUpperCase() == 'COMPLETED';
+    return Row(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Expanded(
+          child: Text(
+            acctFormatDate(reconciliation.statementDate),
+            style: AppTypography.subhead.copyWith(
+              color: lum.textPrimary,
+              fontWeight: FontWeight.w600,
+            ),
+          ),
+        ),
+        const SizedBox(width: 12),
+        Column(
+          crossAxisAlignment: CrossAxisAlignment.end,
+          children: [
+            AppMoneyText(reconciliation.reconciledBalance, size: 15),
+            const SizedBox(height: 7),
+            AppPill(
+              label: acctRefLabel(reconciliation.status),
+              tone: completed ? AppPillTone.success : AppPillTone.neutral,
+            ),
+          ],
+        ),
+      ],
+    );
+  }
+}
+
+/// Two columns on a wide card, one on a narrow one — each cell keeps its
+/// control's natural height.
+class _FieldsGrid extends StatelessWidget {
+  const _FieldsGrid({required this.children});
+
+  final List<Widget> children;
+
+  @override
+  Widget build(BuildContext context) {
+    const gap = 16.0;
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        final twoCol = constraints.maxWidth >= 460;
+        final width =
+            twoCol ? (constraints.maxWidth - gap) / 2 : constraints.maxWidth;
+        return Wrap(
+          spacing: gap,
+          runSpacing: gap,
+          children: [
+            for (final child in children) SizedBox(width: width, child: child),
+          ],
+        );
+      },
+    );
+  }
+}
+
+/// A section label stacked above a control that carries no label of its own.
+class _Labeled extends StatelessWidget {
+  const _Labeled(this.label, this.child);
+
+  final String label;
+  final Widget child;
+
+  @override
+  Widget build(BuildContext context) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        AcctSectionLabel(label),
+        const SizedBox(height: 7),
+        child,
+      ],
     );
   }
 }
