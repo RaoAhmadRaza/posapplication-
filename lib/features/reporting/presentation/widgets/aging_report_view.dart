@@ -1,123 +1,158 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:fl_chart/fl_chart.dart';
+import 'package:lucide_icons_flutter/lucide_icons.dart';
 import '../../../../core/design/app_colors.dart';
-import '../../../../core/design/app_radius.dart';
 import '../../../../core/design/app_spacing.dart';
 import '../../../../core/design/app_typography.dart';
-import '../../../../core/design/format.dart';
-import '../../../../core/design/widgets/app_card.dart';
-import '../../../../core/design/widgets/app_inline_banner.dart';
+import '../../../../core/design/widgets/app_detail_scaffold.dart';
+import '../../../../core/design/widgets/app_money_text.dart';
+import '../../../../core/design/widgets/app_section_card.dart';
+import '../../../../core/design/widgets/app_states.dart';
 import '../../../../core/widgets/permission_gate.dart';
 import '../../domain/entities/reporting.dart';
 import './report_export_button.dart';
+import './reporting_bar_chart.dart';
+import './reporting_stat_card.dart';
+import './reporting_ui.dart';
 
-/// Shared aging-report UI. Both customer and supplier pages wrap this,
-/// passing the matching provider + labels.
+/// Shared aging-report UI. Both customer and supplier pages wrap this, passing
+/// the matching provider + labels.
 class AgingReportView extends ConsumerWidget {
   const AgingReportView({
     super.key,
     required this.provider,
     required this.title,
+    required this.description,
     required this.entityLabel,
   });
 
   final FutureProvider<List<AgingRow>> provider;
   final String title;
+  final String description;
   final String entityLabel;
 
-  static const _bucketNames = ['Current', '1-30', '31-60', '61-90', '90+'];
-  static const _bucketColors = [
-    AppColors.success,
-    AppColors.accent,
-    AppColors.warning,
-    Color(0xFFFF6B30),
-    AppColors.destructive,
-  ];
+  static const _bucketNames = ['Current', '1–30', '31–60', '61–90', '90+'];
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    return Scaffold(
-      backgroundColor: AppColors.background,
-      appBar: AppBar(
-        backgroundColor: AppColors.background,
-        surfaceTintColor: AppColors.background,
-        title: Text(title, style: AppTypography.largeTitle),
-        actions: [
-          ReportExportButton(
-            title: '$entityLabel Aging',
-            headers: [
-              entityLabel,
-              'Total',
-              'Current',
-              '1-30',
-              '31-60',
-              '61-90',
-              '90+',
-              'Max Days',
-            ],
-            rowsBuilder: () {
-              final rows = ref.read(provider).value ?? [];
-              return rows
-                  .map((r) => [
-                        r.name,
-                        r.totalBalance.toStringAsFixed(2),
-                        r.current.toStringAsFixed(2),
-                        r.b1to30.toStringAsFixed(2),
-                        r.b31to60.toStringAsFixed(2),
-                        r.b61to90.toStringAsFixed(2),
-                        r.b90plus.toStringAsFixed(2),
-                        r.maxDaysOverdue.toString(),
-                      ])
-                  .toList();
-            },
-          ),
-        ],
-      ),
-      body: PermissionGate(
+    final lum = context.lum;
+    final async = ref.watch(provider);
+    return AppDetailScaffold(
+      eyebrow: 'Reports',
+      title: title,
+      description: description,
+      actions: [
+        ReportExportButton(
+          title: '$entityLabel Aging',
+          headers: [
+            entityLabel, 'Total', 'Current', '1-30', '31-60', '61-90', '90+',
+            'Max Days',
+          ],
+          rowsBuilder: () {
+            final rows = ref.read(provider).value ?? [];
+            return rows
+                .map((r) => [
+                      r.name,
+                      r.totalBalance.toStringAsFixed(2),
+                      r.current.toStringAsFixed(2),
+                      r.b1to30.toStringAsFixed(2),
+                      r.b31to60.toStringAsFixed(2),
+                      r.b61to90.toStringAsFixed(2),
+                      r.b90plus.toStringAsFixed(2),
+                      r.maxDaysOverdue.toString(),
+                    ])
+                .toList();
+          },
+        ),
+      ],
+      child: PermissionGate(
         module: 'reports',
         action: 'read',
-        fallback: _muted('No access to reports.'),
-        child: _buildBody(ref),
-      ),
-    );
-  }
-
-  Widget _buildBody(WidgetRef ref) {
-    final state = ref.watch(provider);
-    return state.when(
-      loading: () => const Center(child: CircularProgressIndicator()),
-      error: (_, _) => const Padding(
-        padding: EdgeInsets.all(AppSpacing.screenPadding),
-        child: AppInlineBanner(
-          message: 'Could not load report.',
-          type: BannerType.error,
+        fallback: Center(
+          child: Text(
+            'You don’t have access to reports.',
+            style: AppTypography.subhead.copyWith(color: lum.g500),
+          ),
+        ),
+        child: async.when(
+          loading: () => const Padding(
+            padding: EdgeInsets.only(top: AppSpacing.xxxl),
+            child: Center(child: CircularProgressIndicator()),
+          ),
+          error: (_, _) => const AppErrorState(
+            title: 'Couldn’t load the report',
+            body: 'We couldn’t reach the server. Please try again.',
+          ),
+          data: (rows) => rows.isEmpty
+              ? AppEmptyState(
+                  icon: LucideIcons.banknote,
+                  title: 'Nothing outstanding',
+                  body: 'Balances by age will appear here when there are any.',
+                )
+              : _content(context, rows),
         ),
       ),
-      data: (rows) {
-        if (rows.isEmpty) return _muted('Nothing to show.');
-        return _buildContent(rows);
-      },
     );
   }
 
-  Widget _buildContent(List<AgingRow> rows) {
-    final total = rows.fold<double>(0, (sum, r) => sum + r.totalBalance);
+  Widget _content(BuildContext context, List<AgingRow> rows) {
+    final lum = context.lum;
+    final total = rows.fold<double>(0, (s, r) => s + r.totalBalance);
+    final over90 = rows.fold<double>(0, (s, r) => s + r.b90plus);
     final buckets = _sumBuckets(rows);
-    final sorted = [...rows]..sort((a, b) => b.totalBalance.compareTo(a.totalBalance));
+    final muted = Color.lerp(lum.accent, lum.surface, 0.5)!;
+    final colors = [lum.accent, muted, lum.warning, lum.beam, lum.danger];
+    final sorted = [...rows]
+      ..sort((a, b) => b.totalBalance.compareTo(a.totalBalance));
 
-    return ListView(
-      padding: const EdgeInsets.symmetric(horizontal: AppSpacing.screenPadding),
+    final bars = [
+      for (var i = 0; i < buckets.length; i++)
+        ReportingBar(
+          label: _bucketNames[i],
+          value: buckets[i],
+          valueLabel: abbreviateNum(buckets[i]),
+          color: colors[i],
+        ),
+    ];
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
-        const SizedBox(height: AppSpacing.xs),
-        _headlineCard(total),
+        ReportingStatGrid(
+          minTileWidth: 190,
+          cards: [
+            ReportingStatCard(
+              label: 'Total outstanding',
+              icon: LucideIcons.banknote,
+              iconColor: lum.accent,
+              value: AppMoneyText(total, size: 25),
+            ),
+            ReportingStatCard(
+              label: 'Overdue · 90+ days',
+              icon: LucideIcons.clock,
+              iconColor: lum.danger,
+              value: AppMoneyText(over90, size: 25, color: lum.dangerText),
+            ),
+            ReportingStatCard(
+              label: '${entityLabel}s',
+              icon: LucideIcons.users,
+              value: ReportingStatValue('${rows.length}'),
+            ),
+          ],
+        ),
         const SizedBox(height: AppSpacing.xl),
-        _bucketsCard(buckets),
-        const SizedBox(height: AppSpacing.xxl),
-        Text('Top Balances', style: AppTypography.title2),
-        const SizedBox(height: AppSpacing.md),
-        ...sorted.map((r) => _BalanceRow(row: r)),
-        const SizedBox(height: AppSpacing.xxxl),
+        AppSectionCard(
+          eyebrow: 'Aging buckets',
+          child: ReportingBarChart(bars: bars, height: 200),
+        ),
+        const SizedBox(height: AppSpacing.xl),
+        AppSectionCard(
+          eyebrow: 'Top balances',
+          padded: false,
+          child: Column(
+            children: [for (final r in sorted) _BalanceRow(row: r)],
+          ),
+        ),
       ],
     );
   }
@@ -133,138 +168,6 @@ class AgingReportView extends ConsumerWidget {
     }
     return [current, b1, b31, b61, b90];
   }
-
-  Widget _headlineCard(double total) {
-    return AppCard(
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Text(
-            'Total Outstanding',
-            style: AppTypography.footnote.copyWith(color: AppColors.textMuted),
-          ),
-          const SizedBox(height: AppSpacing.sm),
-          Text(
-            formatPkr(total),
-            style: AppTypography.title1.copyWith(color: AppColors.accent),
-          ),
-        ],
-      ),
-    );
-  }
-
-  Widget _bucketsCard(List<double> buckets) {
-    final maxY = buckets.isEmpty
-        ? 100.0
-        : buckets.reduce((a, b) => a > b ? a : b) * 1.2;
-    return AppCard(
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Text('Aging Buckets', style: AppTypography.headline),
-          const SizedBox(height: AppSpacing.xl),
-          SizedBox(
-            height: 200,
-            child: BarChart(
-              BarChartData(
-                alignment: BarChartAlignment.spaceAround,
-                maxY: maxY > 0 ? maxY : 100,
-                barTouchData: BarTouchData(
-                  touchTooltipData: BarTouchTooltipData(
-                    getTooltipItem: (group, _, rod, _) {
-                      return BarTooltipItem(
-                        formatPkr(rod.toY),
-                        const TextStyle(
-                          color: Colors.white,
-                          fontSize: 12,
-                          fontWeight: FontWeight.w600,
-                        ),
-                      );
-                    },
-                  ),
-                ),
-                titlesData: FlTitlesData(
-                  show: true,
-                  bottomTitles: AxisTitles(
-                    sideTitles: SideTitles(
-                      showTitles: true,
-                      getTitlesWidget: (val, _) {
-                        final idx = val.toInt();
-                        if (idx < 0 || idx >= _bucketNames.length) {
-                          return const SizedBox();
-                        }
-                        return Padding(
-                          padding: const EdgeInsets.only(top: 8),
-                          child: Text(
-                            _bucketNames[idx],
-                            style: AppTypography.caption
-                                .copyWith(color: AppColors.textHint),
-                          ),
-                        );
-                      },
-                    ),
-                  ),
-                  leftTitles: AxisTitles(
-                    sideTitles: SideTitles(
-                      showTitles: true,
-                      reservedSize: 40,
-                      getTitlesWidget: (val, _) {
-                        return Text(
-                          val.toStringAsFixed(0),
-                          style: AppTypography.caption
-                              .copyWith(color: AppColors.textHint),
-                        );
-                      },
-                    ),
-                  ),
-                  topTitles: const AxisTitles(
-                    sideTitles: SideTitles(showTitles: false),
-                  ),
-                  rightTitles: const AxisTitles(
-                    sideTitles: SideTitles(showTitles: false),
-                  ),
-                ),
-                gridData: FlGridData(
-                  show: true,
-                  drawVerticalLine: false,
-                  horizontalInterval:
-                      maxY > 0 ? (maxY / 4).ceilToDouble() : 25,
-                ),
-                borderData: FlBorderData(show: false),
-                barGroups: List.generate(buckets.length, (i) {
-                  return BarChartGroupData(
-                    x: i,
-                    barRods: [
-                      BarChartRodData(
-                        toY: buckets[i],
-                        color: _bucketColors[i],
-                        width: 22,
-                        borderRadius:
-                            const BorderRadius.vertical(top: Radius.circular(4)),
-                      ),
-                    ],
-                  );
-                }),
-              ),
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-
-  Widget _muted(String message) {
-    return Center(
-      child: Padding(
-        padding: const EdgeInsets.symmetric(horizontal: 32),
-        child: Text(
-          message,
-          textAlign: TextAlign.center,
-          style: AppTypography.subhead.copyWith(color: AppColors.textMuted),
-        ),
-      ),
-    );
-  }
 }
 
 class _BalanceRow extends StatelessWidget {
@@ -273,13 +176,11 @@ class _BalanceRow extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final lum = context.lum;
     return Container(
-      margin: const EdgeInsets.only(bottom: AppSpacing.sm),
-      padding: const EdgeInsets.all(AppSpacing.base),
+      padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 13),
       decoration: BoxDecoration(
-        color: AppColors.background,
-        borderRadius: BorderRadius.circular(AppRadius.card),
-        border: Border.all(color: AppColors.separator, width: 0.5),
+        border: Border(top: BorderSide(color: lum.hairline)),
       ),
       child: Row(
         children: [
@@ -287,22 +188,22 @@ class _BalanceRow extends StatelessWidget {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Text(row.name, style: AppTypography.headline),
+                Text(
+                  row.name,
+                  style: AppTypography.body.copyWith(color: lum.textPrimary),
+                ),
                 const SizedBox(height: 2),
                 Text(
-                  'Overdue up to ${row.maxDaysOverdue}d',
-                  style: AppTypography.caption
-                      .copyWith(color: AppColors.textMuted),
+                  'oldest ${row.maxDaysOverdue} days',
+                  style: AppTypography.caption.copyWith(color: lum.g500),
                 ),
               ],
             ),
           ),
           const SizedBox(width: AppSpacing.md),
-          Text(
-            formatPkr(row.totalBalance),
-            style: AppTypography.headline
-                .copyWith(color: AppColors.accent, fontWeight: FontWeight.w700),
-          ),
+          agingPill(row.maxDaysOverdue),
+          const SizedBox(width: AppSpacing.md),
+          AppMoneyText(row.totalBalance, size: 15),
         ],
       ),
     );

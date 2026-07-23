@@ -9,7 +9,8 @@ class CustomerReportingPage extends StatelessWidget {
   Widget build(BuildContext context) {
     return AgingReportView(
       provider: customerAgingProvider,
-      title: 'Customer Aging',
+      title: 'Customer aging',
+      description: 'Outstanding receivables grouped by age.',
       entityLabel: 'Customer',
     );
   }

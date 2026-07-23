@@ -9,7 +9,8 @@ class SupplierReportingPage extends StatelessWidget {
   Widget build(BuildContext context) {
     return AgingReportView(
       provider: supplierAgingProvider,
-      title: 'Supplier Aging',
+      title: 'Supplier aging',
+      description: 'Outstanding payables grouped by age.',
       entityLabel: 'Supplier',
     );
   }
