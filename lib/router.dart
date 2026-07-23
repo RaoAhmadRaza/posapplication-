@@ -542,38 +542,8 @@ final appRouter = GoRouter(
       path: '/inventory/notifications',
       redirect: (context, state) => '/notifications',
     ),
-    GoRoute(
-      path: '/customers',
-      builder: (context, state) => const CustomersPage(),
-    ),
-    GoRoute(
-      path: '/customers/create',
-      builder: (context, state) => const CustomerFormPage(),
-    ),
-    GoRoute(
-      path: '/receivables',
-      builder: (context, state) => const ReceivablesAgingPage(),
-    ),
-    GoRoute(
-      path: '/customers/:customerId',
-      builder: (context, state) =>
-          CustomerDetailPage(customerId: state.pathParameters['customerId']!),
-    ),
-    GoRoute(
-      path: '/customers/:customerId/edit',
-      builder: (context, state) =>
-          CustomerFormPage(customerId: state.pathParameters['customerId']!),
-    ),
-    GoRoute(
-      path: '/customers/:customerId/collect',
-      builder: (context, state) {
-        final extra = state.extra as Map<String, dynamic>?;
-        return CustomerPaymentPage(
-          customerId: state.pathParameters['customerId']!,
-          customerName: extra?['customerName'] as String?,
-        );
-      },
-    ),
+    // Customers (CRM) moved INSIDE the nav shell as its own branch — see the
+    // StatefulShellBranch below. /customers*, /receivables now carry the rail.
     GoRoute(
       path: '/hr',
       builder: (context, state) => const EmployeesPage(),
@@ -1107,6 +1077,60 @@ final appRouter = GoRouter(
                 state,
                 RepairDetailPage(repairId: state.pathParameters['repairId']!),
               ),
+            ),
+          ],
+        ),
+        // Customers (CRM) — appended LAST as branch index 6 so branches 0–5
+        // never shift. Same rail/header on every screen, so they cross-fade.
+        // /customers/create is declared before /customers/:customerId so the
+        // literal path keeps winning; edit/collect are pushed from the detail.
+        StatefulShellBranch(
+          routes: [
+            GoRoute(
+              path: '/customers',
+              pageBuilder: (context, state) =>
+                  _fadePage(state, const CustomersPage()),
+            ),
+            GoRoute(
+              path: '/customers/create',
+              pageBuilder: (context, state) =>
+                  _fadePage(state, const CustomerFormPage()),
+            ),
+            GoRoute(
+              path: '/receivables',
+              pageBuilder: (context, state) =>
+                  _fadePage(state, const ReceivablesAgingPage()),
+            ),
+            GoRoute(
+              path: '/customers/:customerId',
+              pageBuilder: (context, state) => _fadePage(
+                state,
+                CustomerDetailPage(
+                  customerId: state.pathParameters['customerId']!,
+                ),
+              ),
+            ),
+            GoRoute(
+              path: '/customers/:customerId/edit',
+              pageBuilder: (context, state) => _fadePage(
+                state,
+                CustomerFormPage(
+                  customerId: state.pathParameters['customerId']!,
+                ),
+              ),
+            ),
+            GoRoute(
+              path: '/customers/:customerId/collect',
+              pageBuilder: (context, state) {
+                final extra = state.extra as Map<String, dynamic>?;
+                return _fadePage(
+                  state,
+                  CustomerPaymentPage(
+                    customerId: state.pathParameters['customerId']!,
+                    customerName: extra?['customerName'] as String?,
+                  ),
+                );
+              },
             ),
           ],
         ),
