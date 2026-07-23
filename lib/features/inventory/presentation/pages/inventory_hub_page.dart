@@ -119,14 +119,14 @@ class InventoryHubPage extends ConsumerWidget {
                 icon: Icons.people_outline,
                 title: 'Customers',
                 subtitle: 'Customer master, credit, and ledger',
-                onTap: () => context.push('/customers'),
+                onTap: () => context.go('/customers'),
               ),
               const SizedBox(height: AppSpacing.md),
               _HubRow(
                 icon: Icons.account_balance_wallet_outlined,
                 title: 'Receivables Aging',
                 subtitle: 'Outstanding balances by age bucket',
-                onTap: () => context.push('/receivables'),
+                onTap: () => context.go('/receivables'),
               ),
               const SizedBox(height: AppSpacing.xxl),
               // NOTE: Accounting lives here until a dedicated hub tab ships.
