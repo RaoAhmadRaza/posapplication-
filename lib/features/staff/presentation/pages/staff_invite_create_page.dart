@@ -2,12 +2,16 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import '../../../../core/design/app_colors.dart';
-import '../../../../core/design/app_spacing.dart';
+import '../../../../core/design/app_radius.dart';
 import '../../../../core/design/app_typography.dart';
 import '../../../../core/design/widgets/app_button.dart';
+import '../../../../core/design/widgets/app_checkbox.dart';
+import '../../../../core/design/widgets/app_detail_scaffold.dart';
 import '../../../../core/design/widgets/app_inline_banner.dart';
 import '../../../../core/design/widgets/app_text_field.dart';
 import '../controllers/staff_controllers.dart';
+import '../widgets/staff_option_card.dart';
+import '../widgets/staff_segmented.dart';
 
 class StaffInviteCreatePage extends ConsumerStatefulWidget {
   const StaffInviteCreatePage({
@@ -35,7 +39,13 @@ class _StaffInviteCreatePageState extends ConsumerState<StaffInviteCreatePage> {
   bool _saving = false;
   String? _error;
 
-  static const _expiryOptions = {24: '1 day', 72: '3 days', 168: '1 week', 720: '30 days'};
+  // Ordered so the segmented control's index maps to a value.
+  static const _expiry = [
+    (24, '1 day'),
+    (72, '3 days'),
+    (168, '1 week'),
+    (720, '30 days'),
+  ];
 
   @override
   void initState() {
@@ -52,14 +62,6 @@ class _StaffInviteCreatePageState extends ConsumerState<StaffInviteCreatePage> {
   }
 
   Future<void> _submit() async {
-    if (_roleId == null) {
-      setState(() => _error = 'Select a role.');
-      return;
-    }
-    if (_branchIds.isEmpty) {
-      setState(() => _error = 'Select at least one branch.');
-      return;
-    }
     setState(() {
       _saving = true;
       _error = null;
@@ -85,100 +87,162 @@ class _StaffInviteCreatePageState extends ConsumerState<StaffInviteCreatePage> {
 
   @override
   Widget build(BuildContext context) {
+    final lum = context.lum;
     final rolesAsync = ref.watch(rolesControllerProvider);
     final branchesAsync = ref.watch(branchOptionsProvider);
-    return Scaffold(
-      backgroundColor: AppColors.background,
-      appBar: AppBar(
-        backgroundColor: AppColors.background,
-        surfaceTintColor: AppColors.background,
-        leading: IconButton(
-          icon: const Icon(Icons.arrow_back_ios, color: AppColors.accent, size: 20),
-          onPressed: () => Navigator.of(context).pop(),
-        ),
-        title: Text('Invite staff', style: AppTypography.headline),
-      ),
-      body: SafeArea(
-        child: ListView(
-          padding: const EdgeInsets.all(AppSpacing.screenPadding),
-          children: [
-            AppTextField(
-              controller: _nameCtrl,
-              label: 'Full name (optional)',
-              prefixIcon: Icons.person_outline,
+    final prefilled = (widget.prefillName ?? widget.prefillEmail) != null;
+    final valid = _roleId != null && _branchIds.isNotEmpty;
+    final expiryIndex = _expiry.indexWhere((e) => e.$1 == _expiryHours);
+
+    return AppDetailScaffold(
+      eyebrow: 'Invites',
+      title: 'Invite a teammate',
+      description: prefilled
+          ? 'Prefilled from the HR profile for ${widget.prefillName ?? 'this employee'}.'
+          : 'Send a one-time code that locks to their role and branches.',
+      maxContentWidth: 640,
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          AppTextField(
+            controller: _nameCtrl,
+            label: 'Name (optional)',
+            prefixIcon: Icons.person_outline,
+          ),
+          const SizedBox(height: 16),
+          AppTextField(
+            controller: _emailCtrl,
+            label: 'Email (locks the code to this address)',
+            prefixIcon: Icons.mail_outline,
+            keyboardType: TextInputType.emailAddress,
+          ),
+          const SizedBox(height: 22),
+          _label(lum, 'Role'),
+          const SizedBox(height: 10),
+          rolesAsync.when(
+            loading: () => const LinearProgressIndicator(),
+            error: (_, _) => _loadError(lum, 'Could not load roles.'),
+            data: (roles) => Column(
+              children: [
+                for (final r in roles)
+                  Padding(
+                    padding: const EdgeInsets.only(bottom: 10),
+                    child: StaffOptionCard(
+                      title: r.name,
+                      trailingText: '${r.permissionCount} permissions',
+                      selected: _roleId == r.id,
+                      onTap: () => setState(() => _roleId = r.id),
+                    ),
+                  ),
+              ],
             ),
-            const SizedBox(height: AppSpacing.md),
-            AppTextField(
-              controller: _emailCtrl,
-              label: 'Email (locks the invite to this address)',
-              prefixIcon: Icons.mail_outline,
-              keyboardType: TextInputType.emailAddress,
-            ),
-            const SizedBox(height: AppSpacing.lg),
-            Text('Role', style: AppTypography.footnote.copyWith(color: AppColors.textMuted)),
-            const SizedBox(height: AppSpacing.sm),
-            rolesAsync.when(
-              loading: () => const LinearProgressIndicator(),
-              error: (_, _) => Text('Could not load roles.',
-                  style: AppTypography.footnote.copyWith(color: AppColors.destructive)),
-              data: (roles) => DropdownButtonFormField<String>(
-                initialValue: _roleId,
-                decoration: const InputDecoration(border: OutlineInputBorder()),
-                items: [
-                  for (final r in roles)
-                    DropdownMenuItem(value: r.id, child: Text(r.name)),
-                ],
-                onChanged: (v) => setState(() => _roleId = v),
-              ),
-            ),
-            const SizedBox(height: AppSpacing.lg),
-            Text('Branches', style: AppTypography.footnote.copyWith(color: AppColors.textMuted)),
-            const SizedBox(height: AppSpacing.sm),
-            branchesAsync.when(
-              loading: () => const LinearProgressIndicator(),
-              error: (_, _) => Text('Could not load branches.',
-                  style: AppTypography.footnote.copyWith(color: AppColors.destructive)),
-              data: (branches) => Column(
-                children: [
-                  for (final b in branches)
-                    CheckboxListTile(
-                      contentPadding: EdgeInsets.zero,
-                      dense: true,
-                      title: Text(b.name, style: AppTypography.body),
-                      value: _branchIds.contains(b.id),
-                      onChanged: (on) => setState(() {
-                        if (on == true) {
-                          _branchIds.add(b.id);
-                        } else {
-                          _branchIds.remove(b.id);
-                        }
+          ),
+          const SizedBox(height: 22),
+          _label(lum, 'Branches · pick at least one'),
+          const SizedBox(height: 10),
+          branchesAsync.when(
+            loading: () => const LinearProgressIndicator(),
+            error: (_, _) => _loadError(lum, 'Could not load branches.'),
+            data: (branches) => Column(
+              children: [
+                for (final b in branches)
+                  Padding(
+                    padding: const EdgeInsets.only(bottom: 10),
+                    child: _BranchTile(
+                      name: b.name,
+                      selected: _branchIds.contains(b.id),
+                      onToggle: () => setState(() {
+                        if (!_branchIds.remove(b.id)) _branchIds.add(b.id);
                       }),
                     ),
-                ],
+                  ),
+              ],
+            ),
+          ),
+          const SizedBox(height: 22),
+          _label(lum, 'Expires in'),
+          const SizedBox(height: 10),
+          StaffSegmented(
+            labels: [for (final e in _expiry) e.$2],
+            index: expiryIndex < 0 ? 1 : expiryIndex,
+            onChanged: (i) => setState(() => _expiryHours = _expiry[i].$1),
+          ),
+          if (_error != null) ...[
+            const SizedBox(height: 16),
+            AppInlineBanner(message: _error!, type: BannerType.error),
+          ],
+          const SizedBox(height: 24),
+          AppButton(
+            label: 'Create invite',
+            fullWidth: true,
+            loading: _saving,
+            onPressed: (_saving || !valid) ? null : _submit,
+          ),
+          if (!valid) ...[
+            const SizedBox(height: 10),
+            Center(
+              child: Text(
+                _roleId == null
+                    ? 'Choose a role to continue.'
+                    : 'Select at least one branch.',
+                style: AppTypography.footnote.copyWith(color: lum.g500),
               ),
             ),
-            const SizedBox(height: AppSpacing.lg),
-            Text('Expires in', style: AppTypography.footnote.copyWith(color: AppColors.textMuted)),
-            const SizedBox(height: AppSpacing.sm),
-            DropdownButtonFormField<int>(
-              initialValue: _expiryHours,
-              decoration: const InputDecoration(border: OutlineInputBorder()),
-              items: [
-                for (final e in _expiryOptions.entries)
-                  DropdownMenuItem(value: e.key, child: Text(e.value)),
-              ],
-              onChanged: (v) => setState(() => _expiryHours = v ?? 72),
-            ),
-            if (_error != null) ...[
-              const SizedBox(height: AppSpacing.md),
-              AppInlineBanner(message: _error!, type: BannerType.error),
-            ],
-            const SizedBox(height: AppSpacing.lg),
-            AppButton(
-              label: 'Create invite',
-              fullWidth: true,
-              loading: _saving,
-              onPressed: _saving ? null : _submit,
+          ],
+        ],
+      ),
+    );
+  }
+
+  Widget _label(LumColors lum, String text) => Text(
+        text,
+        style: AppTypography.label.copyWith(color: lum.g700),
+      );
+
+  Widget _loadError(LumColors lum, String text) => Text(
+        text,
+        style: AppTypography.footnote.copyWith(color: lum.dangerText),
+      );
+}
+
+/// A branch multiselect tile: clay checkbox in a bordered card that highlights
+/// when picked. Tapping anywhere toggles it.
+class _BranchTile extends StatelessWidget {
+  const _BranchTile({
+    required this.name,
+    required this.selected,
+    required this.onToggle,
+  });
+
+  final String name;
+  final bool selected;
+  final VoidCallback onToggle;
+
+  @override
+  Widget build(BuildContext context) {
+    final lum = context.lum;
+    return GestureDetector(
+      behavior: HitTestBehavior.opaque,
+      onTap: onToggle,
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+        decoration: BoxDecoration(
+          color: selected ? lum.accentSoft : lum.surface,
+          borderRadius: BorderRadius.circular(AppRadius.md),
+          border: Border.all(
+            color: selected ? lum.accent : lum.hairline,
+            width: 1,
+          ),
+        ),
+        child: Row(
+          children: [
+            AppCheckbox(value: selected, onChanged: (_) => onToggle()),
+            const SizedBox(width: 12),
+            Expanded(
+              child: Text(
+                name,
+                style: AppTypography.body.copyWith(color: lum.textPrimary),
+              ),
             ),
           ],
         ),
