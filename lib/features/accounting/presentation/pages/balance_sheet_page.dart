@@ -1,13 +1,11 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import '../../../../core/design/app_colors.dart';
-import '../../../../core/design/app_radius.dart';
-import '../../../../core/design/app_spacing.dart';
-import '../../../../core/design/app_typography.dart';
-import '../../../../core/design/format.dart';
 import '../../../../core/design/widgets/app_card.dart';
-import '../../../../core/design/widgets/app_inline_banner.dart';
+import '../../../../core/design/widgets/app_pill.dart';
+import '../../../../core/design/widgets/app_states.dart';
+import '../../../../core/design/widgets/app_detail_scaffold.dart';
 import '../controllers/reports_controller.dart';
+import '../widgets/acct_statement.dart';
 import '../widgets/report_filters.dart';
 
 class BalanceSheetPage extends ConsumerStatefulWidget {
@@ -25,99 +23,98 @@ class _BalanceSheetPageState extends ConsumerState<BalanceSheetPage> {
   Widget build(BuildContext context) {
     final report =
         ref.watch(balanceSheetProvider((asOf: _asOf, branchId: _branchId)));
-    return Scaffold(
-      backgroundColor: AppColors.background,
-      appBar: AppBar(
-        backgroundColor: AppColors.background,
-        surfaceTintColor: AppColors.background,
-        leading: IconButton(
-          icon: const Icon(Icons.arrow_back_ios,
-              color: AppColors.accent, size: 20),
-          onPressed: () => Navigator.of(context).pop(),
-        ),
-        title: Text('Balance Sheet', style: AppTypography.headline),
-      ),
-      body: SafeArea(
-        child: ListView(
-          padding: const EdgeInsets.symmetric(
-              horizontal: AppSpacing.screenPadding, vertical: AppSpacing.md),
-          children: [
-            ReportDateChip(
-                label: 'As of',
-                value: _asOf,
-                onPick: (d) => setState(() => _asOf = d)),
-            const SizedBox(height: AppSpacing.sm),
-            ReportBranchDropdown(
-                value: _branchId,
-                onChanged: (v) => setState(() => _branchId = v)),
-            const SizedBox(height: AppSpacing.md),
-            report.when(
-              loading: () => const Padding(
-                padding: EdgeInsets.all(AppSpacing.xl),
-                child: Center(child: CircularProgressIndicator()),
+
+    return AppDetailScaffold(
+      eyebrow: 'Accounting',
+      title: 'Balance sheet',
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          Wrap(
+            spacing: 9,
+            runSpacing: 9,
+            children: [
+              ReportDateChip(
+                  label: 'As of',
+                  value: _asOf,
+                  onPick: (d) => setState(() => _asOf = d)),
+              ReportBranchDropdown(
+                  value: _branchId,
+                  onChanged: (v) => setState(() => _branchId = v)),
+            ],
+          ),
+          const SizedBox(height: 14),
+          report.when(
+            loading: () => const Padding(
+              padding: EdgeInsets.only(top: 50),
+              child: Center(child: CircularProgressIndicator()),
+            ),
+            error: (e, _) => Padding(
+              padding: const EdgeInsets.only(top: 30),
+              child: AppErrorState(
+                title: 'Couldn\'t load report',
+                body: 'Your data is safe. Check the connection and try again.',
+                onRetry: () => ref.invalidate(
+                    balanceSheetProvider((asOf: _asOf, branchId: _branchId))),
               ),
-              error: (e, _) => AppInlineBanner(
-                  message: 'Could not load report.',
-                  type: BannerType.error),
-              data: (bs) {
-                final claims = bs.liabilities + bs.equity + bs.retainedEarnings;
-                return AppCard(
-                  child: Padding(
-                    padding: const EdgeInsets.all(AppSpacing.xl),
+            ),
+            data: (bs) {
+              final claims = bs.liabilities + bs.equity + bs.retainedEarnings;
+              return Column(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  Align(
+                    alignment: Alignment.centerLeft,
+                    child: AppPill(
+                      label: bs.balanced ? 'Balanced' : 'Unbalanced',
+                      tone:
+                          bs.balanced ? AppPillTone.success : AppPillTone.danger,
+                    ),
+                  ),
+                  const SizedBox(height: 12),
+                  AppCard(
+                    padding: const EdgeInsets.all(20),
                     child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
+                      crossAxisAlignment: CrossAxisAlignment.stretch,
                       children: [
-                        _badge(bs.balanced),
-                        const Divider(
-                            color: AppColors.separator, height: AppSpacing.xl),
-                        _row('Assets', bs.assets, emphasize: true),
-                        const SizedBox(height: AppSpacing.sm),
-                        _row('Liabilities', bs.liabilities),
-                        _row('Equity', bs.equity),
-                        _row('Retained Earnings', bs.retainedEarnings),
-                        const Divider(
-                            color: AppColors.separator, height: AppSpacing.xl),
-                        _row('Liabilities + Equity', claims, emphasize: true),
+                        AcctStatementSection(
+                          heading: 'Assets',
+                          lines: [
+                            for (final l in bs.assetLines)
+                              (name: l.name, amount: l.amount),
+                          ],
+                          subtotalLabel: 'Total assets',
+                          subtotalAmount: bs.assets,
+                        ),
+                        AcctStatementSection(
+                          heading: 'Liabilities',
+                          topGap: true,
+                          lines: [
+                            for (final l in bs.liabilityLines)
+                              (name: l.name, amount: l.amount),
+                          ],
+                          subtotalLabel: 'Total liabilities',
+                          subtotalAmount: bs.liabilities,
+                        ),
+                        AcctStatementSection(
+                          heading: 'Equity',
+                          topGap: true,
+                          lines: [
+                            for (final l in bs.equityLines)
+                              (name: l.name, amount: l.amount),
+                            (name: 'Net profit (period)',
+                              amount: bs.retainedEarnings),
+                          ],
+                        ),
+                        AcctNetRow(
+                            label: 'Liabilities + equity', amount: claims),
                       ],
                     ),
                   ),
-                );
-              },
-            ),
-            const SizedBox(height: AppSpacing.xxl),
-          ],
-        ),
-      ),
-    );
-  }
-
-  Widget _badge(bool balanced) {
-    final color = balanced ? AppColors.success : AppColors.destructive;
-    return Container(
-      padding:
-          const EdgeInsets.symmetric(horizontal: AppSpacing.sm, vertical: 4),
-      decoration: BoxDecoration(
-        color: color.withValues(alpha: 0.12),
-        borderRadius: BorderRadius.circular(AppRadius.chip),
-      ),
-      child: Text(balanced ? 'Balanced' : 'Unbalanced',
-          style: AppTypography.caption
-              .copyWith(color: color, fontWeight: FontWeight.w600)),
-    );
-  }
-
-  Widget _row(String label, double value, {bool emphasize = false}) {
-    final style = emphasize
-        ? AppTypography.headline
-        : AppTypography.subhead.copyWith(color: AppColors.textMuted);
-    return Padding(
-      padding: const EdgeInsets.only(top: 6),
-      child: Row(
-        mainAxisAlignment: MainAxisAlignment.spaceBetween,
-        children: [
-          Text(label, style: style),
-          Text(formatPkr(value),
-              style: style.copyWith(fontWeight: FontWeight.w600)),
+                ],
+              );
+            },
+          ),
         ],
       ),
     );
