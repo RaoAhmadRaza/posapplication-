@@ -6,6 +6,7 @@ import 'package:lucide_icons_flutter/lucide_icons.dart';
 import '../../../../core/design/app_colors.dart';
 import '../../../../core/design/app_radius.dart';
 import '../../../../core/design/app_typography.dart';
+import '../../../../core/design/clay.dart';
 import '../controllers/notifications_controller.dart';
 
 /// Global notification bell + unread badge. Drop into any AppBar `actions`.
@@ -27,41 +28,49 @@ class NotificationBell extends ConsumerWidget {
         child: InkWell(
           onTap: () => context.push('/notifications'),
           borderRadius: BorderRadius.circular(AppRadius.sm),
-          child: SizedBox(
-            width: 40,
-            height: 40,
-            child: Stack(
-              alignment: Alignment.center,
-              children: [
-                Icon(LucideIcons.bell, size: 20, color: lum.g600),
-                if (unread > 0)
-                  Positioned(
-                    top: 5,
-                    right: 5,
-                    child: Container(
-                      padding: const EdgeInsets.symmetric(horizontal: 4),
-                      constraints: const BoxConstraints(minWidth: 16),
-                      height: 16,
-                      alignment: Alignment.center,
-                      decoration: BoxDecoration(
-                        color: lum.danger,
-                        borderRadius: BorderRadius.circular(AppRadius.pill),
-                        // Ring in the header fill so the badge reads as lifted.
-                        border: Border.all(color: lum.surface, width: 1.5),
-                      ),
-                      child: Text(
-                        unread > 99 ? '99+' : '$unread',
-                        textAlign: TextAlign.center,
-                        style: AppTypography.caption.copyWith(
-                          color: Colors.white,
-                          fontSize: 10,
-                          fontWeight: FontWeight.w700,
-                        ),
+          child: Stack(
+            clipBehavior: Clip.none,
+            alignment: Alignment.center,
+            children: [
+              // Clay-inset well (design: surface-2 fill + inner shade).
+              ClayContainer(
+                variant: ClayVariant.inset,
+                color: lum.surface2,
+                borderRadius: AppRadius.sm,
+                width: 40,
+                height: 40,
+                isDark: lum.isDark,
+                child: Center(
+                  child: Icon(LucideIcons.bell, size: 20, color: lum.g700),
+                ),
+              ),
+              if (unread > 0)
+                Positioned(
+                  top: -5,
+                  right: -5,
+                  child: Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 4),
+                    constraints: const BoxConstraints(minWidth: 18),
+                    height: 18,
+                    alignment: Alignment.center,
+                    decoration: BoxDecoration(
+                      color: lum.danger,
+                      borderRadius: BorderRadius.circular(AppRadius.pill),
+                      // Ring in the header fill so the badge reads as lifted.
+                      border: Border.all(color: lum.surface, width: 2),
+                    ),
+                    child: Text(
+                      unread > 99 ? '99+' : '$unread',
+                      textAlign: TextAlign.center,
+                      style: AppTypography.caption.copyWith(
+                        color: Colors.white,
+                        fontSize: 10.5,
+                        fontWeight: FontWeight.w700,
                       ),
                     ),
                   ),
-              ],
-            ),
+                ),
+            ],
           ),
         ),
       ),
