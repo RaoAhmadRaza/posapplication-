@@ -1,45 +1,57 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
-import '../../../../core/design/app_colors.dart';
-import '../../../../core/design/app_spacing.dart';
-import '../../../../core/design/app_typography.dart';
-import '../../../../core/design/widgets/app_card.dart';
-import '../../../../core/design/widgets/app_inline_banner.dart';
+import 'package:lucide_icons_flutter/lucide_icons.dart';
+import '../../../../core/design/widgets/app_button.dart';
+import '../../../../core/design/widgets/app_detail_scaffold.dart';
+import '../../../../core/design/widgets/app_states.dart';
 import '../../../../core/widgets/permission_gate.dart';
 import '../../domain/failures/staff_failure.dart';
 import '../controllers/staff_controllers.dart';
+import '../widgets/staff_member_row.dart';
+import '../widgets/staff_role_card.dart';
+import '../widgets/staff_segmented.dart';
 
-class RolesPage extends ConsumerWidget {
+class RolesPage extends ConsumerStatefulWidget {
   const RolesPage({super.key});
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
-    return DefaultTabController(
-      length: 2,
-      child: Scaffold(
-        backgroundColor: AppColors.background,
-        appBar: AppBar(
-          backgroundColor: AppColors.background,
-          surfaceTintColor: AppColors.background,
-          leading: IconButton(
-            icon: const Icon(Icons.arrow_back_ios, color: AppColors.accent, size: 20),
-            onPressed: () => Navigator.of(context).pop(),
+  ConsumerState<RolesPage> createState() => _RolesPageState();
+}
+
+class _RolesPageState extends ConsumerState<RolesPage> {
+  int _tab = 0;
+
+  @override
+  Widget build(BuildContext context) {
+    return AppDetailScaffold(
+      eyebrow: 'Team',
+      title: 'Roles & permissions',
+      description: 'Roles bundle what someone can do. Lower level = more privilege.',
+      actions: [
+        if (_tab == 0)
+          PermissionGate(
+            module: 'settings',
+            action: 'create',
+            child: AppButton(
+              label: 'New role',
+              size: AppButtonSize.sm,
+              icon: LucideIcons.plus,
+              onPressed: () => context.push('/settings/roles/new'),
+            ),
           ),
-          title: Text('Roles & permissions', style: AppTypography.headline),
-          bottom: const TabBar(tabs: [Tab(text: 'Roles'), Tab(text: 'Members')]),
-        ),
-        floatingActionButton: PermissionGate(
-          module: 'settings',
-          action: 'create',
-          child: FloatingActionButton.extended(
-            onPressed: () => context.push('/settings/roles/new'),
-            backgroundColor: AppColors.accent,
-            icon: const Icon(Icons.add, color: Colors.white),
-            label: const Text('New role', style: TextStyle(color: Colors.white)),
+      ],
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          StaffSegmented(
+            labels: const ['Roles', 'Members'],
+            index: _tab,
+            onChanged: (i) => setState(() => _tab = i),
           ),
-        ),
-        body: const SafeArea(child: TabBarView(children: [_RolesTab(), _MembersTab()])),
+          const SizedBox(height: 20),
+          _tab == 0 ? const _RolesTab() : const _MembersTab(),
+        ],
       ),
     );
   }
@@ -51,52 +63,31 @@ class _RolesTab extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final async = ref.watch(rolesControllerProvider);
-    return RefreshIndicator(
-      onRefresh: () => ref.read(rolesControllerProvider.notifier).refresh(),
-      child: async.when(
-        loading: () => const Center(child: CircularProgressIndicator()),
-        error: (e, _) => _errorList(e, 'Could not load roles.'),
-        data: (roles) => ListView(
-          padding: const EdgeInsets.all(AppSpacing.screenPadding),
-          children: [
-            for (final r in roles)
-              Padding(
-                padding: const EdgeInsets.only(bottom: AppSpacing.sm),
-                child: AppCard(
-                  // Only custom roles are editable; system/admin roles are
-                  // immutable (update_role_permissions rejects them), so no tap.
-                  onTap: r.isSystemRole
-                      ? null
-                      : () => context.push('/settings/roles/${r.id}', extra: r),
-                  child: Row(
-                    children: [
-                      Expanded(
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Text(r.name, style: AppTypography.body),
-                            const SizedBox(height: 2),
-                            Text(
-                              '${r.permissionCount} permission${r.permissionCount == 1 ? '' : 's'} · ${r.userCount} user${r.userCount == 1 ? '' : 's'}',
-                              style: AppTypography.footnote
-                                  .copyWith(color: AppColors.textMuted),
-                            ),
-                          ],
-                        ),
-                      ),
-                      if (r.isSystemRole)
-                        Text('System',
-                            style: AppTypography.caption
-                                .copyWith(color: AppColors.textMuted))
-                      else
-                        const Icon(Icons.chevron_right,
-                            color: AppColors.textMuted, size: 20),
-                    ],
-                  ),
-                ),
+    return async.when(
+      loading: () => const Padding(
+        padding: EdgeInsets.only(top: 60),
+        child: Center(child: CircularProgressIndicator()),
+      ),
+      error: (e, _) => AppErrorState(
+        title: "Couldn't load roles",
+        body: e is StaffFailure ? e.message : 'Please try again.',
+        onRetry: () => ref.read(rolesControllerProvider.notifier).refresh(),
+      ),
+      data: (roles) => Column(
+        children: [
+          for (final r in roles)
+            Padding(
+              padding: const EdgeInsets.only(bottom: 10),
+              child: StaffRoleCard(
+                role: r,
+                // Only custom roles are editable; system roles are immutable
+                // (update_role_permissions rejects them), so no tap.
+                onTap: r.isSystemRole
+                    ? null
+                    : () => context.push('/settings/roles/${r.id}', extra: r),
               ),
-          ],
-        ),
+            ),
+        ],
       ),
     );
   }
@@ -108,58 +99,41 @@ class _MembersTab extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final async = ref.watch(tenantUsersControllerProvider);
-    return RefreshIndicator(
-      onRefresh: () => ref.read(tenantUsersControllerProvider.notifier).refresh(),
-      child: async.when(
-        loading: () => const Center(child: CircularProgressIndicator()),
-        error: (e, _) => _errorList(e, 'Could not load members.'),
-        data: (users) => ListView(
-          padding: const EdgeInsets.all(AppSpacing.screenPadding),
-          children: [
-            for (final u in users)
-              Padding(
-                padding: const EdgeInsets.only(bottom: AppSpacing.sm),
-                child: AppCard(
-                  child: Row(
-                    children: [
-                      Expanded(
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Text(u.fullName?.isNotEmpty == true ? u.fullName! : (u.email ?? 'User'),
-                                style: AppTypography.body),
-                            const SizedBox(height: 2),
-                            Text(u.roleName ?? 'No role',
-                                style: AppTypography.footnote
-                                    .copyWith(color: AppColors.textMuted)),
-                          ],
-                        ),
-                      ),
-                      PermissionGate(
-                        module: 'users',
-                        action: 'update',
-                        child: TextButton(
-                          onPressed: () => context.push('/settings/users/${u.id}/role'),
-                          child: const Text('Change'),
-                        ),
-                      ),
-                    ],
+    return async.when(
+      loading: () => const Padding(
+        padding: EdgeInsets.only(top: 60),
+        child: Center(child: CircularProgressIndicator()),
+      ),
+      error: (e, _) => AppErrorState(
+        title: "Couldn't load members",
+        body: e is StaffFailure ? e.message : 'Please try again.',
+        onRetry: () => ref.read(tenantUsersControllerProvider.notifier).refresh(),
+      ),
+      data: (users) => Column(
+        children: [
+          for (final u in users)
+            Padding(
+              padding: const EdgeInsets.only(bottom: 10),
+              child: StaffMemberRow(
+                user: u,
+                trailing: PermissionGate(
+                  module: 'users',
+                  action: 'update',
+                  child: Padding(
+                    padding: const EdgeInsets.only(left: 8),
+                    child: AppButton(
+                      label: 'Change',
+                      variant: AppButtonVariant.tinted,
+                      size: AppButtonSize.sm,
+                      onPressed: () =>
+                          context.push('/settings/users/${u.id}/role'),
+                    ),
                   ),
                 ),
               ),
-          ],
-        ),
+            ),
+        ],
       ),
     );
   }
 }
-
-Widget _errorList(Object e, String fallback) => ListView(children: [
-      Padding(
-        padding: const EdgeInsets.all(AppSpacing.screenPadding),
-        child: AppInlineBanner(
-          message: e is StaffFailure ? e.message : fallback,
-          type: BannerType.error,
-        ),
-      ),
-    ]);
