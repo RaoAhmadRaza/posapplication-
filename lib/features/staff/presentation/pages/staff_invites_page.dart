@@ -1,15 +1,16 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
+import 'package:lucide_icons_flutter/lucide_icons.dart';
 import '../../../../core/design/app_colors.dart';
-import '../../../../core/design/app_spacing.dart';
-import '../../../../core/design/app_typography.dart';
-import '../../../../core/design/widgets/app_card.dart';
-import '../../../../core/design/widgets/app_inline_banner.dart';
+import '../../../../core/design/widgets/app_button.dart';
+import '../../../../core/design/widgets/app_detail_scaffold.dart';
+import '../../../../core/design/widgets/app_states.dart';
 import '../../../../core/widgets/permission_gate.dart';
 import '../../domain/entities/staff_entities.dart';
 import '../../domain/failures/staff_failure.dart';
 import '../controllers/staff_controllers.dart';
+import '../widgets/staff_invite_card.dart';
 
 class StaffInvitesPage extends ConsumerWidget {
   const StaffInvitesPage({super.key});
@@ -17,103 +18,64 @@ class StaffInvitesPage extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final async = ref.watch(invitesControllerProvider);
-    return Scaffold(
-      backgroundColor: AppColors.background,
-      appBar: AppBar(
-        backgroundColor: AppColors.background,
-        surfaceTintColor: AppColors.background,
-        leading: IconButton(
-          icon: const Icon(Icons.arrow_back_ios, color: AppColors.accent, size: 20),
-          onPressed: () => Navigator.of(context).pop(),
-        ),
-        title: Text('Staff', style: AppTypography.headline),
-      ),
-      floatingActionButton: PermissionGate(
-        module: 'users',
-        action: 'create',
-        child: FloatingActionButton.extended(
-          onPressed: () => context.push('/staff/invite'),
-          backgroundColor: AppColors.accent,
-          icon: const Icon(Icons.person_add_alt, color: Colors.white),
-          label: const Text('Invite', style: TextStyle(color: Colors.white)),
-        ),
-      ),
-      body: SafeArea(
-        child: RefreshIndicator(
-          onRefresh: () => ref.read(invitesControllerProvider.notifier).refresh(),
-          child: async.when(
-            loading: () => const Center(child: CircularProgressIndicator()),
-            error: (e, _) => ListView(children: [
-              Padding(
-                padding: const EdgeInsets.all(AppSpacing.screenPadding),
-                child: AppInlineBanner(
-                  message: e is StaffFailure ? e.message : 'Could not load invites.',
-                  type: BannerType.error,
-                ),
-              ),
-            ]),
-            data: (rows) {
-              if (rows.isEmpty) {
-                return ListView(children: [
-                  const SizedBox(height: 100),
-                  Center(
-                    child: Text('No staff invites yet.',
-                        style: AppTypography.footnote
-                            .copyWith(color: AppColors.textMuted)),
-                  ),
-                ]);
-              }
-              return ListView(
-                padding: const EdgeInsets.symmetric(
-                    horizontal: AppSpacing.screenPadding, vertical: AppSpacing.sm),
-                children: [
-                  for (final inv in rows)
-                    Padding(
-                      padding: const EdgeInsets.only(bottom: AppSpacing.sm),
-                      child: _InviteCard(invite: inv),
-                    ),
-                ],
-              );
-            },
+    return AppDetailScaffold(
+      eyebrow: 'Staff',
+      title: 'Staff invites',
+      description: 'Send someone a one-time code to join. '
+          'Codes expire automatically — regenerate any pending one from its menu.',
+      actions: [
+        PermissionGate(
+          module: 'users',
+          action: 'create',
+          child: AppButton(
+            label: 'Invite',
+            size: AppButtonSize.sm,
+            icon: LucideIcons.userPlus,
+            onPressed: () => context.push('/staff/invite'),
           ),
         ),
-      ),
-    );
-  }
-}
-
-class _InviteCard extends ConsumerWidget {
-  const _InviteCard({required this.invite});
-  final StaffInvite invite;
-
-  @override
-  Widget build(BuildContext context, WidgetRef ref) {
-    final title = invite.fullName?.isNotEmpty == true
-        ? invite.fullName!
-        : (invite.email ?? 'Invited staff');
-    return AppCard(
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Row(
+      ],
+      child: async.when(
+        loading: () => const Padding(
+          padding: EdgeInsets.only(top: 80),
+          child: Center(child: CircularProgressIndicator()),
+        ),
+        error: (e, _) => AppErrorState(
+          title: "Couldn't load invites",
+          body: e is StaffFailure ? e.message : 'Please try again.',
+          onRetry: () => ref.read(invitesControllerProvider.notifier).refresh(),
+        ),
+        data: (rows) {
+          if (rows.isEmpty) {
+            return AppEmptyState(
+              icon: LucideIcons.userPlus,
+              title: 'No invites yet',
+              body: 'Invite your first teammate and their access will show up '
+                  'here — pending, redeemed or expired at a glance.',
+              action: PermissionGate(
+                module: 'users',
+                action: 'create',
+                child: AppButton(
+                  label: 'Invite someone',
+                  icon: LucideIcons.userPlus,
+                  onPressed: () => context.push('/staff/invite'),
+                ),
+              ),
+            );
+          }
+          return Column(
             children: [
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(title, style: AppTypography.body),
-                    const SizedBox(height: 2),
-                    Text('${invite.roleName} · ${invite.branchNames.join(", ")}',
-                        style: AppTypography.footnote
-                            .copyWith(color: AppColors.textMuted)),
-                  ],
+              for (final inv in rows)
+                Padding(
+                  padding: const EdgeInsets.only(bottom: 10),
+                  child: StaffInviteCard(
+                    invite: inv,
+                    menu: _InviteMenu(invite: inv),
+                  ),
                 ),
-              ),
-              _StatusChip(status: invite.effectiveStatus),
-              _InviteMenu(invite: invite),
             ],
-          ),
-        ],
+          );
+        },
       ),
     );
   }
@@ -135,21 +97,23 @@ class _InviteMenu extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
+    final lum = context.lum;
     final actions = ref.read(staffActionsProvider);
     final items = <PopupMenuEntry<String>>[];
     if (invite.isPending) {
-      items.add(const PopupMenuItem(value: 'regenerate', child: Text('Regenerate QR')));
-      items.add(const PopupMenuItem(value: 'revoke', child: Text('Revoke')));
+      items.add(const PopupMenuItem(value: 'regenerate', child: Text('Regenerate QR code')));
+      items.add(const PopupMenuItem(value: 'revoke', child: Text('Revoke invite')));
     }
     if (invite.isAwaitingConfirmation) {
       items.add(const PopupMenuItem(value: 'release', child: Text('Release & re-invite')));
     }
-    if (items.isEmpty) return const SizedBox.shrink();
+    if (items.isEmpty) return const SizedBox(width: 4);
     return PermissionGate(
       module: 'users',
       action: 'update',
       child: PopupMenuButton<String>(
-        icon: const Icon(Icons.more_vert, color: AppColors.textMuted),
+        icon: Icon(LucideIcons.ellipsisVertical, color: lum.g500, size: 20),
+        tooltip: 'Invite actions',
         itemBuilder: (_) => items,
         onSelected: (v) async {
           switch (v) {
@@ -169,33 +133,6 @@ class _InviteMenu extends ConsumerWidget {
           }
         },
       ),
-    );
-  }
-}
-
-class _StatusChip extends StatelessWidget {
-  const _StatusChip({required this.status});
-  final String status;
-
-  @override
-  Widget build(BuildContext context) {
-    final (label, color) = switch (status) {
-      'PENDING' => ('Pending', AppColors.accent),
-      'AWAITING_CONFIRMATION' => ('Awaiting email', AppColors.warning),
-      'REDEEMED' => ('Active', AppColors.success),
-      'EXPIRED' => ('Expired', AppColors.textMuted),
-      'REVOKED' => ('Revoked', AppColors.textMuted),
-      _ => (status, AppColors.textMuted),
-    };
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
-      decoration: BoxDecoration(
-        color: color.withValues(alpha: 0.12),
-        borderRadius: BorderRadius.circular(6),
-      ),
-      child: Text(label,
-          style: AppTypography.caption.copyWith(
-              color: color, fontWeight: FontWeight.w600)),
     );
   }
 }
