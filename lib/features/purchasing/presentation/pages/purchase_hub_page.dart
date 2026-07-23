@@ -1,120 +1,169 @@
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
+import 'package:lucide_icons_flutter/lucide_icons.dart';
 import '../../../../core/design/app_colors.dart';
-import '../../../../core/design/app_spacing.dart';
+import '../../../../core/design/app_radius.dart';
 import '../../../../core/design/app_typography.dart';
+import '../../../../core/design/clay.dart';
+import '../../../../core/design/widgets/app_card.dart';
+import '../../../../core/design/widgets/app_pill.dart';
+import '../../../../core/widgets/module_scaffold.dart';
 
+/// Purchasing landing menu — a launcher into every sub-area. Branch root, so no
+/// back button (the nav rail is the way out).
 class PurchaseHubPage extends StatelessWidget {
   const PurchaseHubPage({super.key});
 
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
-      backgroundColor: AppColors.background,
-      appBar: AppBar(
-        backgroundColor: AppColors.background,
-        surfaceTintColor: AppColors.background,
-        title: Text('Purchasing', style: AppTypography.largeTitle),
+    final lum = context.lum;
+
+    final tiles = <_HubTileData>[
+      _HubTileData(
+        icon: LucideIcons.clipboardList,
+        title: 'Purchase orders',
+        description: 'Create, receive and track POs',
+        tone: AppPillTone.lumen,
+        onTap: () => context.push('/purchasing/orders'),
       ),
-      body: SafeArea(
-        child: SingleChildScrollView(
-          padding: const EdgeInsets.symmetric(
-              horizontal: AppSpacing.screenPadding),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              const SizedBox(height: AppSpacing.xl),
-              _HubRow(
-                icon: Icons.receipt_long,
-                title: 'Purchase Orders',
-                subtitle: 'Create, submit, and track POs',
-                onTap: () => context.push('/purchasing/orders'),
-              ),
-              const SizedBox(height: AppSpacing.md),
-              _HubRow(
-                icon: Icons.local_shipping,
-                title: 'Suppliers',
-                subtitle: 'Vendor master, balances, and ledger',
-                onTap: () => context.go('/suppliers'),
-              ),
-              const SizedBox(height: AppSpacing.md),
-              _HubRow(
-                icon: Icons.request_quote,
-                title: 'Purchase Invoices',
-                subtitle: 'Bills, balances, and matching',
-                onTap: () => context.push('/purchasing/invoices'),
-              ),
-              const SizedBox(height: AppSpacing.md),
-              _HubRow(
-                icon: Icons.payments,
-                title: 'Supplier Payments',
-                subtitle: 'Record payments against invoices',
-                onTap: () => context.push('/purchasing/payments/create'),
-              ),
-              const SizedBox(height: AppSpacing.md),
-              _HubRow(
-                icon: Icons.auto_awesome,
-                title: 'Reorder Suggestions',
-                subtitle: 'Items at or below reorder point',
-                onTap: () => context.push('/purchasing/reorder'),
-              ),
-              const SizedBox(height: AppSpacing.md),
-              _HubRow(
-                icon: Icons.assignment_return,
-                title: 'Purchase Returns',
-                subtitle: 'Return received goods to suppliers',
-                onTap: () => context.push('/purchasing/returns'),
-              ),
-              const SizedBox(height: AppSpacing.xxl),
-            ],
+      _HubTileData(
+        icon: LucideIcons.receiptText,
+        title: 'Purchase invoices',
+        description: '3-way match & bills',
+        tone: AppPillTone.transit,
+        onTap: () => context.push('/purchasing/invoices'),
+      ),
+      _HubTileData(
+        icon: LucideIcons.wallet,
+        title: 'Supplier payments',
+        description: 'Record payments & credit',
+        tone: AppPillTone.success,
+        onTap: () => context.push('/purchasing/payments/create'),
+      ),
+      _HubTileData(
+        icon: LucideIcons.refreshCcw,
+        title: 'Reorder suggestions',
+        description: 'Restock at or below reorder point',
+        tone: AppPillTone.warning,
+        onTap: () => context.push('/purchasing/reorder'),
+      ),
+      _HubTileData(
+        icon: LucideIcons.undo2,
+        title: 'Purchase returns',
+        description: 'Debit notes to suppliers',
+        tone: AppPillTone.danger,
+        onTap: () => context.push('/purchasing/returns'),
+      ),
+      // The mock draws this disabled ('Soon'), but suppliers is a live feature
+      // and a rail destination — shipped as a working tile.
+      _HubTileData(
+        icon: LucideIcons.truck,
+        title: 'Suppliers',
+        description: 'Directory & ledgers',
+        tone: AppPillTone.neutral,
+        onTap: () => context.go('/suppliers'),
+      ),
+    ];
+
+    return ModuleScaffold(
+      title: 'Purchasing',
+      maxContentWidth: 1000,
+      padding: const EdgeInsets.fromLTRB(20, 22, 20, 40),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            'One light. Every operation.',
+            style: AppTypography.subhead.copyWith(color: lum.g500),
           ),
-        ),
+          const SizedBox(height: 20),
+          LayoutBuilder(
+            builder: (context, c) {
+              final w = c.maxWidth;
+              final cols = w >= 820 ? 3 : (w >= 540 ? 2 : 1);
+              const gap = 14.0;
+              final tileW = (w - (cols - 1) * gap) / cols;
+              return Wrap(
+                spacing: gap,
+                runSpacing: gap,
+                children: [
+                  for (final t in tiles)
+                    SizedBox(width: tileW, child: _HubTile(data: t)),
+                ],
+              );
+            },
+          ),
+        ],
       ),
     );
   }
 }
 
-class _HubRow extends StatelessWidget {
-  const _HubRow({
+class _HubTileData {
+  const _HubTileData({
     required this.icon,
     required this.title,
-    required this.subtitle,
-    this.onTap,
+    required this.description,
+    required this.tone,
+    required this.onTap,
   });
 
   final IconData icon;
   final String title;
-  final String subtitle;
-  final VoidCallback? onTap;
+  final String description;
+  final AppPillTone tone;
+  final VoidCallback onTap;
+}
+
+class _HubTile extends StatelessWidget {
+  const _HubTile({required this.data});
+
+  final _HubTileData data;
 
   @override
   Widget build(BuildContext context) {
-    return Container(
-      decoration: BoxDecoration(
-        color: AppColors.background,
-        borderRadius: BorderRadius.circular(14),
-        border: Border.all(color: AppColors.separator, width: 0.5),
-      ),
-      child: ListTile(
-        contentPadding: const EdgeInsets.symmetric(
-            horizontal: AppSpacing.base, vertical: AppSpacing.sm),
-        leading: Container(
-          width: 40,
-          height: 40,
-          decoration: BoxDecoration(
-            color: AppColors.accent.withValues(alpha: 0.1),
-            borderRadius: BorderRadius.circular(10),
+    final lum = context.lum;
+    final (bg, fg) = switch (data.tone) {
+      AppPillTone.neutral => (lum.g100, lum.g600),
+      AppPillTone.lumen => (lum.accentSoft, lum.accentPress),
+      AppPillTone.success => (lum.successSoft, lum.successText),
+      AppPillTone.warning => (lum.warningSoft, lum.warningText),
+      AppPillTone.danger => (lum.dangerSoft, lum.dangerText),
+      AppPillTone.transit => (lum.transitSoft, lum.transitText),
+    };
+
+    return AppCard(
+      onTap: data.onTap,
+      padding: const EdgeInsets.all(18),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              ClayContainer(
+                variant: ClayVariant.soft,
+                color: bg,
+                borderRadius: AppRadius.sm,
+                isDark: lum.isDark,
+                width: 44,
+                height: 44,
+                child: Center(child: Icon(data.icon, size: 21, color: fg)),
+              ),
+              const Spacer(),
+              Icon(LucideIcons.chevronRight, size: 20, color: lum.g400),
+            ],
           ),
-          child: Icon(icon, color: AppColors.accent, size: 20),
-        ),
-        title: Text(title,
-            style: AppTypography.headline
-                .copyWith(color: AppColors.textPrimary)),
-        subtitle: Text(subtitle,
-            style: AppTypography.footnote.copyWith(color: AppColors.textHint)),
-        trailing:
-            const Icon(Icons.chevron_right, color: AppColors.separator),
-        onTap: onTap,
+          const SizedBox(height: 16),
+          Text(
+            data.title,
+            style: AppTypography.headline.copyWith(color: lum.textPrimary),
+          ),
+          const SizedBox(height: 4),
+          Text(
+            data.description,
+            style: AppTypography.footnote.copyWith(color: lum.g500),
+          ),
+        ],
       ),
     );
   }

@@ -604,82 +604,19 @@ final appRouter = GoRouter(
         return DrilldownPage(args: nav.args, title: nav.title);
       },
     ),
-    GoRoute(
-      path: '/purchasing/orders',
-      builder: (context, state) => const PurchaseOrdersPage(),
-    ),
-    GoRoute(
-      path: '/purchasing/orders/create',
-      builder: (context, state) {
-        final lines = state.extra
-            as List<({String productId, String name, double unitCost})>?;
-        return PurchaseOrderFormPage(initialLines: lines);
-      },
-    ),
-    GoRoute(
-      path: '/purchasing/orders/:id/edit',
-      builder: (context, state) =>
-          PurchaseOrderFormPage(poId: state.pathParameters['id']!),
-    ),
-    GoRoute(
-      path: '/purchasing/orders/:id/receive',
-      builder: (context, state) =>
-          GrnReceivePage(poId: state.pathParameters['id']!),
-    ),
-    GoRoute(
-      path: '/purchasing/orders/:id/invoice',
-      builder: (context, state) =>
-          PurchaseInvoiceMatchPage(poId: state.pathParameters['id']!),
-    ),
-    GoRoute(
-      path: '/purchasing/orders/:id',
-      builder: (context, state) =>
-          PurchaseOrderDetailPage(poId: state.pathParameters['id']!),
-    ),
-    GoRoute(
-      path: '/purchasing/invoices',
-      builder: (context, state) => const PurchaseInvoicesPage(),
-    ),
+    // Purchase-invoice detail is the one purchasing leaf kept top-level (NOT in
+    // the shell branch): the top-level /dashboard/drilldown page pushes it, and
+    // go_router cannot push a StatefulShellRoute descendant from a page above
+    // the shell without tripping the '!keyReservation.contains(key)' assertion
+    // (same reason /sales/invoice/:invoiceId below is top-level). Every other
+    // /purchasing/* route lives inside the purchasing branch so it keeps the
+    // rail; this one cross-fades like the rest of the branch.
     GoRoute(
       path: '/purchasing/invoices/:id',
-      builder: (context, state) =>
-          PurchaseInvoiceDetailPage(invoiceId: state.pathParameters['id']!),
-    ),
-    GoRoute(
-      path: '/purchasing/payments/create',
-      builder: (context, state) {
-        final extra = state.extra as Map<String, dynamic>?;
-        final balance = extra?['balance'];
-        return SupplierPaymentPage(
-          supplierId: extra?['supplierId'] as String?,
-          invoiceId: extra?['invoiceId'] as String?,
-          presetAmount: balance is num ? balance.toDouble() : null,
-        );
-      },
-    ),
-    GoRoute(
-      path: '/purchasing/reorder',
-      builder: (context, state) => const ReorderSuggestionsPage(),
-    ),
-    GoRoute(
-      path: '/purchasing/returns',
-      builder: (context, state) => const PurchaseReturnsPage(),
-    ),
-    GoRoute(
-      path: '/purchasing/returns/create',
-      builder: (context, state) {
-        final extra = state.extra as Map<String, dynamic>?;
-        return PurchaseReturnFormPage(
-          poId: extra?['poId'] as String,
-          grnId: extra?['grnId'] as String?,
-          invoiceId: extra?['invoiceId'] as String?,
-        );
-      },
-    ),
-    GoRoute(
-      path: '/purchasing/returns/:id',
-      builder: (context, state) =>
-          PurchaseReturnDetailPage(returnId: state.pathParameters['id']!),
+      pageBuilder: (context, state) => _fadePage(
+        state,
+        PurchaseInvoiceDetailPage(invoiceId: state.pathParameters['id']!),
+      ),
     ),
     // Leaf detail page reached from several branches (sales history, dashboard
     // recent-sale + drilldown, repair). Kept top-level, NOT inside the shell:
@@ -721,7 +658,10 @@ final appRouter = GoRouter(
           routes: [
             GoRoute(
               path: '/purchasing',
-              builder: (context, state) => const PurchaseHubPage(),
+              // Cross-fade like every other route in this branch — a plain
+              // builder here slid when navigated to from /suppliers.
+              pageBuilder: (context, state) =>
+                  _fadePage(state, const PurchaseHubPage()),
             ),
             // Suppliers lives INSIDE the purchasing branch so it keeps the
             // rail/bottom bar, as the design draws it. Same chrome on every
@@ -749,6 +689,104 @@ final appRouter = GoRouter(
                 final id = state.pathParameters['supplierId']!;
                 return _fadePage(state, SupplierFormPage(supplierId: id));
               },
+            ),
+            // Purchasing sub-routes promoted into the branch so the rail/bottom
+            // bar persist on every screen, as the design draws them. Same chrome
+            // → cross-fade, not slide. (Invoice detail is the one exception kept
+            // top-level above — the drilldown pushes it from above the shell.)
+            // Order matters: static/leaf segments must precede ':id'.
+            GoRoute(
+              path: '/purchasing/orders',
+              pageBuilder: (context, state) =>
+                  _fadePage(state, const PurchaseOrdersPage()),
+            ),
+            GoRoute(
+              path: '/purchasing/orders/create',
+              pageBuilder: (context, state) {
+                final lines = state.extra
+                    as List<({String productId, String name, double unitCost})>?;
+                return _fadePage(
+                    state, PurchaseOrderFormPage(initialLines: lines));
+              },
+            ),
+            GoRoute(
+              path: '/purchasing/orders/:id/edit',
+              pageBuilder: (context, state) => _fadePage(
+                state,
+                PurchaseOrderFormPage(poId: state.pathParameters['id']!),
+              ),
+            ),
+            GoRoute(
+              path: '/purchasing/orders/:id/receive',
+              pageBuilder: (context, state) => _fadePage(
+                state,
+                GrnReceivePage(poId: state.pathParameters['id']!),
+              ),
+            ),
+            GoRoute(
+              path: '/purchasing/orders/:id/invoice',
+              pageBuilder: (context, state) => _fadePage(
+                state,
+                PurchaseInvoiceMatchPage(poId: state.pathParameters['id']!),
+              ),
+            ),
+            GoRoute(
+              path: '/purchasing/orders/:id',
+              pageBuilder: (context, state) => _fadePage(
+                state,
+                PurchaseOrderDetailPage(poId: state.pathParameters['id']!),
+              ),
+            ),
+            GoRoute(
+              path: '/purchasing/invoices',
+              pageBuilder: (context, state) =>
+                  _fadePage(state, const PurchaseInvoicesPage()),
+            ),
+            GoRoute(
+              path: '/purchasing/payments/create',
+              pageBuilder: (context, state) {
+                final extra = state.extra as Map<String, dynamic>?;
+                final balance = extra?['balance'];
+                return _fadePage(
+                  state,
+                  SupplierPaymentPage(
+                    supplierId: extra?['supplierId'] as String?,
+                    invoiceId: extra?['invoiceId'] as String?,
+                    presetAmount: balance is num ? balance.toDouble() : null,
+                  ),
+                );
+              },
+            ),
+            GoRoute(
+              path: '/purchasing/reorder',
+              pageBuilder: (context, state) =>
+                  _fadePage(state, const ReorderSuggestionsPage()),
+            ),
+            GoRoute(
+              path: '/purchasing/returns',
+              pageBuilder: (context, state) =>
+                  _fadePage(state, const PurchaseReturnsPage()),
+            ),
+            GoRoute(
+              path: '/purchasing/returns/create',
+              pageBuilder: (context, state) {
+                final extra = state.extra as Map<String, dynamic>?;
+                return _fadePage(
+                  state,
+                  PurchaseReturnFormPage(
+                    poId: extra?['poId'] as String,
+                    grnId: extra?['grnId'] as String?,
+                    invoiceId: extra?['invoiceId'] as String?,
+                  ),
+                );
+              },
+            ),
+            GoRoute(
+              path: '/purchasing/returns/:id',
+              pageBuilder: (context, state) => _fadePage(
+                state,
+                PurchaseReturnDetailPage(returnId: state.pathParameters['id']!),
+              ),
             ),
           ],
         ),
