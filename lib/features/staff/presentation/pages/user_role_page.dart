@@ -1,12 +1,16 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../../../core/design/app_colors.dart';
-import '../../../../core/design/app_spacing.dart';
+import '../../../../core/design/app_radius.dart';
 import '../../../../core/design/app_typography.dart';
+import '../../../../core/design/clay.dart';
 import '../../../../core/design/widgets/app_button.dart';
+import '../../../../core/design/widgets/app_detail_scaffold.dart';
 import '../../../../core/design/widgets/app_inline_banner.dart';
 import '../../domain/entities/staff_entities.dart';
 import '../controllers/staff_controllers.dart';
+import '../widgets/staff_option_card.dart';
+import '../widgets/staff_ui.dart';
 
 class UserRolePage extends ConsumerStatefulWidget {
   const UserRolePage({super.key, required this.userId});
@@ -45,6 +49,7 @@ class _UserRolePageState extends ConsumerState<UserRolePage> {
 
   @override
   Widget build(BuildContext context) {
+    final lum = context.lum;
     final usersAsync = ref.watch(tenantUsersControllerProvider);
     final rolesAsync = ref.watch(rolesControllerProvider);
 
@@ -54,60 +59,117 @@ class _UserRolePageState extends ConsumerState<UserRolePage> {
       orElse: () => null,
     );
     _roleId ??= user?.roleId;
+    final changed = user != null && _roleId != user.roleId;
 
-    return Scaffold(
-      backgroundColor: AppColors.background,
-      appBar: AppBar(
-        backgroundColor: AppColors.background,
-        surfaceTintColor: AppColors.background,
-        leading: IconButton(
-          icon: const Icon(Icons.arrow_back_ios, color: AppColors.accent, size: 20),
-          onPressed: () => Navigator.of(context).pop(),
-        ),
-        title: Text('Change role', style: AppTypography.headline),
+    return AppDetailScaffold(
+      eyebrow: 'Members',
+      title: 'Change role',
+      maxContentWidth: 560,
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          if (user != null) _MemberHeader(user: user),
+          const SizedBox(height: 22),
+          Text('New role',
+              style: AppTypography.label.copyWith(color: lum.g700)),
+          const SizedBox(height: 10),
+          rolesAsync.when(
+            loading: () => const LinearProgressIndicator(),
+            error: (_, _) => AppInlineBanner(
+                message: 'Could not load roles.', type: BannerType.error),
+            data: (roles) => Column(
+              children: [
+                for (final r in roles)
+                  Padding(
+                    padding: const EdgeInsets.only(bottom: 10),
+                    child: StaffOptionCard(
+                      title: r.name,
+                      subtitle: r.description,
+                      showRadio: true,
+                      selected: _roleId == r.id,
+                      onTap: () => setState(() => _roleId = r.id),
+                    ),
+                  ),
+              ],
+            ),
+          ),
+          const SizedBox(height: 6),
+          Text('User counts on both roles update when you save.',
+              style: AppTypography.footnote.copyWith(color: lum.g500)),
+          if (_error != null) ...[
+            const SizedBox(height: 16),
+            AppInlineBanner(message: _error!, type: BannerType.error),
+          ],
+          const SizedBox(height: 22),
+          AppButton(
+            label: 'Save role',
+            fullWidth: true,
+            loading: _saving,
+            onPressed: (_saving || !changed) ? null : _save,
+          ),
+        ],
       ),
-      body: SafeArea(
-        child: ListView(
-          padding: const EdgeInsets.all(AppSpacing.screenPadding),
-          children: [
-            if (user != null) ...[
-              Text(user.fullName?.isNotEmpty == true ? user.fullName! : (user.email ?? 'User'),
-                  style: AppTypography.headline),
-              const SizedBox(height: 4),
-              Text('Current role: ${user.roleName ?? 'None'}',
-                  style: AppTypography.footnote.copyWith(color: AppColors.textMuted)),
-              const SizedBox(height: AppSpacing.lg),
-            ],
-            Text('New role',
-                style: AppTypography.footnote.copyWith(color: AppColors.textMuted)),
-            const SizedBox(height: AppSpacing.sm),
-            rolesAsync.when(
-              loading: () => const LinearProgressIndicator(),
-              error: (_, _) => AppInlineBanner(
-                  message: 'Could not load roles.', type: BannerType.error),
-              data: (roles) => DropdownButtonFormField<String>(
-                initialValue: _roleId,
-                decoration: const InputDecoration(border: OutlineInputBorder()),
-                items: [
-                  for (final r in roles)
-                    DropdownMenuItem(value: r.id, child: Text(r.name)),
-                ],
-                onChanged: (v) => setState(() => _roleId = v),
+    );
+  }
+}
+
+class _MemberHeader extends StatelessWidget {
+  const _MemberHeader({required this.user});
+  final TenantUser user;
+
+  @override
+  Widget build(BuildContext context) {
+    final lum = context.lum;
+    final name = user.fullName?.trim().isNotEmpty == true
+        ? user.fullName!.trim()
+        : (user.email ?? 'User');
+    return ClayContainer(
+      variant: ClayVariant.soft,
+      color: lum.surface,
+      borderRadius: AppRadius.lg,
+      isDark: lum.isDark,
+      padding: const EdgeInsets.all(16),
+      child: Row(
+        children: [
+          ClayContainer(
+            variant: ClayVariant.soft,
+            color: lum.accentSoft,
+            borderRadius: AppRadius.md,
+            isDark: lum.isDark,
+            width: 48,
+            height: 48,
+            child: Center(
+              child: Text(
+                staffInitials(user.fullName, user.email),
+                style: AppTypography.title2
+                    .copyWith(fontSize: 16, color: lum.accentPress),
               ),
             ),
-            if (_error != null) ...[
-              const SizedBox(height: AppSpacing.md),
-              AppInlineBanner(message: _error!, type: BannerType.error),
-            ],
-            const SizedBox(height: AppSpacing.lg),
-            AppButton(
-              label: 'Save',
-              fullWidth: true,
-              loading: _saving,
-              onPressed: _saving ? null : _save,
+          ),
+          const SizedBox(width: 14),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(name,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: AppTypography.headline
+                        .copyWith(fontSize: 16, color: lum.textPrimary)),
+                if (user.email != null && user.fullName?.trim().isNotEmpty == true) ...[
+                  const SizedBox(height: 2),
+                  Text(user.email!,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: AppTypography.footnote.copyWith(color: lum.g500)),
+                ],
+                const SizedBox(height: 4),
+                Text('Currently ${user.roleName ?? 'no role'}',
+                    style: AppTypography.footnote.copyWith(color: lum.accentPress)),
+              ],
             ),
-          ],
-        ),
+          ),
+        ],
       ),
     );
   }
