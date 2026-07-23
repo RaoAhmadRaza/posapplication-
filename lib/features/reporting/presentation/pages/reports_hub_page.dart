@@ -1,180 +1,216 @@
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
+import 'package:lucide_icons_flutter/lucide_icons.dart';
 import '../../../../core/design/app_colors.dart';
-import '../../../../core/design/app_spacing.dart';
+import '../../../../core/design/app_radius.dart';
 import '../../../../core/design/app_typography.dart';
+import '../../../../core/design/clay.dart';
+import '../../../../core/design/widgets/app_card.dart';
+import '../../../../core/widgets/module_scaffold.dart';
 import '../../../../core/widgets/permission_gate.dart';
+
+/// One report entry on the hub.
+class _Row {
+  const _Row(this.icon, this.title, this.desc, this.route, {this.external = false});
+  final IconData icon;
+  final String title;
+  final String desc;
+  final String route;
+
+  /// True for rows that leave the module (open in Accounting) — shown with an
+  /// up-right chevron instead of the in-module right chevron.
+  final bool external;
+}
 
 class ReportsHubPage extends StatelessWidget {
   const ReportsHubPage({super.key});
 
+  static const _sections = <(String, List<_Row>)>[
+    (
+      'Operations',
+      [
+        _Row(LucideIcons.boxes, 'Inventory', 'Stock value & reorder alerts',
+            '/reports/inventory'),
+        _Row(LucideIcons.trendingUp, 'Product performance',
+            'Best sellers by revenue, profit, units', '/reports/products'),
+        _Row(LucideIcons.activity, 'Trend analysis',
+            'Revenue & profit over time', '/reports/trends'),
+        _Row(LucideIcons.lineChart, 'Forecasting', '7-day sales projection',
+            '/reports/forecast'),
+        _Row(LucideIcons.sparkles, 'Smart insights', 'Suggested actions',
+            '/reports/insights'),
+      ],
+    ),
+    (
+      'Receivables & payables',
+      [
+        _Row(LucideIcons.userRound, 'Customer aging',
+            'Receivables by age bucket', '/reports/customers'),
+        _Row(LucideIcons.truck, 'Supplier aging', 'Payables by age bucket',
+            '/reports/suppliers'),
+      ],
+    ),
+    (
+      'Financial · opens in Accounting',
+      [
+        _Row(LucideIcons.scale, 'Trial balance', 'Debits vs credits, as of a date',
+            '/accounting/reports/trial-balance', external: true),
+        _Row(LucideIcons.fileText, 'Profit & loss', 'Revenue, expenses, net profit',
+            '/accounting/reports/profit-loss', external: true),
+        _Row(LucideIcons.book, 'Balance sheet', 'Assets vs liabilities and equity',
+            '/accounting/reports/balance-sheet', external: true),
+        _Row(LucideIcons.landmark, 'Cash & bank book',
+            'Running balance for cash or a bank',
+            '/accounting/reports/cash-bank-book', external: true),
+      ],
+    ),
+    (
+      'Scheduling',
+      [
+        _Row(LucideIcons.calendarClock, 'Scheduled reports',
+            'Automated email delivery', '/reports/schedules'),
+      ],
+    ),
+  ];
+
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
-      backgroundColor: AppColors.background,
-      appBar: AppBar(
-        backgroundColor: AppColors.background,
-        surfaceTintColor: AppColors.background,
-        title: Text('Reports', style: AppTypography.largeTitle),
-      ),
-      body: SafeArea(
-        child: PermissionGate(
-          module: 'reports',
-          action: 'read',
-          fallback: Center(
-            child: Text('No access to reports.',
-                style: AppTypography.subhead
-                    .copyWith(color: AppColors.textMuted)),
+    final lum = context.lum;
+    return ModuleScaffold(
+      title: 'Reports',
+      child: PermissionGate(
+        module: 'reports',
+        action: 'read',
+        fallback: Center(
+          child: Text(
+            'You don’t have access to reports.',
+            style: AppTypography.subhead.copyWith(color: lum.g500),
           ),
-          child: SingleChildScrollView(
-            padding: const EdgeInsets.symmetric(
-                horizontal: AppSpacing.screenPadding),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                const SizedBox(height: AppSpacing.xl),
-                _section('Financial'),
-                _ReportRow(
-                  icon: Icons.balance,
-                  title: 'Trial Balance',
-                  subtitle: 'Debits vs credits, as of a date',
-                  onTap: () =>
-                      context.push('/accounting/reports/trial-balance'),
+        ),
+        child: ListView(
+          padding: const EdgeInsets.fromLTRB(20, 20, 20, 48),
+          children: [
+            Center(
+              child: ConstrainedBox(
+                constraints: const BoxConstraints(maxWidth: 720),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: [
+                    for (final (title, rows) in _sections) ...[
+                      _Section(title: title, rows: rows),
+                      const SizedBox(height: 24),
+                    ],
+                  ],
                 ),
-                _ReportRow(
-                  icon: Icons.trending_up,
-                  title: 'Profit & Loss',
-                  subtitle: 'Revenue, expenses, net profit',
-                  onTap: () => context.push('/accounting/reports/profit-loss'),
-                ),
-                _ReportRow(
-                  icon: Icons.account_balance,
-                  title: 'Balance Sheet',
-                  subtitle: 'Assets vs liabilities and equity',
-                  onTap: () =>
-                      context.push('/accounting/reports/balance-sheet'),
-                ),
-                _ReportRow(
-                  icon: Icons.menu_book,
-                  title: 'Cash / Bank Book',
-                  subtitle: 'Running balance for cash or a bank',
-                  onTap: () =>
-                      context.push('/accounting/reports/cash-bank-book'),
-                ),
-                const SizedBox(height: AppSpacing.xl),
-                _section('Operations'),
-                _ReportRow(
-                  icon: Icons.inventory_2,
-                  title: 'Inventory',
-                  subtitle: 'Stock value, low stock, value by category',
-                  onTap: () => context.push('/reports/inventory'),
-                ),
-                _ReportRow(
-                  icon: Icons.emoji_events,
-                  title: 'Product Performance',
-                  subtitle: 'Top sellers by revenue, profit, units',
-                  onTap: () => context.push('/reports/products'),
-                ),
-                _ReportRow(
-                  icon: Icons.show_chart,
-                  title: 'Trends',
-                  subtitle: 'Revenue and profit over a date range',
-                  onTap: () => context.push('/reports/trends'),
-                ),
-                _ReportRow(
-                  icon: Icons.auto_graph,
-                  title: 'Forecasting',
-                  subtitle: 'Rules-based revenue projection (estimate)',
-                  onTap: () => context.push('/reports/forecast'),
-                ),
-                _ReportRow(
-                  icon: Icons.lightbulb_outline,
-                  title: 'Smart Insights',
-                  subtitle: 'Reorder recommendations to accept or dismiss',
-                  onTap: () => context.push('/reports/insights'),
-                ),
-                const SizedBox(height: AppSpacing.xl),
-                _section('Receivables & Payables'),
-                _ReportRow(
-                  icon: Icons.people,
-                  title: 'Customer Aging',
-                  subtitle: 'Outstanding balances by age bucket',
-                  onTap: () => context.push('/reports/customers'),
-                ),
-                _ReportRow(
-                  icon: Icons.local_shipping,
-                  title: 'Supplier Aging',
-                  subtitle: 'Payables by age bucket',
-                  onTap: () => context.push('/reports/suppliers'),
-                ),
-                const SizedBox(height: AppSpacing.xl),
-                _section('Scheduling'),
-                _ReportRow(
-                  icon: Icons.schedule,
-                  title: 'Scheduled Reports',
-                  subtitle: 'Recurring report deliveries (email via M11)',
-                  onTap: () => context.push('/reports/schedules'),
-                ),
-                const SizedBox(height: AppSpacing.xxl),
-              ],
+              ),
             ),
-          ),
+          ],
         ),
       ),
     );
   }
-
-  Widget _section(String title) => Padding(
-        padding: const EdgeInsets.only(bottom: AppSpacing.sm),
-        child: Text(title,
-            style: AppTypography.footnote.copyWith(color: AppColors.textMuted)),
-      );
 }
 
-class _ReportRow extends StatelessWidget {
-  const _ReportRow({
-    required this.icon,
-    required this.title,
-    required this.subtitle,
-    required this.onTap,
-  });
+class _Section extends StatelessWidget {
+  const _Section({required this.title, required this.rows});
 
-  final IconData icon;
   final String title;
-  final String subtitle;
-  final VoidCallback onTap;
+  final List<_Row> rows;
 
   @override
   Widget build(BuildContext context) {
-    return Container(
-      margin: const EdgeInsets.only(bottom: AppSpacing.md),
-      decoration: BoxDecoration(
-        color: AppColors.background,
-        borderRadius: BorderRadius.circular(14),
-        border: Border.all(color: AppColors.separator, width: 0.5),
-      ),
-      child: ListTile(
-        contentPadding: const EdgeInsets.symmetric(
-            horizontal: AppSpacing.base, vertical: AppSpacing.sm),
-        leading: Container(
-          width: 40,
-          height: 40,
-          decoration: BoxDecoration(
-            color: AppColors.accent.withValues(alpha: 0.1),
-            borderRadius: BorderRadius.circular(10),
+    final lum = context.lum;
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Padding(
+          padding: const EdgeInsets.only(left: 4, bottom: 10),
+          child: Text(
+            title.toUpperCase(),
+            style: AppTypography.caption.copyWith(
+              fontWeight: FontWeight.w700,
+              letterSpacing: 0.8,
+              color: lum.g500,
+            ),
           ),
-          child: Icon(icon, color: AppColors.accent, size: 20),
         ),
-        title: Text(title,
-            style:
-                AppTypography.headline.copyWith(color: AppColors.textPrimary)),
-        subtitle: Text(
-          subtitle,
-          style: AppTypography.footnote.copyWith(color: AppColors.textHint),
+        AppCard(
+          padding: EdgeInsets.zero,
+          child: Column(
+            children: [
+              for (var i = 0; i < rows.length; i++)
+                _HubRow(row: rows[i], first: i == 0),
+            ],
+          ),
         ),
-        trailing:
-            const Icon(Icons.chevron_right, color: AppColors.separator),
-        onTap: onTap,
+      ],
+    );
+  }
+}
+
+class _HubRow extends StatelessWidget {
+  const _HubRow({required this.row, required this.first});
+
+  final _Row row;
+  final bool first;
+
+  @override
+  Widget build(BuildContext context) {
+    final lum = context.lum;
+    return Semantics(
+      button: true,
+      label: row.title,
+      child: InkWell(
+        onTap: () => context.push(row.route),
+        borderRadius: BorderRadius.circular(AppRadius.lg),
+        child: Container(
+          padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 15),
+          decoration: BoxDecoration(
+            border: first
+                ? null
+                : Border(top: BorderSide(color: lum.hairline)),
+          ),
+          child: Row(
+            children: [
+              ClayContainer(
+                variant: ClayVariant.soft,
+                color: lum.accentSoft,
+                borderRadius: 13,
+                isDark: lum.isDark,
+                width: 42,
+                height: 42,
+                child: Icon(row.icon, size: 20, color: lum.accent),
+              ),
+              const SizedBox(width: 15),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      row.title,
+                      style: AppTypography.callout.copyWith(
+                        fontSize: 15,
+                        fontWeight: FontWeight.w600,
+                        color: lum.textPrimary,
+                      ),
+                    ),
+                    const SizedBox(height: 2),
+                    Text(
+                      row.desc,
+                      style: AppTypography.footnote.copyWith(color: lum.g500),
+                    ),
+                  ],
+                ),
+              ),
+              const SizedBox(width: 12),
+              Icon(
+                row.external ? LucideIcons.arrowUpRight : LucideIcons.chevronRight,
+                size: 18,
+                color: lum.g400,
+              ),
+            ],
+          ),
+        ),
       ),
     );
   }
