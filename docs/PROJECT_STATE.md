@@ -441,7 +441,7 @@ notifications (+prefs, trg_low_stock_notify, hub bell badge); bulk CSV import (b
 
 ## Known Issues
 - Profile loaded once (no pull-to-refresh); IMEI section not yet in product edit form (SERIALIZED)
-- ✓ FIXED (DECISIONS): number_series landmine (D1); cron reproducibility (D5). BUILD: macOS+Android OK; file_picker pinned 12.0.0-beta.7 (D4), withData/bytes→readAsBytes() still pending.
+- ✓ FIXED (DECISIONS): number_series landmine (D1); cron reproducibility (D5); next_number NULL entry_number on null-branch post (bank-account creation, migration 20260723110000). BUILD: macOS+Android OK; file_picker pinned 12.0.0-beta.7 (D4), withData/bytes→readAsBytes() still pending.
 - Auth test-diagnosis fixes (docs/AUTH_TEST_DIAGNOSIS.md; branch fix/auth-runbook-v1, DB migrations pushed to
   prod). 11 clusters verified against source, then fixed across 9 phases. Client (Cluster E/D1/D2/C): login
   empty-field error; real password-strength scorer (length + char-class + sequential/repeat); WeakPasswordFailure
