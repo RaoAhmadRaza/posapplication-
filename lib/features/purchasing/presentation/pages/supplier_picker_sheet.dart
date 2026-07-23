@@ -1,40 +1,40 @@
 import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:lucide_icons_flutter/lucide_icons.dart';
 import '../../../../core/design/app_colors.dart';
 import '../../../../core/design/app_radius.dart';
-import '../../../../core/design/app_spacing.dart';
 import '../../../../core/design/app_typography.dart';
-import '../../../../core/design/widgets/app_text_field.dart';
+import '../../../../core/design/clay.dart';
+import '../../../../core/design/widgets/app_money_text.dart';
+import '../../../../core/design/widgets/app_search_field.dart';
+import '../../../../core/design/widgets/app_sheet.dart';
 import '../../../suppliers/domain/entities/supplier.dart';
 import '../../../suppliers/presentation/controllers/suppliers_controller.dart';
 
 /// Searchable supplier picker. Returns the chosen [Supplier], or null on dismiss.
 Future<Supplier?> showSupplierPicker(BuildContext context) {
-  return showModalBottomSheet<Supplier?>(
+  return showAppSheet<Supplier>(
     context: context,
-    isScrollControlled: true,
-    backgroundColor: AppColors.background,
-    builder: (ctx) => const _SupplierPickerSheet(),
+    builder: (sheetContext) => const _SupplierPickerBody(),
   );
 }
 
-class _SupplierPickerSheet extends ConsumerStatefulWidget {
-  const _SupplierPickerSheet();
+class _SupplierPickerBody extends ConsumerStatefulWidget {
+  const _SupplierPickerBody();
 
   @override
-  ConsumerState<_SupplierPickerSheet> createState() =>
-      _SupplierPickerSheetState();
+  ConsumerState<_SupplierPickerBody> createState() => _SupplierPickerBodyState();
 }
 
-class _SupplierPickerSheetState extends ConsumerState<_SupplierPickerSheet> {
+class _SupplierPickerBodyState extends ConsumerState<_SupplierPickerBody> {
   final _searchCtrl = TextEditingController();
   Timer? _debounce;
 
   @override
   void initState() {
     super.initState();
-    _searchCtrl.addListener(() => _onChanged(_searchCtrl.text));
+    _searchCtrl.addListener(_listener);
   }
 
   @override
@@ -44,128 +44,141 @@ class _SupplierPickerSheetState extends ConsumerState<_SupplierPickerSheet> {
     super.dispose();
   }
 
-  void _onChanged(String q) {
+  void _listener() {
     _debounce?.cancel();
     _debounce = Timer(const Duration(milliseconds: 300), () {
-      ref.read(suppliersProvider.notifier).search(q);
+      ref.read(suppliersProvider.notifier).search(_searchCtrl.text);
     });
   }
 
   @override
   Widget build(BuildContext context) {
+    final lum = context.lum;
     final suppliers = ref.watch(suppliersProvider).value ?? const <Supplier>[];
+    final aging = ref.watch(payablesAgingProvider).value;
+    final query = _searchCtrl.text.trim();
 
-    return SafeArea(
-      child: Padding(
-        padding: EdgeInsets.only(
-          left: AppSpacing.screenPadding,
-          right: AppSpacing.screenPadding,
-          top: AppSpacing.md,
-          bottom: AppSpacing.md +
-              MediaQuery.of(context).viewInsets.bottom,
+    return Column(
+      mainAxisSize: MainAxisSize.min,
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        AppSheetHeader(title: 'Select supplier'),
+        AppSearchField(
+          controller: _searchCtrl,
+          hint: 'Search suppliers…',
+          onSubmitted: (q) => ref.read(suppliersProvider.notifier).search(q),
+          onClear: () => ref.read(suppliersProvider.notifier).search(''),
         ),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Center(
-              child: Container(
-                width: 36,
-                height: 4,
-                decoration: BoxDecoration(
-                  color: AppColors.separator,
-                  borderRadius: BorderRadius.circular(2),
-                ),
-              ),
+        const SizedBox(height: 12),
+        if (suppliers.isEmpty)
+          Padding(
+            padding: const EdgeInsets.symmetric(vertical: 28),
+            child: Text(
+              query.isEmpty
+                  ? 'No suppliers found.'
+                  : 'No suppliers match "$query".',
+              textAlign: TextAlign.center,
+              style: AppTypography.footnote.copyWith(color: lum.g500),
             ),
-            const SizedBox(height: AppSpacing.md),
-            Text('Select Supplier', style: AppTypography.title2),
-            const SizedBox(height: AppSpacing.md),
-            AppTextField(
-              controller: _searchCtrl,
-              label: 'Search',
-              prefixIcon: Icons.search,
-              hint: 'Name or phone',
-              onSubmitted: (q) =>
-                  ref.read(suppliersProvider.notifier).search(q),
+          )
+        else
+          for (final s in suppliers) ...[
+            _SupplierTile(
+              supplier: s,
+              payable: aging?.balanceFor(s.id),
+              onTap: () => Navigator.of(context).pop(s),
             ),
-            const SizedBox(height: AppSpacing.md),
-            if (suppliers.isEmpty)
-              Padding(
-                padding: const EdgeInsets.symmetric(vertical: AppSpacing.xl),
-                child: Text('No suppliers found.',
-                    style: AppTypography.footnote
-                        .copyWith(color: AppColors.textHint)),
-              )
-            else
-              Flexible(
-                child: ListView.builder(
-                  shrinkWrap: true,
-                  itemCount: suppliers.length,
-                  itemBuilder: (_, i) {
-                    final s = suppliers[i];
-                    return _SupplierTile(
-                      supplier: s,
-                      onTap: () => Navigator.of(context).pop(s),
-                    );
-                  },
-                ),
-              ),
+            const SizedBox(height: 8),
           ],
-        ),
-      ),
+      ],
     );
   }
 }
 
 class _SupplierTile extends StatelessWidget {
-  const _SupplierTile({required this.supplier, required this.onTap});
+  const _SupplierTile({
+    required this.supplier,
+    required this.payable,
+    required this.onTap,
+  });
   final Supplier supplier;
+  final double? payable;
   final VoidCallback onTap;
 
   @override
   Widget build(BuildContext context) {
-    return Padding(
-      padding: const EdgeInsets.only(bottom: AppSpacing.sm),
-      child: InkWell(
-        onTap: onTap,
-        borderRadius: BorderRadius.circular(AppRadius.card),
-        child: Container(
-          padding: const EdgeInsets.symmetric(
-              horizontal: AppSpacing.base, vertical: AppSpacing.md),
-          decoration: BoxDecoration(
-            color: AppColors.fieldFill,
-            borderRadius: BorderRadius.circular(AppRadius.card),
-          ),
-          child: Row(
-            children: [
-              Container(
-                width: 36,
-                height: 36,
-                decoration: BoxDecoration(
-                  color: AppColors.accent.withValues(alpha: 0.12),
-                  borderRadius: BorderRadius.circular(8),
+    final lum = context.lum;
+    final city = supplier.city?.trim();
+
+    return Semantics(
+      button: true,
+      label: supplier.name,
+      child: Material(
+        color: Colors.transparent,
+        borderRadius: BorderRadius.circular(AppRadius.md),
+        child: InkWell(
+          onTap: onTap,
+          borderRadius: BorderRadius.circular(AppRadius.md),
+          child: ClayContainer(
+            variant: ClayVariant.inset,
+            color: lum.surface2,
+            borderRadius: AppRadius.md,
+            isDark: lum.isDark,
+            padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+            child: Row(
+              children: [
+                ClayContainer(
+                  variant: ClayVariant.soft,
+                  color: lum.accentSoft,
+                  borderRadius: AppRadius.sm,
+                  isDark: lum.isDark,
+                  width: 38,
+                  height: 38,
+                  child: Center(
+                    child: Icon(LucideIcons.truck,
+                        size: 18, color: lum.accentPress),
+                  ),
                 ),
-                child: const Center(
-                  child: Icon(Icons.local_shipping,
-                      size: 18, color: AppColors.accent),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        supplier.name,
+                        style: AppTypography.headline
+                            .copyWith(color: lum.textPrimary),
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                      ),
+                      if (city != null && city.isNotEmpty) ...[
+                        const SizedBox(height: 2),
+                        Text(
+                          city,
+                          style:
+                              AppTypography.caption.copyWith(color: lum.g500),
+                        ),
+                      ],
+                    ],
+                  ),
                 ),
-              ),
-              const SizedBox(width: AppSpacing.md),
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
+                const SizedBox(width: 10),
+                Column(
+                  crossAxisAlignment: CrossAxisAlignment.end,
                   children: [
-                    Text(supplier.name, style: AppTypography.headline),
-                    if (supplier.phone != null)
-                      Text(supplier.phone!,
-                          style: AppTypography.caption
-                              .copyWith(color: AppColors.textMuted)),
+                    payable == null
+                        ? Text('—',
+                            style: AppTypography.monoValue
+                                .copyWith(fontSize: 15, color: lum.g400))
+                        : AppMoneyText(payable!, size: 15),
+                    Text(
+                      'payable',
+                      style: AppTypography.caption.copyWith(color: lum.g400),
+                    ),
                   ],
                 ),
-              ),
-              const Icon(Icons.chevron_right, color: AppColors.separator),
-            ],
+              ],
+            ),
           ),
         ),
       ),

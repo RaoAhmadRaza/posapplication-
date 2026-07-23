@@ -1,12 +1,15 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
+import 'package:lucide_icons_flutter/lucide_icons.dart';
 import '../../../../core/design/app_colors.dart';
-import '../../../../core/design/app_radius.dart';
-import '../../../../core/design/app_spacing.dart';
 import '../../../../core/design/app_typography.dart';
 import '../../../../core/design/widgets/app_button.dart';
-import '../../../../core/design/widgets/app_inline_banner.dart';
+import '../../../../core/design/widgets/app_card.dart';
+import '../../../../core/design/widgets/app_checkbox.dart';
+import '../../../../core/design/widgets/app_detail_scaffold.dart';
+import '../../../../core/design/widgets/app_pill.dart';
+import '../../../../core/design/widgets/app_states.dart';
 import '../../../inventory/domain/entities/product.dart';
 import '../../../inventory/presentation/controllers/products_controller.dart';
 
@@ -24,70 +27,75 @@ class _ReorderSuggestionsPageState
     extends ConsumerState<ReorderSuggestionsPage> {
   final _selected = <String>{};
 
-  bool _isLow(Product p) => p.reorderPoint > 0 && (p.qtyOnHand ?? 0) <= p.reorderPoint;
+  bool _isLow(Product p) =>
+      p.reorderPoint > 0 && (p.qtyOnHand ?? 0) <= p.reorderPoint;
 
   @override
   Widget build(BuildContext context) {
     final state = ref.watch(productsProvider);
+    final low = switch (state) {
+      AsyncData(:final value) => value.where(_isLow).toList(),
+      _ => const <Product>[],
+    };
+    // Drop selections no longer in the low list.
+    _selected.removeWhere((id) => !low.any((p) => p.id == id));
 
-    return Scaffold(
-      backgroundColor: AppColors.background,
-      appBar: AppBar(
-        backgroundColor: AppColors.background,
-        surfaceTintColor: AppColors.background,
-        leading: IconButton(
-          icon: const Icon(Icons.arrow_back_ios,
-              color: AppColors.accent, size: 20),
-          onPressed: () => Navigator.of(context).pop(),
-        ),
-        title: Text('Reorder Suggestions', style: AppTypography.headline),
-      ),
-      body: SafeArea(
-        child: state.when(
-          loading: () => const Center(child: CircularProgressIndicator()),
-          error: (e, _) => _ErrorState(
+    final description = switch (state) {
+      AsyncData() =>
+        '${low.length} ${low.length == 1 ? 'product' : 'products'} '
+            'at or below reorder point',
+      _ => null,
+    };
+
+    return AppDetailScaffold(
+      eyebrow: 'Purchasing',
+      title: 'Reorder suggestions',
+      description: description,
+      child: switch (state) {
+        AsyncError() => AppErrorState(
+            title: 'Could not load products',
+            body: 'Something went wrong. Check your connection and retry.',
             onRetry: () => ref.read(productsProvider.notifier).refresh(),
           ),
-          data: (products) {
-            final low = products.where(_isLow).toList();
-            if (low.isEmpty) return const _EmptyState();
-            // Drop selections no longer in the low list.
-            _selected.removeWhere((id) => !low.any((p) => p.id == id));
-            return Column(
-              children: [
-                Expanded(
-                  child: ListView.builder(
-                    padding: const EdgeInsets.symmetric(
-                        horizontal: AppSpacing.screenPadding,
-                        vertical: AppSpacing.md),
-                    itemCount: low.length,
-                    itemBuilder: (_, i) {
-                      final p = low[i];
-                      return _ProductRow(
-                        product: p,
-                        selected: _selected.contains(p.id),
-                        onChanged: (v) => setState(() {
-                          if (v == true) {
-                            _selected.add(p.id);
-                          } else {
-                            _selected.remove(p.id);
-                          }
-                        }),
-                      );
-                    },
-                  ),
+        AsyncData() when low.isEmpty => const AppEmptyState(
+            icon: LucideIcons.checkCheck,
+            title: 'All stock above reorder point',
+            body: 'Nothing needs restocking right now.',
+          ),
+        AsyncData() => Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              for (final p in low) ...[
+                _ProductRow(
+                  product: p,
+                  selected: _selected.contains(p.id),
+                  onChanged: (v) => setState(() {
+                    if (v) {
+                      _selected.add(p.id);
+                    } else {
+                      _selected.remove(p.id);
+                    }
+                  }),
                 ),
-                _BottomBar(
-                  count: _selected.length,
-                  onCreate: _selected.isEmpty
-                      ? null
-                      : () => _createPo(low),
-                ),
+                const SizedBox(height: 10),
               ],
-            );
-          },
-        ),
-      ),
+              const SizedBox(height: 14),
+              AppButton(
+                label: _selected.isEmpty
+                    ? 'Select items to reorder'
+                    : 'Create PO with ${_selected.length} '
+                        'item${_selected.length == 1 ? '' : 's'}',
+                icon: LucideIcons.plus,
+                fullWidth: true,
+                onPressed: _selected.isEmpty ? null : () => _createPo(low),
+              ),
+            ],
+          ),
+        _ => const Padding(
+            padding: EdgeInsets.only(top: 60),
+            child: Center(child: CircularProgressIndicator()),
+          ),
+      },
     );
   }
 
@@ -109,130 +117,84 @@ class _ProductRow extends StatelessWidget {
   });
   final Product product;
   final bool selected;
-  final ValueChanged<bool?> onChanged;
+  final ValueChanged<bool> onChanged;
 
   @override
   Widget build(BuildContext context) {
-    final onHand = (product.qtyOnHand ?? 0).toStringAsFixed(0);
-    return Container(
-      margin: const EdgeInsets.only(bottom: AppSpacing.md),
-      padding: const EdgeInsets.symmetric(
-          horizontal: AppSpacing.md, vertical: AppSpacing.sm),
-      decoration: BoxDecoration(
-        color: AppColors.fieldFill,
-        borderRadius: BorderRadius.circular(AppRadius.card),
-        border: selected ? Border.all(color: AppColors.accent) : null,
-      ),
+    final lum = context.lum;
+    final onHand = (product.qtyOnHand ?? 0);
+    final reorder = product.reorderPoint;
+    final critical = onHand <= reorder / 2;
+    // Honest, transparent figure: units needed to reach the reorder point.
+    final below = (reorder - onHand).clamp(0, double.infinity);
+
+    return AppCard(
+      onTap: () => onChanged(!selected),
+      padding: const EdgeInsets.all(16),
       child: Row(
         children: [
-          Checkbox(
-            value: selected,
-            activeColor: AppColors.accent,
-            onChanged: onChanged,
-          ),
+          AppCheckbox(value: selected, onChanged: onChanged),
+          const SizedBox(width: 14),
           Expanded(
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Text(product.name, style: AppTypography.headline),
+                Text(
+                  product.name,
+                  style: AppTypography.headline.copyWith(color: lum.textPrimary),
+                ),
                 const SizedBox(height: 2),
-                Text('SKU ${product.sku}',
-                    style: AppTypography.caption
-                        .copyWith(color: AppColors.textMuted)),
+                Text(
+                  'SKU ${product.sku}',
+                  style: AppTypography.caption.copyWith(
+                    fontFamily: AppTypography.mono,
+                    color: lum.g500,
+                  ),
+                ),
               ],
             ),
           ),
+          const SizedBox(width: 12),
           Column(
             crossAxisAlignment: CrossAxisAlignment.end,
             children: [
-              Text('$onHand on hand',
-                  style: AppTypography.footnote
-                      .copyWith(color: AppColors.destructive)),
-              Text('reorder at ${product.reorderPoint}',
-                  style: AppTypography.caption
-                      .copyWith(color: AppColors.textHint)),
+              Text(
+                onHand.toStringAsFixed(0),
+                style: AppTypography.monoValue.copyWith(
+                  fontSize: 17,
+                  color: critical ? lum.dangerText : lum.warningText,
+                ),
+              ),
+              Text(
+                'in stock',
+                style: AppTypography.caption.copyWith(color: lum.g400),
+              ),
+              const SizedBox(height: 6),
+              AppPill(
+                label: 'Reorder ${reorder.toStringAsFixed(0)}',
+                tone: critical ? AppPillTone.danger : AppPillTone.warning,
+                showDot: false,
+              ),
+            ],
+          ),
+          const SizedBox(width: 12),
+          Column(
+            crossAxisAlignment: CrossAxisAlignment.end,
+            children: [
+              Text(
+                '+${below.toStringAsFixed(0)}',
+                style: AppTypography.monoValue.copyWith(
+                  fontSize: 17,
+                  color: lum.accent,
+                ),
+              ),
+              Text(
+                'to reorder',
+                style: AppTypography.caption.copyWith(color: lum.g400),
+              ),
             ],
           ),
         ],
-      ),
-    );
-  }
-}
-
-class _BottomBar extends StatelessWidget {
-  const _BottomBar({required this.count, required this.onCreate});
-  final int count;
-  final VoidCallback? onCreate;
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      width: double.infinity,
-      padding: const EdgeInsets.fromLTRB(AppSpacing.screenPadding,
-          AppSpacing.md, AppSpacing.screenPadding, AppSpacing.xxl),
-      decoration: const BoxDecoration(
-        color: AppColors.background,
-        border: Border(
-            top: BorderSide(color: AppColors.separator, width: 0.5)),
-      ),
-      child: AppButton(
-        label: count == 0
-            ? 'Select items to reorder'
-            : 'Create PO with $count item${count == 1 ? '' : 's'}',
-        onPressed: onCreate,
-        fullWidth: true,
-        icon: Icons.add_shopping_cart,
-      ),
-    );
-  }
-}
-
-class _EmptyState extends StatelessWidget {
-  const _EmptyState();
-
-  @override
-  Widget build(BuildContext context) {
-    return Center(
-      child: Padding(
-        padding:
-            const EdgeInsets.symmetric(horizontal: AppSpacing.screenPadding),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            const Icon(Icons.check_circle_outline,
-                size: 48, color: AppColors.success),
-            const SizedBox(height: AppSpacing.md),
-            Text('All stock above reorder point',
-                textAlign: TextAlign.center,
-                style: AppTypography.subhead
-                    .copyWith(color: AppColors.textMuted)),
-          ],
-        ),
-      ),
-    );
-  }
-}
-
-class _ErrorState extends StatelessWidget {
-  const _ErrorState({required this.onRetry});
-  final VoidCallback onRetry;
-
-  @override
-  Widget build(BuildContext context) {
-    return Center(
-      child: Padding(
-        padding:
-            const EdgeInsets.symmetric(horizontal: AppSpacing.screenPadding),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            AppInlineBanner(
-                message: 'Could not load products.',
-                type: BannerType.error),
-            const SizedBox(height: AppSpacing.md),
-            AppButton(label: 'Retry', onPressed: onRetry),
-          ],
-        ),
       ),
     );
   }
