@@ -3,41 +3,40 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
 import '../../../../core/design/app_colors.dart';
-import '../../../../core/design/app_radius.dart';
 import '../../../../core/design/app_spacing.dart';
 import '../../../../core/design/app_typography.dart';
 import '../../../../core/design/widgets/app_button.dart';
 import '../../../../core/design/widgets/app_card.dart';
 import '../../../../core/design/widgets/app_inline_banner.dart';
+import '../../../../core/design/widgets/app_detail_scaffold.dart';
+import '../../../../core/design/widgets/app_states.dart';
+import '../../../../core/design/widgets/app_toast.dart';
 import '../../../../core/widgets/permission_gate.dart';
+import 'package:lucide_icons_flutter/lucide_icons.dart';
 import '../../domain/entities/ai_recommendation.dart';
 import '../controllers/reporting_controllers.dart';
+import '../widgets/reporting_ui.dart';
 
 class SmartInsightsPage extends ConsumerWidget {
   const SmartInsightsPage({super.key});
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    return Scaffold(
-      backgroundColor: AppColors.background,
-      appBar: AppBar(
-        backgroundColor: AppColors.background,
-        surfaceTintColor: AppColors.background,
-        title: Text('Smart Insights', style: AppTypography.largeTitle),
-      ),
-      body: SafeArea(
-        child: PermissionGate(
-          module: 'reports',
-          action: 'read',
-          fallback: Center(
-            child: Text(
-              'No access.',
-              style:
-                  AppTypography.subhead.copyWith(color: AppColors.textMuted),
-            ),
+    final lum = context.lum;
+    return AppDetailScaffold(
+      eyebrow: 'Reports',
+      title: 'Smart insights',
+      description: 'Suggested actions from your recent sales and stock.',
+      child: PermissionGate(
+        module: 'reports',
+        action: 'read',
+        fallback: Center(
+          child: Text(
+            'You don’t have access to reports.',
+            style: AppTypography.subhead.copyWith(color: lum.g500),
           ),
-          child: _body(context, ref),
         ),
+        child: _body(context, ref),
       ),
     );
   }
@@ -48,28 +47,33 @@ class SmartInsightsPage extends ConsumerWidget {
       loading: () => const Center(child: CircularProgressIndicator()),
       error: (_, _) => const Padding(
         padding: EdgeInsets.all(AppSpacing.screenPadding),
-        child: AppInlineBanner(
-          message: 'Could not load insights.',
-          type: BannerType.error,
+        child: AppErrorState(
+          title: 'Couldn’t load insights',
+          body: 'We couldn’t reach the server. Please try again.',
         ),
       ),
       data: (recs) {
         if (recs.isEmpty) {
-          return Center(
-            child: Text(
-              'No recommendations right now.',
-              style:
-                  AppTypography.subhead.copyWith(color: AppColors.textMuted),
+          return const Center(
+            child: Padding(
+              padding: EdgeInsets.all(AppSpacing.screenPadding),
+              child: AppEmptyState(
+                icon: LucideIcons.sparkles,
+                title: 'No recommendations right now',
+                body: 'Suggested actions from your sales and stock will show up '
+                    'here as they’re detected.',
+              ),
             ),
           );
         }
-        return ListView.separated(
-          padding:
-              const EdgeInsets.symmetric(horizontal: AppSpacing.screenPadding)
-                  .copyWith(top: AppSpacing.xl, bottom: AppSpacing.xxl),
-          itemCount: recs.length,
-          separatorBuilder: (_, _) => const SizedBox(height: AppSpacing.md),
-          itemBuilder: (_, i) => _RecommendationCard(rec: recs[i]),
+        return Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            for (final rec in recs) ...[
+              _RecommendationCard(rec: rec),
+              const SizedBox(height: AppSpacing.md),
+            ],
+          ],
         );
       },
     );
@@ -87,13 +91,13 @@ class _RecommendationCard extends ConsumerWidget {
         .act(rec.id, accept);
     if (!context.mounted) return;
     if (accept) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text(failure == null ? 'Accepted' : failure.message)),
+      showAppToast(
+        context,
+        failure == null ? 'Accepted' : failure.message,
+        type: failure == null ? BannerType.success : BannerType.error,
       );
     } else if (failure != null) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text(failure.message)),
-      );
+      showAppToast(context, failure.message, type: BannerType.error);
     }
   }
 
@@ -112,101 +116,79 @@ class _RecommendationCard extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
+    final lum = context.lum;
     final title = rec.recommendation['product']?.toString() ?? rec.entityId;
     final isReorder = rec.recommendationType == 'REORDER';
+    final conf = (rec.confidenceScore * 100).toStringAsFixed(0);
+
     return AppCard(
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Row(
             children: [
-              _TypeChip(label: rec.recommendationType),
-              const Spacer(),
-              _ConfidenceBadge(score: rec.confidenceScore),
+              InsightBadge(type: rec.recommendationType),
+              const SizedBox(width: AppSpacing.sm),
+              Container(
+                width: 7,
+                height: 7,
+                decoration: BoxDecoration(
+                  color: confidenceColor(lum, rec.confidenceScore),
+                  shape: BoxShape.circle,
+                ),
+              ),
+              const SizedBox(width: 6),
+              Text(
+                '$conf% confidence',
+                style: AppTypography.caption.copyWith(
+                  fontWeight: FontWeight.w600,
+                  color: lum.g500,
+                ),
+              ),
             ],
           ),
           const SizedBox(height: AppSpacing.md),
           Text(
             title,
-            style:
-                AppTypography.headline.copyWith(color: AppColors.textPrimary),
+            style: AppTypography.headline.copyWith(color: lum.textPrimary),
           ),
           if (rec.reasoning != null) ...[
-            const SizedBox(height: AppSpacing.xs),
+            const SizedBox(height: 6),
             Text(
               rec.reasoning!,
-              style:
-                  AppTypography.footnote.copyWith(color: AppColors.textMuted),
+              style: AppTypography.footnote.copyWith(
+                color: lum.g600,
+                height: 1.5,
+              ),
             ),
           ],
           const SizedBox(height: AppSpacing.base),
-          Row(
+          Wrap(
+            spacing: AppSpacing.sm,
+            runSpacing: AppSpacing.sm,
             children: [
-              if (isReorder) ...[
+              if (isReorder)
                 AppButton(
                   label: 'Create PO',
+                  size: AppButtonSize.sm,
+                  icon: LucideIcons.filePlus,
                   onPressed: () => _createPo(context, ref),
                 ),
-                const SizedBox(width: AppSpacing.sm),
-              ],
               AppButton(
                 label: 'Accept',
+                size: AppButtonSize.sm,
                 variant: AppButtonVariant.tinted,
                 onPressed: () => _act(context, ref, true),
               ),
-              const SizedBox(width: AppSpacing.sm),
               AppButton(
                 label: 'Dismiss',
+                size: AppButtonSize.sm,
                 variant: AppButtonVariant.plain,
                 onPressed: () => _act(context, ref, false),
               ),
             ],
           ),
         ],
-      ),
-    );
-  }
-}
-
-class _TypeChip extends StatelessWidget {
-  const _TypeChip({required this.label});
-
-  final String label;
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      padding: const EdgeInsets.symmetric(
-        horizontal: AppSpacing.sm,
-        vertical: AppSpacing.xs,
-      ),
-      decoration: BoxDecoration(
-        color: AppColors.accent.withValues(alpha: 0.1),
-        borderRadius: BorderRadius.circular(AppRadius.field),
-      ),
-      child: Text(
-        label,
-        style: AppTypography.caption.copyWith(
-          color: AppColors.accent,
-          fontWeight: FontWeight.w600,
-        ),
-      ),
-    );
-  }
-}
-
-class _ConfidenceBadge extends StatelessWidget {
-  const _ConfidenceBadge({required this.score});
-
-  final double score;
-
-  @override
-  Widget build(BuildContext context) {
-    return Text(
-      '${(score * 100).toStringAsFixed(0)}%',
-      style: AppTypography.footnote.copyWith(
-        color: AppColors.textMuted,
-        fontWeight: FontWeight.w600,
       ),
     );
   }
