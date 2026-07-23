@@ -1,17 +1,23 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
+import 'package:lucide_icons_flutter/lucide_icons.dart';
 import '../../../../core/design/app_colors.dart';
-import '../../../../core/design/app_spacing.dart';
+import '../../../../core/design/app_radius.dart';
 import '../../../../core/design/app_typography.dart';
+import '../../../../core/design/clay.dart';
 import '../../../../core/design/widgets/app_button.dart';
+import '../../../../core/design/widgets/app_detail_scaffold.dart';
+import '../../../../core/design/widgets/app_filter_chips.dart';
 import '../../../../core/design/widgets/app_inline_banner.dart';
+import '../../../../core/design/widgets/app_section_card.dart';
 import '../../../../core/design/widgets/app_text_field.dart';
+import '../../../../core/design/widgets/app_toast.dart';
 import '../../../auth/presentation/controllers/branch_controller.dart';
 import '../../domain/entities/employee.dart';
 import '../../data/models/employee_model.dart';
 import '../controllers/employees_controller.dart';
-import '../widgets/hr_status_ui.dart';
+import '../widgets/hr_ui.dart';
 
 /// employee == null → create; otherwise edit. Create and edit differ: employee
 /// code, branch, joining date and CNIC are set only at creation (the
@@ -167,8 +173,7 @@ class _EmployeeFormPageState extends ConsumerState<EmployeeFormPage> {
       return;
     }
     if (id != null) {
-      ScaffoldMessenger.of(context)
-          .showSnackBar(const SnackBar(content: Text('Employee created')));
+      showAppToast(context, 'Employee created', type: BannerType.success);
       context.go('/hr/employees/$id');
     } else {
       _done('Employee created');
@@ -176,191 +181,263 @@ class _EmployeeFormPageState extends ConsumerState<EmployeeFormPage> {
   }
 
   void _done(String msg) {
-    ScaffoldMessenger.of(context)
-        .showSnackBar(SnackBar(content: Text(msg)));
+    showAppToast(context, msg, type: BannerType.success);
     context.pop();
   }
 
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
-      backgroundColor: AppColors.background,
-      appBar: AppBar(
-        backgroundColor: AppColors.background,
-        surfaceTintColor: AppColors.background,
-        leading: IconButton(
-          icon: const Icon(Icons.arrow_back_ios,
-              color: AppColors.accent, size: 20),
-          onPressed: () => Navigator.of(context).pop(),
-        ),
-        title: Text(_isEdit ? 'Edit Employee' : 'New Employee',
-            style: AppTypography.headline),
-      ),
-      body: SafeArea(
-        child: ListView(
-          padding: const EdgeInsets.all(AppSpacing.screenPadding),
-          children: [
-            _group('Personal'),
-            if (!_isEdit) ...[
-              AppTextField(
-                  controller: _codeCtrl,
-                  label: 'Employee Code',
-                  prefixIcon: Icons.badge_outlined),
-              const SizedBox(height: AppSpacing.md),
-            ],
-            AppTextField(
-                controller: _nameCtrl,
-                label: 'Name',
-                prefixIcon: Icons.person_outline),
-            if (!_isEdit) ...[
-              const SizedBox(height: AppSpacing.md),
-              AppTextField(
-                  controller: _cnicCtrl,
-                  label: 'CNIC (optional)',
-                  prefixIcon: Icons.credit_card),
-            ],
-            const SizedBox(height: AppSpacing.lg),
-            _group('Contact'),
-            AppTextField(
-                controller: _phoneCtrl,
-                label: 'Phone (optional)',
-                prefixIcon: Icons.phone_outlined,
-                keyboardType: TextInputType.phone),
-            const SizedBox(height: AppSpacing.md),
-            AppTextField(
-                controller: _emailCtrl,
-                label: 'Email (optional)',
-                prefixIcon: Icons.email_outlined,
-                keyboardType: TextInputType.emailAddress),
-            const SizedBox(height: AppSpacing.md),
-            AppTextField(
-                controller: _addressCtrl,
-                label: 'Address (optional)',
-                prefixIcon: Icons.home_outlined),
-            const SizedBox(height: AppSpacing.lg),
-            _group('Employment'),
-            AppTextField(
-                controller: _designationCtrl,
-                label: 'Designation (optional)',
-                prefixIcon: Icons.work_outline),
-            const SizedBox(height: AppSpacing.md),
-            AppTextField(
-                controller: _departmentCtrl,
-                label: 'Department (optional)',
-                prefixIcon: Icons.apartment_outlined),
-            if (!_isEdit) ...[
-              const SizedBox(height: AppSpacing.md),
-              _DateField(
-                  label: 'Joining Date',
-                  date: _joiningDate,
-                  onTap: _pickJoiningDate),
-            ],
-            if (_isEdit) ...[
-              const SizedBox(height: AppSpacing.md),
-              _fieldLabel('Status'),
-              const SizedBox(height: AppSpacing.xs),
-              _StatusSelector(
+    return AppDetailScaffold(
+      eyebrow: 'HR · Employees',
+      title: _isEdit ? 'Edit Employee' : 'New Employee',
+      description:
+          'Fields marked * are required. New employees are added to the '
+          'current branch.',
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          if (_isEdit) ...[
+            AppSectionCard(
+              eyebrow: 'Status',
+              child: _StatusSelector(
                 value: _status,
                 onChanged: (s) => setState(() => _status = s),
               ),
-            ],
-            const SizedBox(height: AppSpacing.lg),
-            _group('Salary'),
-            _fieldLabel('Salary Type'),
-            const SizedBox(height: AppSpacing.xs),
-            _SalaryTypeSelector(
-              value: _salaryType,
-              onChanged: (t) => setState(() => _salaryType = t),
             ),
-            const SizedBox(height: AppSpacing.md),
-            AppTextField(
-                controller: _salaryCtrl,
-                label: 'Base Salary',
-                prefixIcon: Icons.payments_outlined,
-                keyboardType:
-                    const TextInputType.numberWithOptions(decimal: true)),
-            const SizedBox(height: AppSpacing.lg),
-            _group('Bank'),
-            AppTextField(
-                controller: _bankNameCtrl,
-                label: 'Bank Name (optional)',
-                prefixIcon: Icons.account_balance_outlined),
-            const SizedBox(height: AppSpacing.md),
-            AppTextField(
-                controller: _bankAcctCtrl,
-                label: 'Account Number (optional)',
-                prefixIcon: Icons.tag),
-            const SizedBox(height: AppSpacing.md),
-            AppTextField(
-                controller: _notesCtrl,
-                label: 'Notes (optional)',
-                prefixIcon: Icons.notes),
-            if (_error != null) ...[
-              const SizedBox(height: AppSpacing.md),
-              AppInlineBanner(message: _error!, type: BannerType.error),
-            ],
-            const SizedBox(height: AppSpacing.xl),
-            AppButton(
-              label: _isEdit ? 'Save Changes' : 'Create Employee',
-              onPressed: _saving ? null : _submit,
-              loading: _saving,
-              fullWidth: true,
-            ),
+            const SizedBox(height: 16),
           ],
-        ),
+          if (!_isEdit) ...[
+            AppSectionCard(
+              eyebrow: 'Identity',
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  _grid([
+                    AppTextField(
+                      controller: _codeCtrl,
+                      label: 'Employee code',
+                      prefixIcon: LucideIcons.hash,
+                    ),
+                    AppTextField(
+                      controller: _cnicCtrl,
+                      label: 'CNIC',
+                      prefixIcon: LucideIcons.fingerprint,
+                    ),
+                  ]),
+                  const SizedBox(height: 14),
+                  _LabelledField(
+                    label: 'Joining date',
+                    child: _DateWell(
+                      date: _joiningDate,
+                      onTap: _pickJoiningDate,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            const SizedBox(height: 16),
+          ],
+          AppSectionCard(
+            eyebrow: 'Personal & contact',
+            child: _grid([
+              AppTextField(
+                controller: _nameCtrl,
+                label: 'Full name *',
+                prefixIcon: LucideIcons.user,
+              ),
+              AppTextField(
+                controller: _phoneCtrl,
+                label: 'Phone',
+                prefixIcon: LucideIcons.phone,
+                keyboardType: TextInputType.phone,
+              ),
+              AppTextField(
+                controller: _emailCtrl,
+                label: 'Email',
+                prefixIcon: LucideIcons.mail,
+                keyboardType: TextInputType.emailAddress,
+              ),
+              AppTextField(
+                controller: _addressCtrl,
+                label: 'Address',
+                prefixIcon: LucideIcons.mapPin,
+              ),
+            ]),
+          ),
+          const SizedBox(height: 16),
+          AppSectionCard(
+            eyebrow: 'Role & pay',
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                _grid([
+                  AppTextField(
+                    controller: _designationCtrl,
+                    label: 'Designation',
+                    prefixIcon: LucideIcons.briefcase,
+                  ),
+                  AppTextField(
+                    controller: _departmentCtrl,
+                    label: 'Department',
+                    prefixIcon: LucideIcons.building2,
+                  ),
+                ]),
+                const SizedBox(height: 14),
+                _LabelledField(
+                  label: 'Salary type',
+                  child: _SalaryTypeSelector(
+                    value: _salaryType,
+                    onChanged: (t) => setState(() => _salaryType = t),
+                  ),
+                ),
+                const SizedBox(height: 14),
+                AppTextField(
+                  controller: _salaryCtrl,
+                  label: 'Base salary *',
+                  prefixIcon: LucideIcons.wallet,
+                  keyboardType:
+                      const TextInputType.numberWithOptions(decimal: true),
+                ),
+              ],
+            ),
+          ),
+          const SizedBox(height: 16),
+          AppSectionCard(
+            eyebrow: 'Bank & notes',
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                _grid([
+                  AppTextField(
+                    controller: _bankNameCtrl,
+                    label: 'Bank name',
+                    prefixIcon: LucideIcons.landmark,
+                  ),
+                  AppTextField(
+                    controller: _bankAcctCtrl,
+                    label: 'Account number',
+                    prefixIcon: LucideIcons.creditCard,
+                  ),
+                ]),
+                const SizedBox(height: 14),
+                AppTextField(
+                  controller: _notesCtrl,
+                  label: 'Notes',
+                  prefixIcon: LucideIcons.stickyNote,
+                  maxLines: 4,
+                ),
+              ],
+            ),
+          ),
+          if (_error != null) ...[
+            const SizedBox(height: 16),
+            AppInlineBanner(message: _error!, type: BannerType.error),
+          ],
+          const SizedBox(height: 24),
+          Row(
+            mainAxisAlignment: MainAxisAlignment.end,
+            children: [
+              AppButton(
+                label: 'Cancel',
+                variant: AppButtonVariant.plain,
+                onPressed:
+                    _saving ? null : () => Navigator.of(context).maybePop(),
+              ),
+              const SizedBox(width: 10),
+              AppButton(
+                label: _isEdit ? 'Save Changes' : 'Create Employee',
+                onPressed: _saving ? null : _submit,
+                loading: _saving,
+              ),
+            ],
+          ),
+        ],
       ),
     );
   }
 
-  Widget _group(String text) => Padding(
-        padding: const EdgeInsets.only(bottom: AppSpacing.sm),
-        child: Text(text.toUpperCase(),
-            style: AppTypography.footnote.copyWith(
-                color: AppColors.textMuted, fontWeight: FontWeight.w700)),
+  /// Responsive two-up field grid: side-by-side when wide enough, else stacked.
+  Widget _grid(List<Widget> fields) => LayoutBuilder(
+        builder: (context, constraints) {
+          const gap = 14.0;
+          final twoCol = constraints.maxWidth >= 440;
+          final width =
+              twoCol ? (constraints.maxWidth - gap) / 2 : constraints.maxWidth;
+          return Wrap(
+            spacing: gap,
+            runSpacing: gap,
+            children: [
+              for (final f in fields) SizedBox(width: width, child: f),
+            ],
+          );
+        },
       );
-
-  Widget _fieldLabel(String text) => Text(text,
-      style: AppTypography.fieldLabel);
 }
 
-class _DateField extends StatelessWidget {
-  const _DateField(
-      {required this.label, required this.date, required this.onTap});
+/// Field label above a non-[AppTextField] control (date well, pill row).
+class _LabelledField extends StatelessWidget {
+  const _LabelledField({required this.label, required this.child});
   final String label;
+  final Widget child;
+
+  @override
+  Widget build(BuildContext context) {
+    final lum = context.lum;
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Padding(
+          padding: const EdgeInsets.only(left: 2, bottom: 8),
+          child: Text(
+            label,
+            style: AppTypography.fieldLabel.copyWith(color: lum.g700),
+          ),
+        ),
+        child,
+      ],
+    );
+  }
+}
+
+/// Clay-inset date tile opening the platform picker; mirrors [AppTextField]'s
+/// well so the joining date reads as another field.
+class _DateWell extends StatelessWidget {
+  const _DateWell({required this.date, required this.onTap});
   final DateTime date;
   final VoidCallback onTap;
 
   @override
   Widget build(BuildContext context) {
+    final lum = context.lum;
     final text = date.toIso8601String().substring(0, 10);
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Padding(
-          padding: const EdgeInsets.only(left: 4, bottom: 8),
-          child: Text(label, style: AppTypography.fieldLabel),
-        ),
-        InkWell(
-          onTap: onTap,
-          borderRadius: BorderRadius.circular(12),
-          child: Container(
-            height: 52,
-            padding: const EdgeInsets.symmetric(horizontal: 12),
-            decoration: BoxDecoration(
-              color: AppColors.fieldFill,
-              borderRadius: BorderRadius.circular(12),
-            ),
-            child: Row(
-              children: [
-                const Icon(Icons.calendar_today_outlined,
-                    color: AppColors.textMuted, size: 20),
-                const SizedBox(width: 10),
-                Text(text, style: AppTypography.fieldText),
-              ],
-            ),
+    return Semantics(
+      button: true,
+      label: 'Joining date $text',
+      child: GestureDetector(
+        behavior: HitTestBehavior.opaque,
+        onTap: onTap,
+        child: ClayContainer(
+          variant: ClayVariant.inset,
+          color: lum.surface2,
+          borderRadius: AppRadius.md,
+          isDark: lum.isDark,
+          height: 50,
+          padding: const EdgeInsets.symmetric(horizontal: 14),
+          child: Row(
+            children: [
+              Icon(LucideIcons.calendar, size: 18, color: lum.g400),
+              const SizedBox(width: 10),
+              Expanded(
+                child: Text(
+                  text,
+                  style:
+                      AppTypography.fieldText.copyWith(color: lum.textPrimary),
+                ),
+              ),
+            ],
           ),
         ),
-      ],
+      ),
     );
   }
 }
@@ -373,13 +450,17 @@ class _SalaryTypeSelector extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Wrap(
-      spacing: AppSpacing.sm,
+      spacing: 8,
+      runSpacing: 8,
       children: [
         for (final t in SalaryType.values)
-          _Pill(
-            label: salaryTypeLabels[t]!,
-            selected: value == t,
-            onTap: () => onChanged(t),
+          SizedBox(
+            height: 36,
+            child: AppFilterChip(
+              label: salaryTypeLabels[t]!,
+              active: value == t,
+              onTap: () => onChanged(t),
+            ),
           ),
       ],
     );
@@ -394,48 +475,19 @@ class _StatusSelector extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Wrap(
-      spacing: AppSpacing.sm,
-      runSpacing: AppSpacing.xs,
+      spacing: 8,
+      runSpacing: 8,
       children: [
         for (final s in EmployeeStatus.values)
-          _Pill(
-            label: employeeStatusLabels[s]!,
-            selected: value == s,
-            onTap: () => onChanged(s),
+          SizedBox(
+            height: 36,
+            child: AppFilterChip(
+              label: employeeStatusLabels[s]!,
+              active: value == s,
+              onTap: () => onChanged(s),
+            ),
           ),
       ],
-    );
-  }
-}
-
-class _Pill extends StatelessWidget {
-  const _Pill(
-      {required this.label, required this.selected, required this.onTap});
-  final String label;
-  final bool selected;
-  final VoidCallback onTap;
-
-  @override
-  Widget build(BuildContext context) {
-    return GestureDetector(
-      onTap: onTap,
-      child: Container(
-        padding: const EdgeInsets.symmetric(
-            horizontal: AppSpacing.base, vertical: AppSpacing.xs),
-        decoration: BoxDecoration(
-          color: selected
-              ? AppColors.accent
-              : AppColors.accent.withValues(alpha: 0.08),
-          borderRadius: BorderRadius.circular(999),
-        ),
-        child: Text(
-          label,
-          style: AppTypography.footnote.copyWith(
-            color: selected ? Colors.white : AppColors.accent,
-            fontWeight: FontWeight.w600,
-          ),
-        ),
-      ),
     );
   }
 }

@@ -1,10 +1,9 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import '../../../../core/design/app_colors.dart';
 import '../../../../core/design/app_spacing.dart';
-import '../../../../core/design/app_typography.dart';
 import '../../../../core/design/widgets/app_button.dart';
 import '../../../../core/design/widgets/app_inline_banner.dart';
+import '../../../../core/design/widgets/app_sheet.dart';
 import '../../../../core/design/widgets/app_text_field.dart';
 import '../controllers/advances_controller.dart';
 
@@ -14,10 +13,8 @@ Future<bool> showGiveAdvanceSheet({
   required BuildContext context,
   required String employeeId,
 }) async {
-  final result = await showModalBottomSheet<bool>(
+  final result = await showAppSheet<bool>(
     context: context,
-    isScrollControlled: true,
-    backgroundColor: AppColors.background,
     builder: (_) => _GiveAdvanceSheet(employeeId: employeeId),
   );
   return result ?? false;
@@ -80,56 +77,46 @@ class _GiveAdvanceSheetState extends ConsumerState<_GiveAdvanceSheet> {
 
   @override
   Widget build(BuildContext context) {
-    return Padding(
-      padding: EdgeInsets.only(
-        left: AppSpacing.screenPadding,
-        right: AppSpacing.screenPadding,
-        top: AppSpacing.lg,
-        bottom: MediaQuery.of(context).viewInsets.bottom + AppSpacing.lg,
-      ),
-      child: SingleChildScrollView(
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Text('Give Advance', style: AppTypography.headline),
-            const SizedBox(height: AppSpacing.md),
-            AppTextField(
-                controller: _amountCtrl,
-                label: 'Amount',
-                prefixIcon: Icons.payments_outlined,
-                keyboardType:
-                    const TextInputType.numberWithOptions(decimal: true)),
-            const SizedBox(height: AppSpacing.md),
-            AppTextField(
-                controller: _recoveryCtrl,
-                label: 'Recovery per payroll (optional)',
-                prefixIcon: Icons.trending_down,
-                keyboardType:
-                    const TextInputType.numberWithOptions(decimal: true)),
-            const SizedBox(height: AppSpacing.md),
-            AppTextField(
-                controller: _payCtrl,
-                label: 'Pay account code',
-                prefixIcon: Icons.account_balance_outlined),
-            const SizedBox(height: AppSpacing.md),
-            AppTextField(
-                controller: _notesCtrl,
-                label: 'Notes (optional)',
-                prefixIcon: Icons.notes),
-            if (_error != null) ...[
-              const SizedBox(height: AppSpacing.md),
-              AppInlineBanner(message: _error!, type: BannerType.error),
-            ],
-            const SizedBox(height: AppSpacing.lg),
-            AppButton(
-                label: 'Disburse Advance',
-                fullWidth: true,
-                loading: _saving,
-                onPressed: _saving ? null : _save),
-          ],
-        ),
-      ),
+    return Column(
+      mainAxisSize: MainAxisSize.min,
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        const AppSheetHeader(title: 'Give advance'),
+        AppTextField(
+            controller: _amountCtrl,
+            label: 'Amount',
+            prefixIcon: Icons.payments_outlined,
+            keyboardType:
+                const TextInputType.numberWithOptions(decimal: true)),
+        const SizedBox(height: AppSpacing.base),
+        AppTextField(
+            controller: _recoveryCtrl,
+            label: 'Recovery per payroll (optional)',
+            prefixIcon: Icons.trending_down,
+            keyboardType:
+                const TextInputType.numberWithOptions(decimal: true)),
+        const SizedBox(height: AppSpacing.base),
+        AppTextField(
+            controller: _payCtrl,
+            label: 'Pay account code',
+            prefixIcon: Icons.account_balance_outlined),
+        const SizedBox(height: AppSpacing.base),
+        AppTextField(
+            controller: _notesCtrl,
+            label: 'Notes (optional)',
+            prefixIcon: Icons.notes,
+            maxLines: 3),
+        if (_error != null) ...[
+          const SizedBox(height: AppSpacing.base),
+          AppInlineBanner(message: _error!, type: BannerType.error),
+        ],
+        const SizedBox(height: AppSpacing.lg),
+        AppButton(
+            label: 'Disburse advance',
+            fullWidth: true,
+            loading: _saving,
+            onPressed: _saving ? null : _save),
+      ],
     );
   }
 }

@@ -1,16 +1,18 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
+import 'package:lucide_icons_flutter/lucide_icons.dart';
 import '../../../../core/design/app_colors.dart';
-import '../../../../core/design/app_radius.dart';
-import '../../../../core/design/app_spacing.dart';
-import '../../../../core/design/app_typography.dart';
-import '../../../../core/design/widgets/app_inline_banner.dart';
-import '../../../../core/design/widgets/app_text_field.dart';
+import '../../../../core/design/widgets/app_filter_chips.dart';
+import '../../../../core/design/widgets/app_list_skeleton.dart';
+import '../../../../core/design/widgets/app_search_field.dart';
+import '../../../../core/design/widgets/app_states.dart';
+import '../../../../core/widgets/module_scaffold.dart';
 import '../../../../core/widgets/permission_gate.dart';
 import '../../domain/entities/employee.dart';
 import '../controllers/employees_controller.dart';
-import '../widgets/hr_status_ui.dart';
+import '../widgets/employee_card.dart';
+import '../widgets/hr_ui.dart';
 
 class EmployeesPage extends ConsumerStatefulWidget {
   const EmployeesPage({super.key});
@@ -34,128 +36,141 @@ class _EmployeesPageState extends ConsumerState<EmployeesPage> {
 
   @override
   Widget build(BuildContext context) {
+    final lum = context.lum;
     final async = ref.watch(employeesProvider);
     final controller = ref.read(employeesProvider.notifier);
     final activeStatus = controller.statusFilter;
     final activeDept = controller.departmentFilter;
 
-    return Scaffold(
-      backgroundColor: AppColors.background,
-      appBar: AppBar(
-        backgroundColor: AppColors.background,
-        surfaceTintColor: AppColors.background,
-        leading: IconButton(
-          icon: const Icon(Icons.arrow_back_ios,
-              color: AppColors.accent, size: 20),
-          onPressed: () => Navigator.of(context).pop(),
+    // Status filter chips are index-based; index 0 == "All".
+    final statusLabels = [
+      'All',
+      for (final s in EmployeeStatus.values) employeeStatusLabels[s]!,
+    ];
+    final statusSelected =
+        activeStatus == null ? 0 : EmployeeStatus.values.indexOf(activeStatus) + 1;
+
+    return ModuleScaffold(
+      title: 'Employees',
+      maxContentWidth: 720,
+      actions: [
+        _HeaderAction(
+          icon: LucideIcons.clock,
+          tooltip: 'Clock in / out',
+          onTap: () => context.go('/hr/clock'),
         ),
-        title: Text('Employees', style: AppTypography.headline),
-        actions: [
-          IconButton(
-            icon: const Icon(Icons.calendar_month_outlined,
-                color: AppColors.accent),
-            tooltip: 'Attendance',
-            onPressed: () => context.push('/hr/attendance'),
-          ),
-          IconButton(
-            icon: const Icon(Icons.event_note_outlined,
-                color: AppColors.accent),
-            tooltip: 'Leaves',
-            onPressed: () => context.push('/hr/leaves'),
-          ),
-          IconButton(
-            icon: const Icon(Icons.payments_outlined, color: AppColors.accent),
-            tooltip: 'Payroll',
-            onPressed: () => context.push('/hr/payroll'),
-          ),
-          IconButton(
-            icon: const Icon(Icons.schedule, color: AppColors.accent),
+        PermissionGate(
+          module: 'hr',
+          action: 'update',
+          child: _HeaderAction(
+            icon: LucideIcons.calendarClock,
             tooltip: 'Shifts',
-            onPressed: () => context.push('/hr/shifts'),
+            onTap: () => context.go('/hr/shifts'),
           ),
-        ],
-      ),
+        ),
+      ],
       floatingActionButton: PermissionGate(
         module: 'hr',
         action: 'create',
         child: FloatingActionButton(
-          backgroundColor: AppColors.accent,
+          backgroundColor: lum.accent,
           onPressed: () => context.push('/hr/employees/new'),
-          child: const Icon(Icons.add, color: Colors.white),
+          child: const Icon(LucideIcons.userPlus, color: Colors.white),
         ),
       ),
-      body: SafeArea(
-        child: Column(
-          children: [
-            Padding(
-              padding: const EdgeInsets.fromLTRB(AppSpacing.screenPadding,
-                  AppSpacing.sm, AppSpacing.screenPadding, AppSpacing.sm),
-              child: AppTextField(
-                controller: _searchCtrl,
-                label: 'Search',
-                prefixIcon: Icons.search,
-                hint: 'Name or employee code',
-                onSubmitted: _search,
-              ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          Padding(
+            padding: const EdgeInsets.fromLTRB(16, 14, 16, 10),
+            child: AppSearchField(
+              controller: _searchCtrl,
+              hint: 'Search name, code or role',
+              onSubmitted: _search,
+              onClear: () => _search(''),
             ),
-            _StatusFilter(
-              active: activeStatus,
-              onChanged: (s) => controller.setFilters(
-                status: s,
-                clearStatus: s == null,
-                query: controller.query,
-              ),
+          ),
+          Padding(
+            padding: const EdgeInsets.only(bottom: 6),
+            child: AppFilterChips(
+              labels: statusLabels,
+              selected: statusSelected,
+              padding: const EdgeInsets.symmetric(horizontal: 16),
+              onSelected: (i) {
+                final s = i == 0 ? null : EmployeeStatus.values[i - 1];
+                controller.setFilters(
+                  status: s,
+                  clearStatus: s == null,
+                  query: controller.query,
+                );
+              },
             ),
-            Expanded(
-              child: async.when(
-                loading: () =>
-                    const Center(child: CircularProgressIndicator()),
-                error: (e, _) => Center(
-                  child: Padding(
-                    padding: const EdgeInsets.all(AppSpacing.screenPadding),
-                    child: AppInlineBanner(
-                        message: 'Could not load employees.',
-                        type: BannerType.error),
+          ),
+          Expanded(
+            child: async.when(
+              loading: () => const Padding(
+                padding: EdgeInsets.fromLTRB(16, 8, 16, 28),
+                child: AppListSkeleton(rows: 5, rowHeight: 74),
+              ),
+              error: (e, _) => Center(
+                child: Padding(
+                  padding: const EdgeInsets.all(16),
+                  child: AppErrorState(
+                    title: "We couldn't load employees",
+                    body:
+                        "We couldn't reach the server. Check your connection and try again.",
                   ),
                 ),
-                data: (employees) {
-                  if (employees.isEmpty) {
-                    return Center(
-                      child: Text('No employees found.',
-                          style: AppTypography.footnote
-                              .copyWith(color: AppColors.textMuted)),
-                    );
-                  }
-                  final depts = _departments(employees);
-                  return ListView(
-                    padding: const EdgeInsets.symmetric(
-                        horizontal: AppSpacing.screenPadding),
-                    children: [
-                      if (depts.isNotEmpty)
-                        _DepartmentFilter(
-                          departments: depts,
-                          active: activeDept,
-                          onChanged: (d) => controller.setFilters(
-                            status: activeStatus,
-                            department: d,
-                            clearStatus: activeStatus == null,
-                            clearDepartment: d == null,
-                            query: controller.query,
-                          ),
-                        ),
-                      for (final e in employees)
-                        Padding(
-                          padding:
-                              const EdgeInsets.only(bottom: AppSpacing.sm),
-                          child: _EmployeeRow(employee: e),
-                        ),
-                    ],
-                  );
-                },
               ),
+              data: (employees) {
+                if (employees.isEmpty) {
+                  return const Center(
+                    child: Padding(
+                      padding: EdgeInsets.all(16),
+                      child: AppEmptyState(
+                        icon: LucideIcons.userRoundSearch,
+                        title: 'No employees match',
+                        body:
+                            'No employees match these filters — try clearing them.',
+                      ),
+                    ),
+                  );
+                }
+                final depts = _departments(employees);
+                return ListView(
+                  padding: const EdgeInsets.fromLTRB(16, 4, 16, 28),
+                  children: [
+                    if (depts.isNotEmpty)
+                      Padding(
+                        padding: const EdgeInsets.only(bottom: 12),
+                        child: AppFilterChips(
+                          labels: ['All depts', ...depts],
+                          selected: activeDept == null
+                              ? 0
+                              : depts.indexOf(activeDept) + 1,
+                          onSelected: (i) {
+                            final d = i == 0 ? null : depts[i - 1];
+                            controller.setFilters(
+                              status: activeStatus,
+                              department: d,
+                              clearStatus: activeStatus == null,
+                              clearDepartment: d == null,
+                              query: controller.query,
+                            );
+                          },
+                        ),
+                      ),
+                    for (final e in employees)
+                      Padding(
+                        padding: const EdgeInsets.only(bottom: 10),
+                        child: EmployeeCard(employee: e),
+                      ),
+                  ],
+                );
+              },
             ),
-          ],
-        ),
+          ),
+        ],
       ),
     );
   }
@@ -171,151 +186,26 @@ class _EmployeesPageState extends ConsumerState<EmployeesPage> {
   }
 }
 
-class _StatusFilter extends StatelessWidget {
-  const _StatusFilter({required this.active, required this.onChanged});
-  final EmployeeStatus? active;
-  final ValueChanged<EmployeeStatus?> onChanged;
-
-  @override
-  Widget build(BuildContext context) {
-    return SizedBox(
-      height: 40,
-      child: ListView(
-        scrollDirection: Axis.horizontal,
-        padding: const EdgeInsets.symmetric(
-            horizontal: AppSpacing.screenPadding),
-        children: [
-          _Chip(
-            label: 'All',
-            selected: active == null,
-            onTap: () => onChanged(null),
-          ),
-          for (final s in EmployeeStatus.values)
-            _Chip(
-              label: employeeStatusLabels[s]!,
-              selected: active == s,
-              onTap: () => onChanged(s),
-            ),
-        ],
-      ),
-    );
-  }
-}
-
-class _DepartmentFilter extends StatelessWidget {
-  const _DepartmentFilter({
-    required this.departments,
-    required this.active,
-    required this.onChanged,
+/// A 40x40 icon button for the module header (reach Shifts / Clock, which are
+/// not nav-rail destinations).
+class _HeaderAction extends StatelessWidget {
+  const _HeaderAction({
+    required this.icon,
+    required this.tooltip,
+    required this.onTap,
   });
-  final List<String> departments;
-  final String? active;
-  final ValueChanged<String?> onChanged;
 
-  @override
-  Widget build(BuildContext context) {
-    return Padding(
-      padding: const EdgeInsets.only(bottom: AppSpacing.sm),
-      child: Wrap(
-        spacing: AppSpacing.sm,
-        runSpacing: AppSpacing.xs,
-        children: [
-          _Chip(
-              label: 'All depts',
-              selected: active == null,
-              onTap: () => onChanged(null)),
-          for (final d in departments)
-            _Chip(
-                label: d,
-                selected: active == d,
-                onTap: () => onChanged(d)),
-        ],
-      ),
-    );
-  }
-}
-
-class _Chip extends StatelessWidget {
-  const _Chip(
-      {required this.label, required this.selected, required this.onTap});
-  final String label;
-  final bool selected;
+  final IconData icon;
+  final String tooltip;
   final VoidCallback onTap;
 
   @override
   Widget build(BuildContext context) {
-    return Padding(
-      padding: const EdgeInsets.only(right: AppSpacing.sm),
-      child: GestureDetector(
-        onTap: onTap,
-        child: Container(
-          alignment: Alignment.center,
-          padding: const EdgeInsets.symmetric(
-              horizontal: AppSpacing.base, vertical: AppSpacing.xs),
-          decoration: BoxDecoration(
-            color: selected
-                ? AppColors.accent
-                : AppColors.accent.withValues(alpha: 0.08),
-            borderRadius: BorderRadius.circular(999),
-          ),
-          child: Text(
-            label,
-            style: AppTypography.footnote.copyWith(
-              color: selected ? Colors.white : AppColors.accent,
-              fontWeight: FontWeight.w600,
-            ),
-          ),
-        ),
-      ),
-    );
-  }
-}
-
-class _EmployeeRow extends StatelessWidget {
-  const _EmployeeRow({required this.employee});
-  final Employee employee;
-
-  @override
-  Widget build(BuildContext context) {
-    final subtitle = [employee.designation, employee.department]
-        .where((e) => e != null && e.isNotEmpty)
-        .join(' · ');
-    return Container(
-      decoration: BoxDecoration(
-        color: AppColors.background,
-        borderRadius: BorderRadius.circular(AppRadius.card),
-        border: Border.all(color: AppColors.separator, width: 0.5),
-      ),
-      child: InkWell(
-        onTap: () => context.push('/hr/employees/${employee.id}'),
-        borderRadius: BorderRadius.circular(AppRadius.card),
-        child: Padding(
-          padding: const EdgeInsets.all(AppSpacing.md),
-          child: Row(
-            children: [
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(employee.name,
-                        style: AppTypography.subhead
-                            .copyWith(fontWeight: FontWeight.w600)),
-                    const SizedBox(height: 2),
-                    Text(employee.employeeCode,
-                        style: AppTypography.caption
-                            .copyWith(color: AppColors.textMuted)),
-                    if (subtitle.isNotEmpty)
-                      Text(subtitle,
-                          style: AppTypography.caption
-                              .copyWith(color: AppColors.textMuted)),
-                  ],
-                ),
-              ),
-              EmployeeStatusBadge(status: employee.status),
-            ],
-          ),
-        ),
-      ),
+    final lum = context.lum;
+    return IconButton(
+      icon: Icon(icon, size: 20, color: lum.g600),
+      tooltip: tooltip,
+      onPressed: onTap,
     );
   }
 }
