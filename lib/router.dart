@@ -689,42 +689,6 @@ final appRouter = GoRouter(
       },
     ),
     GoRoute(
-      path: '/reports',
-      builder: (context, state) => const ReportsHubPage(),
-    ),
-    GoRoute(
-      path: '/reports/inventory',
-      builder: (context, state) => const InventoryReportingPage(),
-    ),
-    GoRoute(
-      path: '/reports/products',
-      builder: (context, state) => const ProductPerformancePage(),
-    ),
-    GoRoute(
-      path: '/reports/customers',
-      builder: (context, state) => const CustomerReportingPage(),
-    ),
-    GoRoute(
-      path: '/reports/suppliers',
-      builder: (context, state) => const SupplierReportingPage(),
-    ),
-    GoRoute(
-      path: '/reports/trends',
-      builder: (context, state) => const TrendAnalysisPage(),
-    ),
-    GoRoute(
-      path: '/reports/schedules',
-      builder: (context, state) => const ScheduledReportsPage(),
-    ),
-    GoRoute(
-      path: '/reports/insights',
-      builder: (context, state) => const SmartInsightsPage(),
-    ),
-    GoRoute(
-      path: '/reports/forecast',
-      builder: (context, state) => const ForecastingPage(),
-    ),
-    GoRoute(
       path: '/accounting/vouchers',
       builder: (context, state) => const ManualVoucherPage(),
     ),
@@ -1131,6 +1095,59 @@ final appRouter = GoRouter(
                   ),
                 );
               },
+            ),
+          ],
+        ),
+        // Reporting lives INSIDE its own branch (index 7) so it carries the
+        // nav rail/bottom bar, per the design. The hub is the branch root; the
+        // 8 sub-reports are pushed on top of it and pop back via their
+        // AppDetailScaffold back button. Same chrome, so they cross-fade.
+        StatefulShellBranch(
+          routes: [
+            GoRoute(
+              path: '/reports',
+              pageBuilder: (context, state) =>
+                  _fadePage(state, const ReportsHubPage()),
+            ),
+            GoRoute(
+              path: '/reports/inventory',
+              pageBuilder: (context, state) =>
+                  _fadePage(state, const InventoryReportingPage()),
+            ),
+            GoRoute(
+              path: '/reports/products',
+              pageBuilder: (context, state) =>
+                  _fadePage(state, const ProductPerformancePage()),
+            ),
+            GoRoute(
+              path: '/reports/customers',
+              pageBuilder: (context, state) =>
+                  _fadePage(state, const CustomerReportingPage()),
+            ),
+            GoRoute(
+              path: '/reports/suppliers',
+              pageBuilder: (context, state) =>
+                  _fadePage(state, const SupplierReportingPage()),
+            ),
+            GoRoute(
+              path: '/reports/trends',
+              pageBuilder: (context, state) =>
+                  _fadePage(state, const TrendAnalysisPage()),
+            ),
+            GoRoute(
+              path: '/reports/schedules',
+              pageBuilder: (context, state) =>
+                  _fadePage(state, const ScheduledReportsPage()),
+            ),
+            GoRoute(
+              path: '/reports/insights',
+              pageBuilder: (context, state) =>
+                  _fadePage(state, const SmartInsightsPage()),
+            ),
+            GoRoute(
+              path: '/reports/forecast',
+              pageBuilder: (context, state) =>
+                  _fadePage(state, const ForecastingPage()),
             ),
           ],
         ),
