@@ -26,8 +26,8 @@ class _NavItem {
 }
 
 // Indexed by shell branch: 0 Dashboard, 1 Inventory, 2 Purchase, 3 Sales,
-// 4 Settings, 5 Repair, 6 Customers, 7 Reports. Repair, Customers and Reports
-// are appended so the earlier indices never shift.
+// 4 Settings, 5 Repair, 6 Customers, 7 Reports, 8 Accounting. Repair, Customers,
+// Reports and Accounting are appended so the earlier indices never shift.
 const _allItems = [
   _NavItem('Dashboard', LucideIcons.layoutGrid),
   _NavItem('Inventory', LucideIcons.box),
@@ -37,6 +37,7 @@ const _allItems = [
   _NavItem('Repair', LucideIcons.wrench),
   _NavItem('Customers', LucideIcons.users),
   _NavItem('Reports', LucideIcons.barChart3),
+  _NavItem('Accounting', LucideIcons.calculator),
 ];
 
 /// Shell branch indices, per the router's branch order.
@@ -45,6 +46,7 @@ const _kSalesBranch = 3;
 const _kRepairBranch = 5;
 const _kCustomersBranch = 6;
 const _kReportsBranch = 7;
+const _kAccountingBranch = 8;
 
 /// A destination inside a module's own branch. These navigate with `go` —
 /// `goBranch` is only for switching module.
@@ -133,6 +135,7 @@ class BottomNavShell extends ConsumerWidget {
     final hasRepair = matrix.contains('repair:read');
     final hasCustomers = matrix.contains('customers:read');
     final hasReports = matrix.contains('reports:read');
+    final hasAccounting = matrix.contains('accounting:read');
 
     // Settings stays last (it sits below the rail divider); Reports slots in
     // just before it. Reports has no in-branch destinations of its own, so it
@@ -145,6 +148,7 @@ class BottomNavShell extends ConsumerWidget {
       if (hasRepair) _kRepairBranch,
       if (hasCustomers) _kCustomersBranch,
       if (hasReports) _kReportsBranch,
+      if (hasAccounting) _kAccountingBranch,
       4,
     ];
     final items = [for (final b in branchMap) _allItems[b]];

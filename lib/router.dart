@@ -660,104 +660,11 @@ final appRouter = GoRouter(
       },
     ),
     GoRoute(
-      path: '/accounting',
-      builder: (context, state) => const AccountingHubPage(),
-    ),
-    GoRoute(
-      path: '/accounting/accounts',
-      builder: (context, state) => const ChartOfAccountsPage(),
-    ),
-    GoRoute(
-      path: '/accounting/accounts/:id/ledger',
-      builder: (context, state) =>
-          AccountLedgerPage(accountId: state.pathParameters['id']!),
-    ),
-    GoRoute(
-      path: '/accounting/journal',
-      builder: (context, state) => const JournalEntriesPage(),
-    ),
-    GoRoute(
-      path: '/accounting/journal/:id',
-      builder: (context, state) =>
-          JournalEntryDetailPage(entryId: state.pathParameters['id']!),
-    ),
-    GoRoute(
       path: '/dashboard/drilldown',
       builder: (context, state) {
         final nav = state.extra as ({DrilldownArgs args, String title});
         return DrilldownPage(args: nav.args, title: nav.title);
       },
-    ),
-    GoRoute(
-      path: '/accounting/vouchers',
-      builder: (context, state) => const ManualVoucherPage(),
-    ),
-    GoRoute(
-      path: '/accounting/vouchers/create',
-      builder: (context, state) => const ManualVoucherPage(),
-    ),
-    GoRoute(
-      path: '/accounting/expenses',
-      builder: (context, state) => const ExpensesPage(),
-    ),
-    GoRoute(
-      path: '/accounting/expenses/create',
-      builder: (context, state) => const ExpenseFormPage(),
-    ),
-    GoRoute(
-      path: '/accounting/expense-categories',
-      builder: (context, state) => const ExpenseCategoriesPage(),
-    ),
-    GoRoute(
-      path: '/accounting/banks',
-      builder: (context, state) => const BankAccountsPage(),
-    ),
-    GoRoute(
-      path: '/accounting/banks/create',
-      builder: (context, state) => const BankAccountFormPage(),
-    ),
-    GoRoute(
-      path: '/accounting/banks/:id/edit',
-      builder: (context, state) =>
-          BankAccountFormPage(bankAccountId: state.pathParameters['id']!),
-    ),
-    GoRoute(
-      path: '/accounting/banks/:id/reconcile',
-      builder: (context, state) =>
-          BankReconciliationPage(bankAccountId: state.pathParameters['id']!),
-    ),
-    GoRoute(
-      path: '/accounting/periods',
-      builder: (context, state) => const FiscalPeriodsPage(),
-    ),
-    GoRoute(
-      path: '/accounting/tax-rules',
-      builder: (context, state) => const TaxRulesPage(),
-    ),
-    GoRoute(
-      path: '/accounting/tax-rules/create',
-      builder: (context, state) => const TaxRuleFormPage(),
-    ),
-    GoRoute(
-      path: '/accounting/tax-rules/:id/edit',
-      builder: (context, state) =>
-          TaxRuleFormPage(taxRuleId: state.pathParameters['id']!),
-    ),
-    GoRoute(
-      path: '/accounting/reports/trial-balance',
-      builder: (context, state) => const TrialBalancePage(),
-    ),
-    GoRoute(
-      path: '/accounting/reports/profit-loss',
-      builder: (context, state) => const ProfitLossPage(),
-    ),
-    GoRoute(
-      path: '/accounting/reports/balance-sheet',
-      builder: (context, state) => const BalanceSheetPage(),
-    ),
-    GoRoute(
-      path: '/accounting/reports/cash-bank-book',
-      builder: (context, state) => const CashBankBookPage(),
     ),
     GoRoute(
       path: '/purchasing/orders',
@@ -1148,6 +1055,127 @@ final appRouter = GoRouter(
               path: '/reports/forecast',
               pageBuilder: (context, state) =>
                   _fadePage(state, const ForecastingPage()),
+            ),
+          ],
+        ),
+        // Accounting lives INSIDE its own branch (index 8, appended after
+        // reporting=7 so no earlier index shifts) so it carries the nav rail /
+        // bottom bar, per the design. The hub is the branch root; the 18
+        // sub-pages are pushed on top and pop back via their AppDetailScaffold
+        // back button. Same chrome, so they cross-fade.
+        StatefulShellBranch(
+          routes: [
+            GoRoute(
+              path: '/accounting',
+              pageBuilder: (context, state) =>
+                  _fadePage(state, const AccountingHubPage()),
+            ),
+            GoRoute(
+              path: '/accounting/accounts',
+              pageBuilder: (context, state) =>
+                  _fadePage(state, const ChartOfAccountsPage()),
+            ),
+            GoRoute(
+              path: '/accounting/accounts/:id/ledger',
+              pageBuilder: (context, state) => _fadePage(
+                  state, AccountLedgerPage(accountId: state.pathParameters['id']!)),
+            ),
+            GoRoute(
+              path: '/accounting/journal',
+              pageBuilder: (context, state) =>
+                  _fadePage(state, const JournalEntriesPage()),
+            ),
+            GoRoute(
+              path: '/accounting/journal/:id',
+              pageBuilder: (context, state) => _fadePage(state,
+                  JournalEntryDetailPage(entryId: state.pathParameters['id']!)),
+            ),
+            GoRoute(
+              path: '/accounting/vouchers',
+              pageBuilder: (context, state) =>
+                  _fadePage(state, const ManualVoucherPage()),
+            ),
+            GoRoute(
+              path: '/accounting/vouchers/create',
+              pageBuilder: (context, state) =>
+                  _fadePage(state, const ManualVoucherPage()),
+            ),
+            GoRoute(
+              path: '/accounting/expenses',
+              pageBuilder: (context, state) =>
+                  _fadePage(state, const ExpensesPage()),
+            ),
+            GoRoute(
+              path: '/accounting/expenses/create',
+              pageBuilder: (context, state) =>
+                  _fadePage(state, const ExpenseFormPage()),
+            ),
+            GoRoute(
+              path: '/accounting/expense-categories',
+              pageBuilder: (context, state) =>
+                  _fadePage(state, const ExpenseCategoriesPage()),
+            ),
+            GoRoute(
+              path: '/accounting/banks',
+              pageBuilder: (context, state) =>
+                  _fadePage(state, const BankAccountsPage()),
+            ),
+            GoRoute(
+              path: '/accounting/banks/create',
+              pageBuilder: (context, state) =>
+                  _fadePage(state, const BankAccountFormPage()),
+            ),
+            GoRoute(
+              path: '/accounting/banks/:id/edit',
+              pageBuilder: (context, state) => _fadePage(state,
+                  BankAccountFormPage(bankAccountId: state.pathParameters['id']!)),
+            ),
+            GoRoute(
+              path: '/accounting/banks/:id/reconcile',
+              pageBuilder: (context, state) => _fadePage(
+                  state,
+                  BankReconciliationPage(
+                      bankAccountId: state.pathParameters['id']!)),
+            ),
+            GoRoute(
+              path: '/accounting/periods',
+              pageBuilder: (context, state) =>
+                  _fadePage(state, const FiscalPeriodsPage()),
+            ),
+            GoRoute(
+              path: '/accounting/tax-rules',
+              pageBuilder: (context, state) =>
+                  _fadePage(state, const TaxRulesPage()),
+            ),
+            GoRoute(
+              path: '/accounting/tax-rules/create',
+              pageBuilder: (context, state) =>
+                  _fadePage(state, const TaxRuleFormPage()),
+            ),
+            GoRoute(
+              path: '/accounting/tax-rules/:id/edit',
+              pageBuilder: (context, state) => _fadePage(
+                  state, TaxRuleFormPage(taxRuleId: state.pathParameters['id']!)),
+            ),
+            GoRoute(
+              path: '/accounting/reports/trial-balance',
+              pageBuilder: (context, state) =>
+                  _fadePage(state, const TrialBalancePage()),
+            ),
+            GoRoute(
+              path: '/accounting/reports/profit-loss',
+              pageBuilder: (context, state) =>
+                  _fadePage(state, const ProfitLossPage()),
+            ),
+            GoRoute(
+              path: '/accounting/reports/balance-sheet',
+              pageBuilder: (context, state) =>
+                  _fadePage(state, const BalanceSheetPage()),
+            ),
+            GoRoute(
+              path: '/accounting/reports/cash-bank-book',
+              pageBuilder: (context, state) =>
+                  _fadePage(state, const CashBankBookPage()),
             ),
           ],
         ),

@@ -142,7 +142,9 @@ class InventoryHubPage extends ConsumerWidget {
                       icon: Icons.account_balance_outlined,
                       title: 'Accounting',
                       subtitle: 'Ledger, journals, vouchers, expenses, reports',
-                      onTap: () => context.push('/accounting'),
+                      // go (not push): accounting is now a nav-shell branch, so
+                      // switch to its tab rather than stacking above the shell.
+                      onTap: () => context.go('/accounting'),
                     ),
                     const SizedBox(height: AppSpacing.xxl),
                   ],
