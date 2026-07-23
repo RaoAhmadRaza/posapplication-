@@ -4,9 +4,7 @@ import 'package:go_router/go_router.dart';
 import '../../../../core/design/app_colors.dart';
 import '../../../../core/design/app_spacing.dart';
 import '../../../../core/design/app_typography.dart';
-import '../../../../core/widgets/permission_gate.dart';
 import '../../../notifications/presentation/widgets/notification_bell.dart';
-import '../../../approvals/presentation/controllers/approvals_controller.dart';
 
 class InventoryHubPage extends ConsumerWidget {
   const InventoryHubPage({super.key});
@@ -100,120 +98,11 @@ class InventoryHubPage extends ConsumerWidget {
                 onTap: () => context.push('/inventory/imei'),
               ),
               const SizedBox(height: AppSpacing.xxl),
-              // NOTE: Suppliers lives here until the Purchasing hub ships (next
-              // feature); move this row to that hub when it exists.
-              _SectionLabel('Purchasing'),
-              const SizedBox(height: AppSpacing.sm),
-              _HubRow(
-                icon: Icons.local_shipping,
-                title: 'Suppliers',
-                subtitle: 'Vendor master, balances, and ledger',
-                onTap: () => context.go('/suppliers'),
-              ),
-              const SizedBox(height: AppSpacing.xxl),
-              // NOTE: Customers CRM lives here alongside Suppliers until a
-              // dedicated CRM hub ships.
-              _SectionLabel('Customers'),
-              const SizedBox(height: AppSpacing.sm),
-              _HubRow(
-                icon: Icons.people_outline,
-                title: 'Customers',
-                subtitle: 'Customer master, credit, and ledger',
-                onTap: () => context.go('/customers'),
-              ),
-              const SizedBox(height: AppSpacing.md),
-              _HubRow(
-                icon: Icons.account_balance_wallet_outlined,
-                title: 'Receivables Aging',
-                subtitle: 'Outstanding balances by age bucket',
-                onTap: () => context.go('/receivables'),
-              ),
-              const SizedBox(height: AppSpacing.xxl),
-              // NOTE: Accounting lives here until a dedicated hub tab ships.
-              PermissionGate(
-                module: 'accounting',
-                action: 'read',
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    _SectionLabel('Accounting'),
-                    const SizedBox(height: AppSpacing.sm),
-                    _HubRow(
-                      icon: Icons.account_balance_outlined,
-                      title: 'Accounting',
-                      subtitle: 'Ledger, journals, vouchers, expenses, reports',
-                      // go (not push): accounting is now a nav-shell branch, so
-                      // switch to its tab rather than stacking above the shell.
-                      onTap: () => context.go('/accounting'),
-                    ),
-                    const SizedBox(height: AppSpacing.xxl),
-                  ],
-                ),
-              ),
-              // NOTE: Repair lives here until a dedicated hub tab ships.
-              PermissionGate(
-                module: 'repair',
-                action: 'read',
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    _SectionLabel('Repair & Service'),
-                    const SizedBox(height: AppSpacing.sm),
-                    _HubRow(
-                      icon: Icons.build_outlined,
-                      title: 'Repairs',
-                      subtitle: 'Intake, kanban board, close & invoice',
-                      // Repair is its own nav-shell branch, so it is entered with go — a
-                      // push would stack it outside the shell and lose the rail.
-                      onTap: () => context.go('/repair'),
-                    ),
-                    const SizedBox(height: AppSpacing.xxl),
-                  ],
-                ),
-              ),
-              // NOTE: HR lives here until a dedicated hub tab ships.
-              PermissionGate(
-                module: 'hr',
-                action: 'read',
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    _SectionLabel('HR & Payroll'),
-                    const SizedBox(height: AppSpacing.sm),
-                    _HubRow(
-                      icon: Icons.groups_outlined,
-                      title: 'Employees',
-                      subtitle: 'Employees, shifts, payroll',
-                      onTap: () => context.go('/hr'),
-                    ),
-                    const SizedBox(height: AppSpacing.xxl),
-                  ],
-                ),
-              ),
-              PermissionGate(
-                module: 'approvals',
-                action: 'read',
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    _SectionLabel('Approvals'),
-                    const SizedBox(height: AppSpacing.sm),
-                    Builder(builder: (context) {
-                      final count =
-                          ref.watch(pendingApprovalsCountProvider);
-                      return _HubRow(
-                        icon: Icons.fact_check_outlined,
-                        title: 'Approval Center',
-                        subtitle: count > 0
-                            ? '$count awaiting approval'
-                            : 'Pending & escalated requests',
-                        onTap: () => context.go('/approvals'),
-                      );
-                    }),
-                    const SizedBox(height: AppSpacing.xxl),
-                  ],
-                ),
-              ),
+              // Suppliers, Customers, Receivables, Accounting, Repair, HR and
+              // Approvals moved out of this hub once each became a nav-shell
+              // branch (or sub-rail destination) — they are reached from the
+              // rail / bottom bar now, so a duplicate row here would be dead
+              // weight. Only true Inventory sub-pages remain.
             ],
           ),
         ),
