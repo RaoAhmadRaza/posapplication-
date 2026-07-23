@@ -577,8 +577,35 @@ REPAIR-SERVICE sentinel / Main Warehouse / 7 payment methods) idempotently; `ver
 revoked from public/anon + ERR_FORBIDDEN_TENANT guard (signup path exempt via auth.uid()=NULL). Ops: cron
 verify_provisioning_daily alerts admins on any complete=false; fiscal reuses current_fiscal_period (MONTHLY).
 
-## Migration Import — COMPLETE
-`lib/features/migration_import/` clean-arch (reuses InventoryFailure). 4 set-based RPCs (migrate_import_categories/brands/products/stock); MigrationImportPage 4 FK-ordered step cards. Route /inventory/import-migration.
+## Migration Import — COMPLETE (LUMINA reskin 2026-07-23; detail in DECISIONS)
+`lib/features/migration_import/` clean-arch (reuses InventoryFailure). 4 set-based RPCs
+(migrate_import_categories/brands/products/stock); MigrationImportPage = 4 FK-ordered step cards.
+- **13th design export, SAME design-system UUID (5cd3f8f0-…) → tokens untouched; consumer-side reskin.**
+  The page was the last partial/legacy skin (raw Scaffold/AppBar/DataTable/CircularProgressIndicator/
+  SnackBar, static AppColors, no `context.lum`) — now zero static-colour refs, works in Counter mode.
+- **Entry point moved into Settings** (user choice via AskUserQuestion). Route relocated
+  `/inventory/import-migration` → `/settings/import-migration` **inside the settings StatefulShellBranch**
+  (pageBuilder + `_fadePage`, sibling of the other `/settings/*` detail routes; no branch index shifts).
+  New Settings-hub "Data" group row (gated `inventory:create`, its own PermissionGate so it does NOT
+  inherit the Workspace group's `settings:read`); the Inventory-hub "Import Data" row + Data section removed.
+  Page = `AppDetailScaffold` (eyebrow Settings / title Import migration, back → settings), still wrapped in
+  `PermissionGate(inventory:create)`.
+- **New module widgets** (`presentation/widgets/`): `migration_ui.dart` (Lucide icon per kind + log-line
+  splitter), `import_log_panel.dart` (dark collapsible copyable panel — bg = `isDark ? surface2 : #10131C`
+  so `lum.ink` flipping light in Counter mode doesn't break it; uniform mono, greyed time, Copy→showAppToast),
+  `import_step_card.dart` (ClayContainer card, 5 states locked/idle/parsed/running/result, `AppPill` status,
+  `AppButton`s, determinate progress bar, module-local mono preview `Table`, warning-toned error accordion).
+- **Honest data** — every value backed: tri-count = `ImportResult.inserted/.skipped/.failed`, error rows =
+  `ImportRowError.row/.error`, progress = `MigrationImportProgress.done/.total`, filename/preview/rowcount +
+  branch label from real state. **Omitted** (demo/decorative): "Simulate a server error" button, Desktop/
+  Mobile toggle, "Synced" chip. Log tone NOT inferred from text (controller stores plain strings — left
+  untouched). Deviations: preview-table header not sticky (single Table); running caption drops the chunk
+  count (implementation detail). No controller/usecase/repo/datasource/domain/supabase edits; no new deps.
+- GATE: `flutter analyze` **8 issues, 0 new** (baseline 8); macOS debug build succeeds; `flutter test` = the
+  same 2 pre-existing failures as clean HEAD (widget_test smoke + kpi_layout).
+- **VERIFY OWED (on-device eyeball)** — agent env can't screenshot: Settings → Import migration (both
+  layouts), one step through idle→parsed(preview)→running(progress)→result, log panel toggle + copy, a
+  failure banner, light + dark, and a screenshot diff vs the two reference renders.
 
 ## Sales V1 — Core COMPLETE
 

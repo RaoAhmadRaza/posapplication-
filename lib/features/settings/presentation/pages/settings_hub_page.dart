@@ -80,6 +80,15 @@ class SettingsHubPage extends StatelessWidget {
                         child: _WorkspaceGroup(),
                       ),
 
+                      // Data migration — gated inventory:create (not
+                      // settings:read), its leading spacer inside the gate so
+                      // no stray gap is left when it collapses.
+                      const PermissionGate(
+                        module: 'inventory',
+                        action: 'create',
+                        child: _DataGroup(),
+                      ),
+
                       // Self-service — always visible.
                       const SizedBox(height: 24),
                       AppSettingsGroup(
@@ -170,6 +179,35 @@ class _WorkspaceGroup extends StatelessWidget {
               title: 'Number series',
               subtitle: 'Invoice & document numbering',
               onTap: () => context.push('/settings/number-series'),
+            ),
+          ],
+        ),
+      ],
+    );
+  }
+}
+
+/// Data migration group — one row, gated inventory:create by its wrapping
+/// PermissionGate. Carries its own leading spacer so the block collapses
+/// cleanly when the user cannot see it.
+class _DataGroup extends StatelessWidget {
+  const _DataGroup();
+
+  @override
+  Widget build(BuildContext context) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        const SizedBox(height: 24),
+        AppSettingsGroup(
+          title: 'Data',
+          children: [
+            SettingsNavTile(
+              icon: LucideIcons.databaseZap,
+              title: 'Import migration',
+              subtitle: 'One-time bulk import from a bak-tool bundle',
+              showDivider: false,
+              onTap: () => context.push('/settings/import-migration'),
             ),
           ],
         ),

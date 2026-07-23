@@ -499,10 +499,6 @@ final appRouter = GoRouter(
       builder: (context, state) => const ImportProductsPage(),
     ),
     GoRoute(
-      path: '/inventory/import-migration',
-      builder: (context, state) => const MigrationImportPage(),
-    ),
-    GoRoute(
       path: '/notifications',
       builder: (context, state) => const NotificationsPage(),
     ),
@@ -855,6 +851,11 @@ final appRouter = GoRouter(
               path: '/settings/preferences',
               pageBuilder: (context, state) =>
                   _fadePage(state, const PreferencesPage()),
+            ),
+            GoRoute(
+              path: '/settings/import-migration',
+              pageBuilder: (context, state) =>
+                  _fadePage(state, const MigrationImportPage()),
             ),
           ],
         ),
