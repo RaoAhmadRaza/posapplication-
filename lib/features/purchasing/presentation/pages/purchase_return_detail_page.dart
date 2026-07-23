@@ -1,21 +1,22 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
+import 'package:lucide_icons_flutter/lucide_icons.dart';
 import '../../../../core/design/app_colors.dart';
-import '../../../../core/design/app_radius.dart';
-import '../../../../core/design/app_spacing.dart';
 import '../../../../core/design/app_typography.dart';
-import '../../../../core/design/format.dart';
-import '../../../../core/design/widgets/app_card.dart';
-import '../../../../core/design/widgets/app_inline_banner.dart';
+import '../../../../core/design/widgets/app_detail_scaffold.dart';
+import '../../../../core/design/widgets/app_money_text.dart';
+import '../../../../core/design/widgets/app_pill.dart';
+import '../../../../core/design/widgets/app_section_card.dart';
+import '../../../../core/design/widgets/app_states.dart';
+import '../../../inventory/domain/entities/product.dart';
+import '../../../inventory/presentation/controllers/products_controller.dart';
 import '../../../suppliers/domain/entities/supplier.dart';
 import '../../../suppliers/presentation/controllers/suppliers_controller.dart';
 import '../../domain/entities/purchase_return.dart';
 import '../../domain/entities/purchase_return_item.dart';
 import '../controllers/purchase_returns_controller.dart';
-import 'purchase_orders_page.dart' show fmtPoDate;
-import 'purchase_returns_page.dart'
-    show returnStatusColor, returnStatusLabels;
+import '../widgets/purchasing_ui.dart';
 
 class PurchaseReturnDetailPage extends ConsumerWidget {
   const PurchaseReturnDetailPage({super.key, required this.returnId});
@@ -25,32 +26,27 @@ class PurchaseReturnDetailPage extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final detail = ref.watch(purchaseReturnDetailProvider(returnId));
 
-    return Scaffold(
-      backgroundColor: AppColors.background,
-      appBar: AppBar(
-        backgroundColor: AppColors.background,
-        surfaceTintColor: AppColors.background,
-        leading: IconButton(
-          icon: const Icon(Icons.arrow_back_ios,
-              color: AppColors.accent, size: 20),
-          onPressed: () => Navigator.of(context).pop(),
-        ),
-        title: Text('Purchase Return', style: AppTypography.headline),
-      ),
-      body: detail.when(
-        loading: () => const Center(child: CircularProgressIndicator()),
-        error: (e, _) => Center(
-          child: Padding(
-            padding: const EdgeInsets.symmetric(
-                horizontal: AppSpacing.screenPadding),
-            child: AppInlineBanner(
-                message: 'Could not load purchase return.',
-                type: BannerType.error),
+    return switch (detail) {
+      AsyncError() => AppDetailScaffold(
+          eyebrow: 'Purchase return',
+          title: 'Purchase return',
+          child: AppErrorState(
+            title: 'Could not load purchase return',
+            body: 'Something went wrong. Check your connection and retry.',
+            onRetry: () =>
+                ref.invalidate(purchaseReturnDetailProvider(returnId)),
           ),
         ),
-        data: (d) => _Body(ret: d.ret, items: d.items),
-      ),
-    );
+      AsyncData(:final value) => _Body(ret: value.ret, items: value.items),
+      _ => const AppDetailScaffold(
+          eyebrow: 'Purchase return',
+          title: 'Purchase return',
+          child: Padding(
+            padding: EdgeInsets.only(top: 60),
+            child: Center(child: CircularProgressIndicator()),
+          ),
+        ),
+    };
   }
 }
 
@@ -61,203 +57,200 @@ class _Body extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
+    final lum = context.lum;
     final suppliers = ref.watch(suppliersProvider).value ?? const <Supplier>[];
     final supplierName = suppliers
             .where((s) => s.id == ret.supplierId)
             .map((s) => s.name)
             .firstOrNull ??
         'Supplier ${ret.supplierId.substring(0, 6)}';
+    final products = ref.watch(productsProvider).value ?? const <Product>[];
+    final names = {for (final p in products) p.id: p.name};
+    final (tone, label) = returnStatusPill(ret.status);
+    final reason = ret.reason?.trim();
+    final notes = ret.notes?.trim();
 
-    return ListView(
-      padding: const EdgeInsets.symmetric(
-          horizontal: AppSpacing.screenPadding, vertical: AppSpacing.md),
+    final left = Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
-        _HeaderCard(ret: ret, supplierName: supplierName),
-        const SizedBox(height: AppSpacing.md),
-        _LinesCard(items: items),
-        const SizedBox(height: AppSpacing.md),
-        InkWell(
-          onTap: () => context.push('/purchasing/orders/${ret.poId}'),
-          borderRadius: BorderRadius.circular(AppRadius.card),
-          child: AppCard(
+        AppSectionCard(
+          eyebrow: 'Return details',
+          trailing: AppPill(label: label, tone: tone),
+          child: Column(
+            children: [
+              _kv(context, 'Date', ymd(ret.returnDate)),
+              _kv(context, 'Reason',
+                  reason == null || reason.isEmpty ? '—' : reason),
+              if (notes != null && notes.isNotEmpty)
+                _kv(context, 'Notes', notes),
+            ],
+          ),
+        ),
+        const SizedBox(height: 14),
+        AppSectionCard(
+          eyebrow: 'Returned items',
+          child: items.isEmpty
+              ? Text('No line items.',
+                  style: AppTypography.footnote.copyWith(color: lum.g500))
+              : Column(
+                  children: [
+                    for (final it in items)
+                      _LineRow(
+                        item: it,
+                        name: names[it.productId] ??
+                            'Item ${it.productId.substring(0, 6)}',
+                      ),
+                  ],
+                ),
+        ),
+        const SizedBox(height: 14),
+        AppSectionCard(
+          eyebrow: 'Source',
+          child: InkWell(
+            onTap: () => context.push('/purchasing/orders/${ret.poId}'),
             child: Padding(
-              padding: const EdgeInsets.all(AppSpacing.xl),
+              padding: const EdgeInsets.symmetric(vertical: 4),
               child: Row(
                 children: [
-                  const Icon(Icons.receipt_long,
-                      size: 18, color: AppColors.textMuted),
-                  const SizedBox(width: AppSpacing.sm),
+                  Icon(LucideIcons.clipboardList, size: 18, color: lum.g500),
+                  const SizedBox(width: 10),
                   Expanded(
-                      child: Text('View purchase order',
-                          style: AppTypography.footnote)),
-                  const Icon(Icons.chevron_right,
-                      color: AppColors.separator),
+                    child: Text('View purchase order',
+                        style: AppTypography.subhead
+                            .copyWith(color: lum.textPrimary)),
+                  ),
+                  Icon(LucideIcons.chevronRight, size: 18, color: lum.g400),
                 ],
               ),
             ),
           ),
         ),
-        const SizedBox(height: AppSpacing.xxl),
       ],
     );
-  }
-}
 
-class _HeaderCard extends StatelessWidget {
-  const _HeaderCard({required this.ret, required this.supplierName});
-  final PurchaseReturn ret;
-  final String supplierName;
+    final right = AppSectionCard(
+      eyebrow: 'Total',
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          Row(
+            children: [
+              Expanded(
+                child: Text('Debit note',
+                    style: AppTypography.headline
+                        .copyWith(color: lum.textPrimary)),
+              ),
+              AppMoneyText(ret.totalAmount, size: 22, color: lum.dangerText),
+            ],
+          ),
+          const SizedBox(height: 10),
+          Text(
+            'A return is final once created. No further changes can be made.',
+            style: AppTypography.caption.copyWith(color: lum.g500),
+          ),
+        ],
+      ),
+    );
 
-  @override
-  Widget build(BuildContext context) {
-    final color = returnStatusColor(ret.status);
-    return AppCard(
-      child: Padding(
-        padding: const EdgeInsets.all(AppSpacing.xl),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Row(
+    return AppDetailScaffold(
+      eyebrow: 'Purchase return',
+      title: ret.returnNumber,
+      description: supplierName,
+      child: LayoutBuilder(
+        builder: (context, c) {
+          if (c.maxWidth >= 760) {
+            return Row(
+              crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Expanded(
-                    child:
-                        Text(ret.returnNumber, style: AppTypography.largeTitle)),
-                Container(
-                  padding: const EdgeInsets.symmetric(
-                      horizontal: AppSpacing.sm, vertical: 4),
-                  decoration: BoxDecoration(
-                    color: color.withValues(alpha: 0.12),
-                    borderRadius: BorderRadius.circular(AppRadius.chip),
-                  ),
-                  child: Text(returnStatusLabels[ret.status]!,
-                      style: AppTypography.caption.copyWith(
-                          color: color, fontWeight: FontWeight.w600)),
-                ),
+                Expanded(flex: 3, child: left),
+                const SizedBox(width: 16),
+                Expanded(flex: 2, child: right),
               ],
-            ),
-            const SizedBox(height: AppSpacing.sm),
-            _line(Icons.local_shipping, supplierName),
-            _line(Icons.calendar_today, 'Returned ${fmtPoDate(ret.returnDate)}'),
-            if (ret.reason != null && ret.reason!.isNotEmpty)
-              _line(Icons.info_outline, ret.reason!),
-            const Divider(color: AppColors.separator, height: AppSpacing.xl),
-            _amount('Subtotal', ret.subtotal),
-            _amount('Tax', ret.taxTotal),
-            const SizedBox(height: AppSpacing.xs),
-            _amount('Total Returned', ret.totalAmount, emphasize: true),
-          ],
-        ),
+            );
+          }
+          return Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [left, const SizedBox(height: 14), right],
+          );
+        },
       ),
     );
   }
 
-  Widget _line(IconData icon, String text) => Padding(
-        padding: const EdgeInsets.only(top: 4),
-        child: Row(
-          children: [
-            Icon(icon, size: 15, color: AppColors.textMuted),
-            const SizedBox(width: AppSpacing.sm),
-            Expanded(
-                child: Text(text,
-                    style: AppTypography.footnote
-                        .copyWith(color: AppColors.textMuted))),
-          ],
-        ),
-      );
-
-  Widget _amount(String label, double value, {bool emphasize = false}) {
-    final style = emphasize
-        ? AppTypography.headline
-        : AppTypography.footnote.copyWith(color: AppColors.textMuted);
+  Widget _kv(BuildContext context, String k, String v) {
+    final lum = context.lum;
     return Padding(
-      padding: const EdgeInsets.only(top: 4),
+      padding: const EdgeInsets.symmetric(vertical: 5),
       child: Row(
-        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+        crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Text(label, style: style),
-          Text(formatPkr(value), style: style),
+          SizedBox(
+            width: 80,
+            child: Text(k,
+                style: AppTypography.subhead.copyWith(color: lum.g500)),
+          ),
+          Expanded(
+            child: Text(v,
+                style: AppTypography.subhead.copyWith(color: lum.textPrimary)),
+          ),
         ],
       ),
     );
   }
 }
 
-class _LinesCard extends StatelessWidget {
-  const _LinesCard({required this.items});
-  final List<PurchaseReturnItem> items;
-
-  @override
-  Widget build(BuildContext context) {
-    return AppCard(
-      child: Padding(
-        padding: const EdgeInsets.all(AppSpacing.xl),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Text('RETURNED ITEMS',
-                style: AppTypography.footnote.copyWith(
-                    color: AppColors.textMuted,
-                    fontWeight: FontWeight.w600)),
-            const SizedBox(height: AppSpacing.sm),
-            if (items.isEmpty)
-              Text('No line items.',
-                  style: AppTypography.footnote
-                      .copyWith(color: AppColors.textHint))
-            else
-              for (final it in items) _LineRow(item: it),
-          ],
-        ),
-      ),
-    );
-  }
-}
-
 class _LineRow extends StatelessWidget {
-  const _LineRow({required this.item});
+  const _LineRow({required this.item, required this.name});
   final PurchaseReturnItem item;
+  final String name;
 
   @override
   Widget build(BuildContext context) {
+    final lum = context.lum;
     final imeis = item.imeiIds ?? const <String>[];
+
     return Padding(
-      padding: const EdgeInsets.symmetric(vertical: 6),
+      padding: const EdgeInsets.symmetric(vertical: 7),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Row(
             children: [
               Expanded(
-                child: Text('Item ${item.productId.substring(0, 6)}',
-                    style: AppTypography.subhead),
+                child: Text(name,
+                    style: AppTypography.subhead
+                        .copyWith(color: lum.textPrimary)),
               ),
-              Text(formatPkr(item.lineTotal),
-                  style: AppTypography.subhead
-                      .copyWith(fontWeight: FontWeight.w600)),
+              const SizedBox(width: 10),
+              AppMoneyText(item.lineTotal, size: 15),
             ],
           ),
-          const SizedBox(height: 2),
+          const SizedBox(height: 3),
           Text(
-            'Returned ${_n(item.qtyReturned)} · '
-            'Cost ${formatPkr(item.unitCost)}',
-            style: AppTypography.caption.copyWith(color: AppColors.textMuted),
+            '${_n(item.qtyReturned)} × ${_n(item.unitCost)} · '
+            'tax ${_n(item.taxPct)}%',
+            style: AppTypography.caption.copyWith(
+              fontFamily: AppTypography.mono,
+              color: lum.g500,
+            ),
           ),
           if (imeis.isNotEmpty) ...[
-            const SizedBox(height: 4),
+            const SizedBox(height: 6),
             Wrap(
-              spacing: AppSpacing.sm,
-              runSpacing: 4,
+              spacing: 6,
+              runSpacing: 6,
               children: [
-                for (final imei in imeis)
-                  Row(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      const Icon(Icons.smartphone,
-                          size: 13, color: AppColors.textHint),
-                      const SizedBox(width: 2),
-                      Text(imei,
-                          style: AppTypography.caption
-                              .copyWith(color: AppColors.textHint)),
-                    ],
+                for (final imei in imeis.take(3))
+                  AppPill(
+                    label: imei,
+                    tone: AppPillTone.transit,
+                    showDot: false,
+                  ),
+                if (imeis.length > 3)
+                  AppPill(
+                    label: '+${imeis.length - 3}',
+                    tone: AppPillTone.neutral,
+                    showDot: false,
                   ),
               ],
             ),

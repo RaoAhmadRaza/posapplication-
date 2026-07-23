@@ -1,13 +1,17 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:lucide_icons_flutter/lucide_icons.dart';
 import '../../../../core/design/app_colors.dart';
 import '../../../../core/design/app_radius.dart';
-import '../../../../core/design/app_spacing.dart';
 import '../../../../core/design/app_typography.dart';
+import '../../../../core/design/clay.dart';
 import '../../../../core/design/widgets/app_button.dart';
-import '../../../../core/design/widgets/app_card.dart';
+import '../../../../core/design/widgets/app_detail_scaffold.dart';
 import '../../../../core/design/widgets/app_inline_banner.dart';
+import '../../../../core/design/widgets/app_section_card.dart';
+import '../../../../core/design/widgets/app_states.dart';
 import '../../../../core/design/widgets/app_text_field.dart';
+import '../../../../core/design/widgets/app_toast.dart';
 import '../../../../core/services/scanner_support.dart';
 import '../../../../core/widgets/barcode_scan_page.dart';
 import '../../../../core/widgets/permission_gate.dart';
@@ -17,6 +21,7 @@ import '../../domain/entities/purchase_order_item.dart';
 import '../../domain/failures/purchase_failure.dart';
 import '../controllers/purchase_order_detail_provider.dart';
 import '../controllers/purchase_orders_controller.dart';
+import '../widgets/purchasing_imei_capture.dart';
 
 /// Goods Receipt Note entry — receive open lines of a purchase order.
 class GrnReceivePage extends ConsumerStatefulWidget {
@@ -172,149 +177,107 @@ class _GrnReceivePageState extends ConsumerState<GrnReceivePage> {
       if (failure is PurchaseOverReceiptFailure) {
         setState(() => _error = failure.message);
       } else {
-        ScaffoldMessenger.of(context)
-            .showSnackBar(SnackBar(content: Text(failure.message)));
+        showAppToast(context, failure.message, type: BannerType.error);
       }
       return;
     }
 
-    ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-        content: Text('GRN ${result!.grnNumber} — PO ${result.poStatus}')));
+    showAppToast(context, 'GRN ${result!.grnNumber} — PO ${result.poStatus}',
+        type: BannerType.success);
     Navigator.of(context).pop();
   }
 
   @override
   Widget build(BuildContext context) {
     final detail = ref.watch(purchaseOrderDetailProvider(widget.poId));
+    final poNumber = detail.asData?.value.po.poNumber;
 
-    return Scaffold(
-      backgroundColor: AppColors.background,
-      appBar: AppBar(
-        backgroundColor: AppColors.background,
-        surfaceTintColor: AppColors.background,
-        leading: IconButton(
-          icon: const Icon(Icons.arrow_back_ios,
-              color: AppColors.accent, size: 20),
-          onPressed: () => Navigator.of(context).pop(),
+    return AppDetailScaffold(
+      eyebrow: 'Purchasing',
+      title: 'Receive goods',
+      description: poNumber != null ? 'PO $poNumber' : null,
+      child: detail.when(
+        loading: () => const Padding(
+          padding: EdgeInsets.only(top: 60),
+          child: Center(child: CircularProgressIndicator()),
         ),
-        title: Text('Receive Goods', style: AppTypography.headline),
-      ),
-      body: detail.when(
-        loading: () => const Center(child: CircularProgressIndicator()),
-        error: (_, _) => Center(
-          child: Padding(
-            padding:
-                const EdgeInsets.symmetric(horizontal: AppSpacing.screenPadding),
-            child: AppInlineBanner(
-                message: 'Could not load purchase order.',
-                type: BannerType.error),
-          ),
+        error: (_, _) => AppErrorState(
+          title: 'Could not load',
+          body: 'The purchase order could not be loaded.',
+          onRetry: () =>
+              ref.invalidate(purchaseOrderDetailProvider(widget.poId)),
         ),
         data: (data) {
           final openLines =
               data.items.where((i) => i.qtyRemaining > 0).toList();
           if (openLines.isEmpty) {
-            return Center(
-              child: Text('No open lines to receive.',
-                  style: AppTypography.footnote
-                      .copyWith(color: AppColors.textMuted)),
+            return const AppEmptyState(
+              icon: LucideIcons.packageCheck,
+              title: 'Nothing left to receive',
+              body: 'Every line on this PO has been fully received.',
             );
           }
           _ensureInit(openLines);
           if (!_init) {
-            return const Center(child: CircularProgressIndicator());
+            return const Padding(
+              padding: EdgeInsets.only(top: 60),
+              child: Center(child: CircularProgressIndicator()),
+            );
           }
-          return _buildForm(context, data.po.poNumber, openLines);
+          return _buildBody(openLines);
         },
       ),
     );
   }
 
-  Widget _buildForm(
-      BuildContext context, String poNumber, List<PurchaseOrderItem> lines) {
-    return SafeArea(
-      child: LayoutBuilder(
-        builder: (context, _) => Column(
-          children: [
-            Expanded(
-              child: ListView(
-                padding: const EdgeInsets.symmetric(
-                    horizontal: AppSpacing.screenPadding,
-                    vertical: AppSpacing.md),
-                children: [
-                  Center(
-                    child: ConstrainedBox(
-                      constraints: const BoxConstraints(maxWidth: 640),
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.stretch,
-                        children: [
-                          Text('PO $poNumber',
-                              style: AppTypography.subhead
-                                  .copyWith(color: AppColors.textMuted)),
-                          if (_error != null) ...[
-                            const SizedBox(height: AppSpacing.md),
-                            AppInlineBanner(
-                                message: _error!, type: BannerType.error),
-                          ],
-                          const SizedBox(height: AppSpacing.md),
-                          for (final line in lines) ...[
-                            _LineCard(
-                              line: line,
-                              productName:
-                                  _products[line.productId]?.name ??
-                                      line.productId,
-                              serialized: _isSerialized(line),
-                              qtyReceived: _qtyReceived[line.id]!,
-                              qtyRejected: _qtyRejected[line.id]!,
-                              batch: _batch[line.id]!,
-                              imeiInput: _imeiInput[line.id]!,
-                              imeis: _imeis[line.id]!,
-                              expiry: _expiry[line.id],
-                              targetImeiCount: _received(line.id).toInt(),
-                              onScanImei: () => _scanImei(line.id),
-                              onAddImei: (v) => _addImei(line.id, v),
-                              onRemoveImei: (v) => _removeImei(line.id, v),
-                              onPickExpiry: () => _pickExpiry(line.id),
-                              onClearExpiry: () =>
-                                  setState(() => _expiry[line.id] = null),
-                              onChanged: () => setState(() {}),
-                            ),
-                            const SizedBox(height: AppSpacing.md),
-                          ],
-                          AppTextField(
-                            controller: _notes,
-                            label: 'Notes',
-                            prefixIcon: Icons.notes,
-                            hint: 'Optional',
-                          ),
-                        ],
-                      ),
-                    ),
-                  ),
-                ],
-              ),
-            ),
-            Padding(
-              padding: const EdgeInsets.all(AppSpacing.screenPadding),
-              child: Center(
-                child: ConstrainedBox(
-                  constraints: const BoxConstraints(maxWidth: 640),
-                  child: PermissionGate(
-                    module: 'purchase',
-                    action: 'update',
-                    child: AppButton(
-                      label: 'Receive',
-                      loading: _submitting,
-                      fullWidth: true,
-                      onPressed: () => _receive(lines),
-                    ),
-                  ),
-                ),
-              ),
-            ),
-          ],
+  Widget _buildBody(List<PurchaseOrderItem> lines) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        if (_error != null) ...[
+          AppInlineBanner(message: _error!, type: BannerType.error),
+          const SizedBox(height: 16),
+        ],
+        for (final line in lines) ...[
+          _LineCard(
+            line: line,
+            productName: _products[line.productId]?.name ?? line.productId,
+            serialized: _isSerialized(line),
+            qtyReceived: _qtyReceived[line.id]!,
+            qtyRejected: _qtyRejected[line.id]!,
+            batch: _batch[line.id]!,
+            imeiInput: _imeiInput[line.id]!,
+            imeis: _imeis[line.id]!,
+            expiry: _expiry[line.id],
+            targetImeiCount: _received(line.id).toInt(),
+            onScanImei: () => _scanImei(line.id),
+            onAddImei: (v) => _addImei(line.id, v),
+            onRemoveImei: (v) => _removeImei(line.id, v),
+            onPickExpiry: () => _pickExpiry(line.id),
+            onClearExpiry: () => setState(() => _expiry[line.id] = null),
+            onChanged: () => setState(() {}),
+          ),
+          const SizedBox(height: 16),
+        ],
+        AppTextField(
+          controller: _notes,
+          label: 'Notes',
+          prefixIcon: LucideIcons.messageSquare,
+          hint: 'Optional',
+          maxLines: 3,
         ),
-      ),
+        const SizedBox(height: 20),
+        PermissionGate(
+          module: 'purchase',
+          action: 'update',
+          child: AppButton(
+            label: 'Receive goods',
+            loading: _submitting,
+            fullWidth: true,
+            onPressed: () => _receive(lines),
+          ),
+        ),
+      ],
     );
   }
 
@@ -369,157 +332,128 @@ class _LineCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return AppCard(
-      child: Padding(
-        padding: const EdgeInsets.all(AppSpacing.lg),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Text(productName,
-                style: AppTypography.body, maxLines: 2,
-                overflow: TextOverflow.ellipsis),
-            const SizedBox(height: 2),
-            Text('Remaining: ${_fmtQty(line.qtyRemaining)}',
-                style: AppTypography.caption
-                    .copyWith(color: AppColors.textMuted)),
-            const SizedBox(height: AppSpacing.md),
-            Row(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Expanded(
-                  child: AppTextField(
-                    controller: qtyReceived,
-                    label: 'Received',
-                    prefixIcon: Icons.inventory_2,
-                    keyboardType:
-                        const TextInputType.numberWithOptions(decimal: true),
-                    onSubmitted: (_) => onChanged(),
-                  ),
-                ),
-                const SizedBox(width: AppSpacing.md),
-                Expanded(
-                  child: AppTextField(
-                    controller: qtyRejected,
-                    label: 'Rejected',
-                    prefixIcon: Icons.block,
-                    keyboardType:
-                        const TextInputType.numberWithOptions(decimal: true),
-                  ),
-                ),
-              ],
-            ),
-            const SizedBox(height: AppSpacing.md),
-            AppTextField(
-              controller: batch,
-              label: 'Batch Number',
-              prefixIcon: Icons.tag,
-              hint: 'Optional',
-            ),
-            const SizedBox(height: AppSpacing.md),
-            InkWell(
-              onTap: onPickExpiry,
-              borderRadius: BorderRadius.circular(AppRadius.field),
-              child: Row(
-                children: [
-                  const Icon(Icons.event,
-                      size: 18, color: AppColors.textMuted),
-                  const SizedBox(width: AppSpacing.sm),
-                  Text(
-                    expiry != null
-                        ? 'Expiry: ${_fmtDate(expiry!)}'
-                        : 'Set expiry date (optional)',
-                    style: AppTypography.footnote,
-                  ),
-                  if (expiry != null) ...[
-                    const SizedBox(width: AppSpacing.sm),
-                    GestureDetector(
-                      onTap: onClearExpiry,
-                      child: const Icon(Icons.close,
-                          size: 16, color: AppColors.textHint),
-                    ),
-                  ],
-                ],
-              ),
-            ),
-            if (serialized) ...[
-              const Divider(
-                  color: AppColors.separator, height: AppSpacing.xl),
-              Row(
-                mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                children: [
-                  Text('IMEIs',
-                      style: AppTypography.footnote
-                          .copyWith(fontWeight: FontWeight.w600)),
-                  Text('${imeis.length} / $targetImeiCount captured',
-                      style: AppTypography.caption.copyWith(
-                        color: imeis.length >= targetImeiCount &&
-                                targetImeiCount > 0
-                            ? AppColors.success
-                            : AppColors.textMuted,
-                        fontWeight: FontWeight.w600,
-                      )),
-                ],
-              ),
-              const SizedBox(height: AppSpacing.sm),
-              for (final imei in imeis)
-                Padding(
-                  padding: const EdgeInsets.only(bottom: 4),
-                  child: Row(
-                    children: [
-                      const Icon(Icons.smartphone,
-                          size: 16, color: AppColors.textMuted),
-                      const SizedBox(width: AppSpacing.sm),
-                      Expanded(
-                          child: Text(imei, style: AppTypography.footnote)),
-                      GestureDetector(
-                        onTap: () => onRemoveImei(imei),
-                        child: const Icon(Icons.close,
-                            size: 16, color: AppColors.destructive),
-                      ),
-                    ],
-                  ),
-                ),
-              const SizedBox(height: AppSpacing.sm),
-              Row(
-                crossAxisAlignment: CrossAxisAlignment.center,
-                children: [
-                  Expanded(
-                    child: AppTextField(
-                      controller: imeiInput,
-                      label: 'Add IMEI',
-                      prefixIcon: Icons.keyboard,
-                      hint: 'Type then add',
-                      textInputAction: TextInputAction.done,
-                      onSubmitted: onAddImei,
-                    ),
-                  ),
-                  const SizedBox(width: AppSpacing.sm),
-                  IconButton(
-                    icon: const Icon(Icons.add_circle,
-                        color: AppColors.accent),
-                    onPressed: () => onAddImei(imeiInput.text),
-                  ),
-                ],
-              ),
-              if (barcodeScanSupported) ...[
-                const SizedBox(height: AppSpacing.sm),
-                AppButton(
-                  label: 'Scan IMEI',
-                  variant: AppButtonVariant.tinted,
-                  icon: Icons.qr_code_scanner,
-                  fullWidth: true,
-                  onPressed: onScanImei,
-                ),
-              ],
-            ],
-          ],
+    final lum = context.lum;
+    return AppSectionCard(
+      eyebrow: productName,
+      trailing: Text(
+        'Remaining ${_fmtQty(line.qtyRemaining)}',
+        style: AppTypography.caption.copyWith(
+          fontWeight: FontWeight.w600,
+          color: lum.g500,
         ),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Expanded(
+                child: AppTextField(
+                  controller: qtyReceived,
+                  label: 'Received',
+                  prefixIcon: LucideIcons.boxes,
+                  keyboardType:
+                      const TextInputType.numberWithOptions(decimal: true),
+                  onSubmitted: (_) => onChanged(),
+                ),
+              ),
+              const SizedBox(width: 12),
+              Expanded(
+                child: AppTextField(
+                  controller: qtyRejected,
+                  label: 'Rejected',
+                  prefixIcon: LucideIcons.x,
+                  keyboardType:
+                      const TextInputType.numberWithOptions(decimal: true),
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 12),
+          AppTextField(
+            controller: batch,
+            label: 'Batch number',
+            prefixIcon: LucideIcons.tag,
+            hint: 'Optional',
+          ),
+          const SizedBox(height: 12),
+          _ExpiryWell(
+            expiry: expiry,
+            onPick: onPickExpiry,
+            onClear: onClearExpiry,
+          ),
+          if (serialized)
+            PurchasingImeiCapture(
+              imeis: imeis,
+              input: imeiInput,
+              target: targetImeiCount,
+              met: imeis.length >= targetImeiCount,
+              onAdd: onAddImei,
+              onRemove: onRemoveImei,
+              onScan: barcodeScanSupported ? onScanImei : null,
+            ),
+        ],
       ),
     );
   }
 
   String _fmtQty(double v) =>
       v == v.roundToDouble() ? v.toInt().toString() : v.toString();
+}
+
+/// Clay-inset well that opens the date picker; shows the chosen expiry or a
+/// placeholder, with a clear affordance once a date is set.
+class _ExpiryWell extends StatelessWidget {
+  const _ExpiryWell({
+    required this.expiry,
+    required this.onPick,
+    required this.onClear,
+  });
+
+  final DateTime? expiry;
+  final VoidCallback onPick;
+  final VoidCallback onClear;
+
+  @override
+  Widget build(BuildContext context) {
+    final lum = context.lum;
+    final hasDate = expiry != null;
+    return GestureDetector(
+      behavior: HitTestBehavior.opaque,
+      onTap: onPick,
+      child: ClayContainer(
+        variant: ClayVariant.inset,
+        color: lum.surface2,
+        borderRadius: AppRadius.md,
+        isDark: lum.isDark,
+        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 14),
+        child: Row(
+          children: [
+            Icon(LucideIcons.calendar, size: 18, color: lum.g500),
+            const SizedBox(width: 10),
+            Expanded(
+              child: Text(
+                hasDate ? _fmtDate(expiry!) : 'Set expiry date (optional)',
+                style: AppTypography.footnote.copyWith(
+                  color: hasDate ? lum.textPrimary : lum.textTertiary,
+                ),
+              ),
+            ),
+            if (hasDate)
+              Semantics(
+                button: true,
+                label: 'Clear expiry date',
+                child: GestureDetector(
+                  onTap: onClear,
+                  child: Icon(LucideIcons.x, size: 16, color: lum.g500),
+                ),
+              ),
+          ],
+        ),
+      ),
+    );
+  }
 
   String _fmtDate(DateTime d) =>
       '${d.year.toString().padLeft(4, '0')}-${d.month.toString().padLeft(2, '0')}-${d.day.toString().padLeft(2, '0')}';

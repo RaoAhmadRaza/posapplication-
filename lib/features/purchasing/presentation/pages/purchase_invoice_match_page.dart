@@ -1,23 +1,32 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:lucide_icons_flutter/lucide_icons.dart';
 import '../../../../core/design/app_colors.dart';
 import '../../../../core/design/app_radius.dart';
-import '../../../../core/design/app_spacing.dart';
 import '../../../../core/design/app_typography.dart';
-import '../../../../core/design/format.dart';
+import '../../../../core/design/clay.dart';
 import '../../../../core/design/widgets/app_button.dart';
-import '../../../../core/design/widgets/app_card.dart';
+import '../../../../core/design/widgets/app_detail_scaffold.dart';
+import '../../../../core/design/widgets/app_dropdown.dart';
 import '../../../../core/design/widgets/app_inline_banner.dart';
+import '../../../../core/design/widgets/app_money_field.dart';
+import '../../../../core/design/widgets/app_money_text.dart';
+import '../../../../core/design/widgets/app_pill.dart';
+import '../../../../core/design/widgets/app_section_card.dart';
+import '../../../../core/design/widgets/app_states.dart';
 import '../../../../core/design/widgets/app_text_field.dart';
 import '../../../../core/widgets/permission_gate.dart';
 import '../../../inventory/domain/entities/product.dart';
 import '../../../inventory/domain/usecases/get_product.dart';
+import '../../../suppliers/domain/entities/supplier.dart';
+import '../../../suppliers/presentation/controllers/suppliers_controller.dart';
 import '../../domain/entities/grn.dart';
 import '../../domain/entities/purchase_order.dart';
 import '../../domain/entities/purchase_order_item.dart';
 import '../../domain/entities/purchase_results.dart';
 import '../controllers/purchase_invoices_controller.dart';
 import '../controllers/purchase_order_detail_provider.dart';
+import '../widgets/purchasing_ui.dart';
 
 /// 3-way match: PO ordered/received vs supplier invoice entry.
 class PurchaseInvoiceMatchPage extends ConsumerStatefulWidget {
@@ -129,60 +138,73 @@ class _PurchaseInvoiceMatchPageState
   Widget build(BuildContext context) {
     final detail = ref.watch(purchaseOrderDetailProvider(widget.poId));
 
-    return Scaffold(
-      backgroundColor: AppColors.background,
-      appBar: AppBar(
-        backgroundColor: AppColors.background,
-        surfaceTintColor: AppColors.background,
-        leading: IconButton(
-          icon: const Icon(Icons.arrow_back_ios,
-              color: AppColors.accent, size: 20),
-          onPressed: () => Navigator.of(context).pop(),
+    return detail.when(
+      loading: () => const AppDetailScaffold(
+        eyebrow: 'Purchasing',
+        title: 'Match invoice',
+        description: '3-way match',
+        child: Padding(
+          padding: EdgeInsets.only(top: 60),
+          child: Center(child: CircularProgressIndicator()),
         ),
-        title: Text('Match Invoice', style: AppTypography.headline),
       ),
-      body: detail.when(
-        loading: () => const Center(child: CircularProgressIndicator()),
-        error: (_, _) => Center(
-          child: Padding(
-            padding:
-                const EdgeInsets.symmetric(horizontal: AppSpacing.screenPadding),
-            child: AppInlineBanner(
-                message: 'Could not load purchase order.',
-                type: BannerType.error),
-          ),
+      error: (_, _) => AppDetailScaffold(
+        eyebrow: 'Purchasing',
+        title: 'Match invoice',
+        description: '3-way match',
+        child: AppErrorState(
+          title: 'Could not load purchase order',
+          body: 'Something went wrong. Check your connection and retry.',
+          onRetry: () =>
+              ref.invalidate(purchaseOrderDetailProvider(widget.poId)),
         ),
-        data: (data) {
-          _ensureInit(data.po, data.items);
-          if (!_seeded) {
-            return const Center(child: CircularProgressIndicator());
-          }
-          if (_result != null) {
-            return _ResultView(
-              result: _result!,
-              onDone: () => Navigator.of(context).pop(),
-            );
-          }
-          return _buildForm(context, data.po, data.items);
-        },
       ),
+      data: (data) {
+        _ensureInit(data.po, data.items);
+        final Widget body;
+        if (!_seeded) {
+          body = const Padding(
+            padding: EdgeInsets.only(top: 60),
+            child: Center(child: CircularProgressIndicator()),
+          );
+        } else if (_result != null) {
+          body = _ResultView(
+            result: _result!,
+            onDone: () => Navigator.of(context).pop(),
+          );
+        } else {
+          body = _buildForm(context, data.po, data.items);
+        }
+        return AppDetailScaffold(
+          eyebrow: 'Purchasing',
+          title: 'Match invoice',
+          description: 'PO ${data.po.poNumber} · 3-way match',
+          child: body,
+        );
+      },
     );
   }
 
   Widget _buildForm(
       BuildContext context, PurchaseOrder po, List<PurchaseOrderItem> items) {
     final grnsAsync = ref.watch(poGrnsProvider(widget.poId));
+    final suppliers = ref.watch(suppliersProvider).value ?? const <Supplier>[];
+    final supplierName = suppliers
+            .where((s) => s.id == po.supplierId)
+            .map((s) => s.name)
+            .firstOrNull ??
+        'Supplier ${po.supplierId.substring(0, 6)}';
 
     final left = _PoSummaryColumn(
       po: po,
       items: items,
       products: _products,
+      supplierName: supplierName,
     );
     final right = _InvoiceFormColumn(
       invoiceNumber: _invoiceNumber,
       amount: _amount,
       tax: _tax,
-      notes: _notes,
       dueDate: _dueDate,
       onPickDueDate: _pickDueDate,
       onClearDueDate: () => setState(() => _dueDate = null),
@@ -194,34 +216,23 @@ class _PurchaseInvoiceMatchPageState
       onSubmit: _create,
     );
 
-    return SafeArea(
-      child: LayoutBuilder(
-        builder: (context, c) {
-          final wide = c.maxWidth >= 760;
-          return SingleChildScrollView(
-            padding: const EdgeInsets.symmetric(
-                horizontal: AppSpacing.screenPadding,
-                vertical: AppSpacing.md),
-            child: wide
-                ? Row(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Expanded(child: left),
-                      const SizedBox(width: AppSpacing.xl),
-                      Expanded(child: right),
-                    ],
-                  )
-                : Column(
-                    crossAxisAlignment: CrossAxisAlignment.stretch,
-                    children: [
-                      left,
-                      const SizedBox(height: AppSpacing.xl),
-                      right,
-                    ],
-                  ),
+    return LayoutBuilder(
+      builder: (context, c) {
+        if (c.maxWidth >= 760) {
+          return Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Expanded(child: left),
+              const SizedBox(width: 16),
+              Expanded(child: right),
+            ],
           );
-        },
-      ),
+        }
+        return Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [left, const SizedBox(height: 14), right],
+        );
+      },
     );
   }
 
@@ -233,75 +244,121 @@ class _PurchaseInvoiceMatchPageState
 
 class _PoSummaryColumn extends StatelessWidget {
   const _PoSummaryColumn(
-      {required this.po, required this.items, required this.products});
+      {required this.po,
+      required this.items,
+      required this.products,
+      required this.supplierName});
 
   final PurchaseOrder po;
   final List<PurchaseOrderItem> items;
   final Map<String, Product> products;
+  final String supplierName;
 
   @override
   Widget build(BuildContext context) {
-    return AppCard(
-      child: Padding(
-        padding: const EdgeInsets.all(AppSpacing.lg),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Text('PO ${po.poNumber}', style: AppTypography.headline),
-            Text('Ordered vs received',
-                style: AppTypography.caption
-                    .copyWith(color: AppColors.textMuted)),
-            const Divider(color: AppColors.separator, height: AppSpacing.xl),
-            for (final line in items) ...[
-              Text(products[line.productId]?.name ?? line.productId,
-                  style: AppTypography.footnote,
-                  maxLines: 2,
-                  overflow: TextOverflow.ellipsis),
-              const SizedBox(height: 2),
-              Row(
-                mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                children: [
-                  Text(
-                    'Ord ${_fmtQty(line.qtyOrdered)}  ·  Rcv ${_fmtQty(line.qtyReceived)}',
-                    style: AppTypography.caption
-                        .copyWith(color: AppColors.textMuted),
-                  ),
-                  Text(formatPkr(line.lineTotal),
-                      style: AppTypography.caption),
-                ],
+    final lum = context.lum;
+    final (tone, label) = poStatusPill(po.status);
+    return AppSectionCard(
+      eyebrow: 'Purchase order',
+      trailing: AppPill(label: label, tone: tone),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          _kv(context, 'PO number', po.poNumber, mono: true),
+          _kv(context, 'Supplier', supplierName),
+          const SizedBox(height: 14),
+          Text(
+            'ORDERED VS RECEIVED',
+            style: AppTypography.caption.copyWith(
+              fontWeight: FontWeight.w700,
+              letterSpacing: 0.6,
+              color: lum.g500,
+            ),
+          ),
+          const SizedBox(height: 8),
+          for (final line in items) _lineRow(context, line),
+          Divider(height: 22, color: lum.hairline),
+          _money(context, 'Subtotal', po.subtotal),
+          _money(context, 'Tax', po.taxTotal),
+          _money(context, 'Landed cost', po.landedCost),
+          const SizedBox(height: 12),
+          Row(
+            children: [
+              Expanded(
+                child: Text('PO total',
+                    style: AppTypography.headline
+                        .copyWith(color: lum.textPrimary)),
               ),
-              const SizedBox(height: AppSpacing.md),
+              AppMoneyText(po.grandTotal, size: 22, color: lum.accent),
             ],
-            const Divider(color: AppColors.separator, height: AppSpacing.sm),
-            const SizedBox(height: AppSpacing.sm),
-            _totalRow('Subtotal', po.subtotal),
-            _totalRow('Tax', po.taxTotal),
-            _totalRow('Grand total', po.grandTotal, bold: true),
-          ],
-        ),
+          ),
+        ],
       ),
     );
   }
 
-  Widget _totalRow(String label, double value, {bool bold = false}) => Padding(
-        padding: const EdgeInsets.only(top: 4),
-        child: Row(
-          mainAxisAlignment: MainAxisAlignment.spaceBetween,
-          children: [
-            Text(label,
-                style: bold
-                    ? AppTypography.footnote
-                        .copyWith(fontWeight: FontWeight.w600)
-                    : AppTypography.footnote
-                        .copyWith(color: AppColors.textMuted)),
-            Text(formatPkr(value),
-                style: bold
-                    ? AppTypography.footnote
-                        .copyWith(fontWeight: FontWeight.w600)
-                    : AppTypography.footnote),
-          ],
-        ),
-      );
+  Widget _lineRow(BuildContext context, PurchaseOrderItem line) {
+    final lum = context.lum;
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 5),
+      child: Row(
+        children: [
+          Expanded(
+            child: Text(
+              products[line.productId]?.name ?? line.productId,
+              maxLines: 2,
+              overflow: TextOverflow.ellipsis,
+              style: AppTypography.subhead.copyWith(color: lum.textPrimary),
+            ),
+          ),
+          const SizedBox(width: 12),
+          Text(
+            '${_fmtQty(line.qtyReceived)}/${_fmtQty(line.qtyOrdered)}',
+            style: AppTypography.monoValue
+                .copyWith(fontSize: 14, color: lum.g600),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _kv(BuildContext context, String k, String v, {bool mono = false}) {
+    final lum = context.lum;
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 5),
+      child: Row(
+        children: [
+          Expanded(
+            child:
+                Text(k, style: AppTypography.subhead.copyWith(color: lum.g500)),
+          ),
+          Text(
+            v,
+            style: mono
+                ? AppTypography.monoValue
+                    .copyWith(fontSize: 14, color: lum.textPrimary)
+                : AppTypography.subhead.copyWith(color: lum.textPrimary),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _money(BuildContext context, String k, double v) {
+    final lum = context.lum;
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 5),
+      child: Row(
+        children: [
+          Expanded(
+            child:
+                Text(k, style: AppTypography.subhead.copyWith(color: lum.g500)),
+          ),
+          AppMoneyText(v, size: 15, decimals: 2),
+        ],
+      ),
+    );
+  }
 
   String _fmtQty(double v) =>
       v == v.roundToDouble() ? v.toInt().toString() : v.toString();
@@ -312,7 +369,6 @@ class _InvoiceFormColumn extends StatelessWidget {
     required this.invoiceNumber,
     required this.amount,
     required this.tax,
-    required this.notes,
     required this.dueDate,
     required this.onPickDueDate,
     required this.onClearDueDate,
@@ -327,7 +383,6 @@ class _InvoiceFormColumn extends StatelessWidget {
   final TextEditingController invoiceNumber;
   final TextEditingController amount;
   final TextEditingController tax;
-  final TextEditingController notes;
   final DateTime? dueDate;
   final VoidCallback onPickDueDate;
   final VoidCallback onClearDueDate;
@@ -340,79 +395,109 @@ class _InvoiceFormColumn extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.stretch,
-      children: [
-        if (error != null) ...[
-          AppInlineBanner(message: error!, type: BannerType.error),
-          const SizedBox(height: AppSpacing.md),
+    return AppSectionCard(
+      eyebrow: 'Supplier invoice',
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          if (error != null) ...[
+            AppInlineBanner(message: error!, type: BannerType.error),
+            const SizedBox(height: 14),
+          ],
+          AppTextField(
+            controller: invoiceNumber,
+            label: 'Supplier invoice number',
+            prefixIcon: LucideIcons.receiptText,
+            hint: 'Optional',
+          ),
+          const SizedBox(height: 14),
+          AppMoneyField(controller: amount, label: 'Amount'),
+          const SizedBox(height: 14),
+          AppMoneyField(controller: tax, label: 'Tax amount'),
+          const SizedBox(height: 14),
+          _labeled(context, 'Due date', _dueDateWell(context)),
+          const SizedBox(height: 14),
+          _labeled(context, 'Against GRN', _grnField(context)),
+          const SizedBox(height: 16),
+          ListenableBuilder(
+            listenable: Listenable.merge([amount, tax]),
+            builder: (context, _) {
+              final total = (double.tryParse(amount.text.trim()) ?? 0) +
+                  (double.tryParse(tax.text.trim()) ?? 0);
+              return _invoiceTotalRow(context, total);
+            },
+          ),
+          const SizedBox(height: 18),
+          PermissionGate(
+            module: 'purchase',
+            action: 'create',
+            child: AppButton(
+              label: 'Create invoice',
+              loading: submitting,
+              fullWidth: true,
+              onPressed: onSubmit,
+            ),
+          ),
         ],
-        AppTextField(
-          controller: invoiceNumber,
-          label: 'Supplier Invoice Number',
-          prefixIcon: Icons.receipt_long,
-          hint: 'Optional',
+      ),
+    );
+  }
+
+  Widget _labeled(BuildContext context, String label, Widget child) {
+    final lum = context.lum;
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Padding(
+          padding: const EdgeInsets.only(left: 2, bottom: 8),
+          child: Text(label,
+              style: AppTypography.fieldLabel.copyWith(color: lum.g700)),
         ),
-        const SizedBox(height: AppSpacing.md),
-        AppTextField(
-          controller: amount,
-          label: 'Amount',
-          prefixIcon: Icons.payments,
-          keyboardType: const TextInputType.numberWithOptions(decimal: true),
-        ),
-        const SizedBox(height: AppSpacing.md),
-        AppTextField(
-          controller: tax,
-          label: 'Tax Amount',
-          prefixIcon: Icons.percent,
-          keyboardType: const TextInputType.numberWithOptions(decimal: true),
-        ),
-        const SizedBox(height: AppSpacing.md),
-        InkWell(
-          onTap: onPickDueDate,
-          borderRadius: BorderRadius.circular(AppRadius.field),
-          child: Row(
-            children: [
-              const Icon(Icons.event, size: 18, color: AppColors.textMuted),
-              const SizedBox(width: AppSpacing.sm),
-              Text(
-                dueDate != null
-                    ? 'Due: ${_fmtDate(dueDate!)}'
-                    : 'Set due date (optional)',
-                style: AppTypography.footnote,
-              ),
-              if (dueDate != null) ...[
-                const SizedBox(width: AppSpacing.sm),
-                GestureDetector(
-                  onTap: onClearDueDate,
-                  child: const Icon(Icons.close,
-                      size: 16, color: AppColors.textHint),
-                ),
-              ],
-            ],
-          ),
-        ),
-        const SizedBox(height: AppSpacing.md),
-        _grnDropdown(),
-        const SizedBox(height: AppSpacing.xl),
-        PermissionGate(
-          module: 'purchase',
-          action: 'create',
-          child: AppButton(
-            label: 'Create Invoice',
-            loading: submitting,
-            fullWidth: true,
-            onPressed: onSubmit,
-          ),
-        ),
+        child,
       ],
     );
   }
 
-  Widget _grnDropdown() {
+  Widget _dueDateWell(BuildContext context) {
+    final lum = context.lum;
+    return GestureDetector(
+      behavior: HitTestBehavior.opaque,
+      onTap: onPickDueDate,
+      child: ClayContainer(
+        variant: ClayVariant.inset,
+        color: lum.surface2,
+        borderRadius: AppRadius.md,
+        isDark: lum.isDark,
+        height: 50,
+        padding: const EdgeInsets.symmetric(horizontal: 14),
+        child: Row(
+          children: [
+            Icon(LucideIcons.calendar, size: 18, color: lum.g500),
+            const SizedBox(width: 12),
+            Expanded(
+              child: Text(
+                dueDate != null ? _fmtDate(dueDate!) : 'Set due date (optional)',
+                style: AppTypography.fieldText.copyWith(
+                  color: dueDate != null ? lum.textPrimary : lum.textTertiary,
+                ),
+              ),
+            ),
+            if (dueDate != null)
+              GestureDetector(
+                behavior: HitTestBehavior.opaque,
+                onTap: onClearDueDate,
+                child: Icon(LucideIcons.x, size: 16, color: lum.g500),
+              ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _grnField(BuildContext context) {
     return grnsAsync.when(
       loading: () => const SizedBox(
-        height: 32,
+        height: 50,
         child: Center(
           child: SizedBox(
             width: 18,
@@ -423,28 +508,37 @@ class _InvoiceFormColumn extends StatelessWidget {
       ),
       error: (_, _) => AppInlineBanner(
           message: 'Could not load GRNs.', type: BannerType.info),
-      data: (grns) {
-        if (grns.isEmpty) {
-          return Text('No GRNs recorded yet.',
-              style:
-                  AppTypography.caption.copyWith(color: AppColors.textHint));
-        }
-        return DropdownButtonFormField<String?>(
-          initialValue: grnId,
-          decoration: const InputDecoration(
-            labelText: 'Link GRN (optional)',
-            border: OutlineInputBorder(),
+      data: (grns) => AppDropdown<String?>(
+        value: grnId,
+        placeholder: 'None',
+        options: [
+          const AppDropdownOption<String?>(value: null, label: 'None'),
+          for (final grn in grns)
+            AppDropdownOption<String?>(value: grn.id, label: grn.grnNumber),
+        ],
+        onSelected: onGrnChanged,
+      ),
+    );
+  }
+
+  Widget _invoiceTotalRow(BuildContext context, double total) {
+    final lum = context.lum;
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+      decoration: BoxDecoration(
+        color: lum.accentSoft,
+        borderRadius: BorderRadius.circular(AppRadius.md),
+      ),
+      child: Row(
+        children: [
+          Expanded(
+            child: Text('Invoice total',
+                style: AppTypography.subhead.copyWith(
+                    color: lum.textPrimary, fontWeight: FontWeight.w600)),
           ),
-          items: [
-            const DropdownMenuItem<String?>(
-                value: null, child: Text('None')),
-            for (final grn in grns)
-              DropdownMenuItem<String?>(
-                  value: grn.id, child: Text(grn.grnNumber)),
-          ],
-          onChanged: onGrnChanged,
-        );
-      },
+          AppMoneyText(total, size: 18, decimals: 2, color: lum.accent),
+        ],
+      ),
     );
   }
 
@@ -460,48 +554,56 @@ class _ResultView extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final lum = context.lum;
     final hasVariance = result.matchVariance != 0;
-    return SafeArea(
-      child: Center(
-        child: ConstrainedBox(
-          constraints: const BoxConstraints(maxWidth: 480),
-          child: Padding(
-            padding:
-                const EdgeInsets.symmetric(horizontal: AppSpacing.screenPadding),
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              crossAxisAlignment: CrossAxisAlignment.stretch,
-              children: [
-                Icon(
-                  hasVariance ? Icons.error_outline : Icons.check_circle,
-                  size: 48,
-                  color: hasVariance
-                      ? AppColors.destructive
-                      : AppColors.success,
-                ),
-                const SizedBox(height: AppSpacing.lg),
-                if (hasVariance)
-                  Text(
-                    'Match variance: ${formatPkr(result.matchVariance)}',
-                    textAlign: TextAlign.center,
-                    style: AppTypography.headline
-                        .copyWith(color: AppColors.destructive),
-                  )
-                else
-                  AppInlineBanner(
-                      message: 'Matched — no variance',
-                      type: BannerType.success),
-                const SizedBox(height: AppSpacing.sm),
-                Text('Invoice total: ${formatPkr(result.totalAmount)}',
-                    textAlign: TextAlign.center,
-                    style: AppTypography.footnote
-                        .copyWith(color: AppColors.textMuted)),
-                const SizedBox(height: AppSpacing.xxl),
-                AppButton(label: 'Done', fullWidth: true, onPressed: onDone),
-              ],
+    final tone = hasVariance ? lum.danger : lum.success;
+    final toneSoft = hasVariance ? lum.dangerSoft : lum.successSoft;
+    final icon = hasVariance ? LucideIcons.alertTriangle : LucideIcons.checkCheck;
+
+    return AppSectionCard(
+      eyebrow: 'Match result',
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          Center(
+            child: ClayContainer(
+              variant: ClayVariant.soft,
+              color: toneSoft,
+              borderRadius: AppRadius.clay,
+              isDark: lum.isDark,
+              width: 72,
+              height: 72,
+              child: Icon(icon, size: 30, color: tone),
             ),
           ),
-        ),
+          const SizedBox(height: 18),
+          Text(
+            hasVariance ? 'Variance detected' : 'Matched — no variance',
+            textAlign: TextAlign.center,
+            style: AppTypography.title3.copyWith(color: lum.textPrimary),
+          ),
+          if (hasVariance) ...[
+            const SizedBox(height: 6),
+            Center(
+              child: AppMoneyText(result.matchVariance,
+                  size: 20, decimals: 2, color: lum.danger),
+            ),
+          ],
+          const SizedBox(height: 18),
+          Divider(height: 1, color: lum.hairline),
+          const SizedBox(height: 14),
+          Row(
+            children: [
+              Expanded(
+                child: Text('Invoice total',
+                    style: AppTypography.subhead.copyWith(color: lum.g500)),
+              ),
+              AppMoneyText(result.totalAmount, size: 16, decimals: 2),
+            ],
+          ),
+          const SizedBox(height: 20),
+          AppButton(label: 'Done', fullWidth: true, onPressed: onDone),
+        ],
       ),
     );
   }

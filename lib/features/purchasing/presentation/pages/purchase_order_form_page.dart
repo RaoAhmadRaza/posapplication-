@@ -1,15 +1,19 @@
 import 'dart:async';
 import 'package:flutter/material.dart';
-import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:lucide_icons_flutter/lucide_icons.dart';
 import '../../../../core/design/app_colors.dart';
 import '../../../../core/design/app_radius.dart';
-import '../../../../core/design/app_spacing.dart';
 import '../../../../core/design/app_typography.dart';
-import '../../../../core/design/format.dart';
+import '../../../../core/design/clay.dart';
 import '../../../../core/design/widgets/app_button.dart';
-import '../../../../core/design/widgets/app_card.dart';
+import '../../../../core/design/widgets/app_detail_scaffold.dart';
+import '../../../../core/design/widgets/app_dropdown.dart';
 import '../../../../core/design/widgets/app_inline_banner.dart';
+import '../../../../core/design/widgets/app_money_text.dart';
+import '../../../../core/design/widgets/app_search_field.dart';
+import '../../../../core/design/widgets/app_section_card.dart';
+import '../../../../core/design/widgets/app_sheet.dart';
 import '../../../../core/design/widgets/app_text_field.dart';
 import '../../../auth/presentation/controllers/branch_controller.dart';
 import '../../../inventory/domain/entities/product.dart';
@@ -18,6 +22,7 @@ import '../../../suppliers/domain/entities/supplier.dart';
 import '../../domain/entities/purchase_order.dart';
 import '../controllers/purchase_order_detail_provider.dart';
 import '../controllers/purchase_orders_controller.dart';
+import '../widgets/purchasing_ui.dart';
 import 'supplier_picker_sheet.dart';
 
 /// One editable PO line. Holds its own controllers; disposed with the page.
@@ -89,6 +94,8 @@ class _PurchaseOrderFormPageState
   bool _loadingExisting = false;
   bool _locked = false; // edit blocked when PO is not draft
   bool _saveAttempted = false; // drives per-line "product required" highlight
+  String? _poNumber; // display-only: loaded PO's number for the header
+  PurchaseOrderStatus? _status; // display-only: drives the locked banner label
 
   bool get _isEditing => widget.poId != null;
 
@@ -178,6 +185,8 @@ class _PurchaseOrderFormPageState
       setState(() {
         _loadingExisting = false;
         _locked = po.status != PurchaseOrderStatus.draft;
+        _poNumber = po.poNumber;
+        _status = po.status;
       });
     } on Object catch (e) {
       if (!mounted) return;
@@ -241,10 +250,8 @@ class _PurchaseOrderFormPageState
   }
 
   Future<void> _pickProduct(_LineDraft line) async {
-    final product = await showModalBottomSheet<Product?>(
+    final product = await showAppSheet<Product>(
       context: context,
-      isScrollControlled: true,
-      backgroundColor: AppColors.background,
       builder: (_) => const _ProductPickerSheet(),
     );
     if (product == null || !mounted) return;
@@ -380,431 +387,437 @@ class _PurchaseOrderFormPageState
     return '${d.year}-${two(d.month)}-${two(d.day)}';
   }
 
+  String get _lockedLabel =>
+      _status == null ? 'not a draft' : poStatusPill(_status!).$2.toLowerCase();
+
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
-      backgroundColor: AppColors.background,
-      appBar: AppBar(
-        backgroundColor: AppColors.background,
-        surfaceTintColor: AppColors.background,
-        leading: IconButton(
-          icon: const Icon(Icons.arrow_back_ios,
-              color: AppColors.accent, size: 20),
-          onPressed: () => Navigator.of(context).pop(),
-        ),
-        title: Text(_isEditing ? 'Edit PO' : 'New PO',
-            style: AppTypography.headline),
+    final title =
+        _isEditing ? (_locked ? 'View PO' : 'Edit PO') : 'New purchase order';
+
+    return AppDetailScaffold(
+      eyebrow: 'Purchasing',
+      title: title,
+      description: _poNumber ?? 'Draft',
+      child: _loadingExisting
+          ? const Padding(
+              padding: EdgeInsets.only(top: 60),
+              child: Center(child: CircularProgressIndicator()),
+            )
+          : Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                if (_locked) ...[
+                  AppInlineBanner(
+                    message:
+                        'This PO is $_lockedLabel and can no longer be edited.',
+                    type: BannerType.warning,
+                  ),
+                  const SizedBox(height: 14),
+                ],
+                _supplierDatesCard(context),
+                const SizedBox(height: 14),
+                _lineItemsCard(context),
+                const SizedBox(height: 14),
+                _chargesNotesCard(context),
+                const SizedBox(height: 14),
+                _totalsCard(context),
+                if (_error != null) ...[
+                  const SizedBox(height: 14),
+                  AppInlineBanner(message: _error!, type: BannerType.error),
+                ],
+                const SizedBox(height: 14),
+                AppButton(
+                  label: _isEditing ? 'Update PO' : 'Create PO',
+                  loading: _saving,
+                  fullWidth: true,
+                  onPressed: _locked ? null : _save,
+                ),
+              ],
+            ),
+    );
+  }
+
+  Widget _supplierDatesCard(BuildContext context) {
+    return AppSectionCard(
+      eyebrow: 'Supplier & dates',
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          _PickerField(
+            label: 'Supplier',
+            icon: LucideIcons.truck,
+            value: _supplier?.name ?? 'Select supplier',
+            placeholder: _supplier == null,
+            onTap: _locked ? null : _pickSupplier,
+          ),
+          const SizedBox(height: 14),
+          _PickerField(
+            label: 'Order date',
+            icon: LucideIcons.calendar,
+            value: _fmtDate(_orderDate),
+            placeholder: false,
+            onTap: _locked ? null : () => _pickDate(isExpected: false),
+          ),
+          const SizedBox(height: 14),
+          _PickerField(
+            label: 'Expected date',
+            icon: LucideIcons.calendar,
+            value:
+                _expectedDate != null ? _fmtDate(_expectedDate!) : 'Optional',
+            placeholder: _expectedDate == null,
+            onTap: _locked ? null : () => _pickDate(isExpected: true),
+          ),
+          const SizedBox(height: 14),
+          _labeled(
+            context,
+            'Currency',
+            AppDropdown<String>(
+              value: _currency.text.trim().isEmpty ? null : _currency.text,
+              options: const [
+                AppDropdownOption(value: 'PKR', label: 'PKR'),
+                AppDropdownOption(value: 'USD', label: 'USD'),
+                AppDropdownOption(value: 'AED', label: 'AED'),
+              ],
+              onSelected: (v) => setState(() => _currency.text = v),
+              enabled: !_locked,
+            ),
+          ),
+          const SizedBox(height: 14),
+          AppTextField(
+            controller: _exchangeRate,
+            label: 'Exch. rate',
+            prefixIcon: LucideIcons.arrowRightLeft,
+            keyboardType:
+                const TextInputType.numberWithOptions(decimal: true),
+            enabled: !_locked,
+          ),
+        ],
       ),
-      body: _loadingExisting
-          ? const Center(child: CircularProgressIndicator())
-          : SafeArea(
-              child: LayoutBuilder(
-                builder: (context, _) => SingleChildScrollView(
-                  padding: const EdgeInsets.symmetric(
-                      horizontal: AppSpacing.screenPadding),
-                  child: Center(
-                    child: ConstrainedBox(
-                      constraints: const BoxConstraints(maxWidth: 640),
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.stretch,
-                        children: [
-                          const SizedBox(height: AppSpacing.lg),
-                          if (_locked) ...[
-                            AppInlineBanner(
-                                message:
-                                    'This PO is no longer a draft and cannot be edited.',
-                                type: BannerType.info),
-                            const SizedBox(height: AppSpacing.lg),
-                          ],
-                          if (_error != null) ...[
-                            AppInlineBanner(
-                                message: _error!, type: BannerType.error),
-                            const SizedBox(height: AppSpacing.lg),
-                          ],
-                          _group('Supplier'),
-                          _SupplierField(
-                            supplier: _supplier,
-                            onTap: _locked ? null : _pickSupplier,
-                          ),
-                          _sectionGap(),
-                          _group('Dates'),
-                          _DateField(
-                            label: 'Order Date',
-                            value: _fmtDate(_orderDate),
-                            onTap:
-                                _locked ? null : () => _pickDate(isExpected: false),
-                          ),
-                          _gap(),
-                          _DateField(
-                            label: 'Expected Date',
-                            value: _expectedDate != null
-                                ? _fmtDate(_expectedDate!)
-                                : 'Optional',
-                            onTap:
-                                _locked ? null : () => _pickDate(isExpected: true),
-                          ),
-                          _sectionGap(),
-                          _group('Currency'),
-                          AppTextField(
-                              controller: _currency,
-                              label: 'Currency',
-                              prefixIcon: Icons.attach_money),
-                          _gap(),
-                          AppTextField(
-                              controller: _exchangeRate,
-                              label: 'Exchange Rate',
-                              prefixIcon: Icons.currency_exchange,
-                              keyboardType: const TextInputType.numberWithOptions(
-                                  decimal: true)),
-                          _sectionGap(),
-                          _group('Items'),
-                          for (final line in _lines)
-                            _LineEditor(
-                              line: line,
-                              enabled: !_locked,
-                              showProductError: _saveAttempted,
-                              onPickProduct: () => _pickProduct(line),
-                              onRemove:
-                                  _lines.length > 1 ? () => _removeLine(line) : null,
-                            ),
-                          const SizedBox(height: AppSpacing.sm),
-                          AppButton(
-                            label: '+ Add line',
-                            variant: AppButtonVariant.plain,
-                            icon: Icons.add,
-                            onPressed: _locked ? null : () => _addLine(),
-                          ),
-                          _sectionGap(),
-                          _group('Charges'),
-                          AppTextField(
-                              controller: _freight,
-                              label: 'Freight',
-                              prefixIcon: Icons.local_shipping,
-                              keyboardType: const TextInputType.numberWithOptions(
-                                  decimal: true)),
-                          _gap(),
-                          AppTextField(
-                              controller: _insurance,
-                              label: 'Insurance',
-                              prefixIcon: Icons.shield_outlined,
-                              keyboardType: const TextInputType.numberWithOptions(
-                                  decimal: true)),
-                          _gap(),
-                          AppTextField(
-                              controller: _customDuty,
-                              label: 'Custom Duty',
-                              prefixIcon: Icons.account_balance,
-                              keyboardType: const TextInputType.numberWithOptions(
-                                  decimal: true)),
-                          _gap(),
-                          AppTextField(
-                              controller: _discountTotal,
-                              label: 'Order Discount',
-                              prefixIcon: Icons.percent,
-                              keyboardType: const TextInputType.numberWithOptions(
-                                  decimal: true)),
-                          _sectionGap(),
-                          _group('Notes'),
-                          AppTextField(
-                              controller: _notes,
-                              label: 'Notes',
-                              prefixIcon: Icons.notes,
-                              hint: 'Optional'),
-                          _sectionGap(),
-                          _TotalsPanel(
-                            subtotal: _subtotal,
-                            tax: _taxTotal,
-                            landedCost: _landedCost,
-                            grandTotal: _grandTotal,
-                          ),
-                          const SizedBox(height: AppSpacing.xxl),
-                          AppButton(
-                            label: _isEditing ? 'Update PO' : 'Create PO',
-                            loading: _saving,
-                            fullWidth: true,
-                            onPressed: _locked ? null : _save,
-                          ),
-                          const SizedBox(height: AppSpacing.xxl),
-                        ],
+    );
+  }
+
+  Widget _lineItemsCard(BuildContext context) {
+    return AppSectionCard(
+      eyebrow: 'Line items',
+      trailing: AppButton(
+        label: 'Add line',
+        variant: AppButtonVariant.tinted,
+        size: AppButtonSize.sm,
+        icon: LucideIcons.plus,
+        onPressed: _locked ? null : () => _addLine(),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          for (final line in _lines) ...[
+            _lineCard(context, line),
+            const SizedBox(height: 12),
+          ],
+        ],
+      ),
+    );
+  }
+
+  Widget _lineCard(BuildContext context, _LineDraft line) {
+    final lum = context.lum;
+    final missing = line.productId == null;
+    final showError = _saveAttempted && missing;
+
+    return ClayContainer(
+      variant: ClayVariant.inset,
+      color: lum.surface2,
+      borderRadius: AppRadius.md,
+      isDark: lum.isDark,
+      padding: const EdgeInsets.all(14),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Expanded(
+                child: GestureDetector(
+                  behavior: HitTestBehavior.opaque,
+                  onTap: _locked ? null : () => _pickProduct(line),
+                  child: Container(
+                    height: 46,
+                    padding: const EdgeInsets.symmetric(horizontal: 13),
+                    decoration: BoxDecoration(
+                      color: lum.surface,
+                      borderRadius: BorderRadius.circular(AppRadius.md),
+                      border: Border.all(
+                        color: showError ? lum.danger : Colors.transparent,
+                        width: 1.5,
                       ),
+                    ),
+                    child: Row(
+                      children: [
+                        Icon(LucideIcons.boxes,
+                            size: 18,
+                            color: missing ? lum.accent : lum.g500),
+                        const SizedBox(width: 10),
+                        Expanded(
+                          child: Text(
+                            missing ? 'Select product' : line.name,
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                            style: AppTypography.subhead.copyWith(
+                              color:
+                                  missing ? lum.accent : lum.textPrimary,
+                              fontWeight: FontWeight.w600,
+                            ),
+                          ),
+                        ),
+                        Icon(LucideIcons.chevronRight,
+                            size: 18, color: lum.g400),
+                      ],
                     ),
                   ),
                 ),
               ),
-            ),
-    );
-  }
-
-  Widget _gap() => const SizedBox(height: AppSpacing.fieldGap);
-  Widget _sectionGap() => const SizedBox(height: AppSpacing.xl);
-
-  Widget _group(String label) => Padding(
-        padding: const EdgeInsets.only(bottom: AppSpacing.sm),
-        child: Text(label.toUpperCase(),
-            style: AppTypography.footnote.copyWith(
-                color: AppColors.textMuted, fontWeight: FontWeight.w600)),
-      );
-}
-
-class _SupplierField extends StatelessWidget {
-  const _SupplierField({required this.supplier, required this.onTap});
-  final Supplier? supplier;
-  final VoidCallback? onTap;
-
-  @override
-  Widget build(BuildContext context) {
-    return InkWell(
-      onTap: onTap,
-      borderRadius: BorderRadius.circular(AppRadius.field),
-      child: Container(
-        padding: const EdgeInsets.symmetric(
-            horizontal: AppSpacing.base, vertical: AppSpacing.base),
-        decoration: BoxDecoration(
-          color: AppColors.fieldFill,
-          borderRadius: BorderRadius.circular(AppRadius.field),
-        ),
-        child: Row(
-          children: [
-            const Icon(Icons.local_shipping,
-                size: 18, color: AppColors.textMuted),
-            const SizedBox(width: AppSpacing.md),
-            Expanded(
-              child: Text(
-                supplier?.name ?? 'Select supplier',
-                style: AppTypography.body.copyWith(
-                    color: supplier == null
-                        ? AppColors.textHint
-                        : AppColors.textPrimary),
+              if (_lines.length > 1) ...[
+                const SizedBox(width: 6),
+                Semantics(
+                  button: true,
+                  label: 'Remove line',
+                  child: GestureDetector(
+                    behavior: HitTestBehavior.opaque,
+                    onTap: _locked ? null : () => _removeLine(line),
+                    child: SizedBox(
+                      width: 40,
+                      height: 40,
+                      child: Icon(LucideIcons.x, size: 18, color: lum.g500),
+                    ),
+                  ),
+                ),
+              ],
+            ],
+          ),
+          if (showError) ...[
+            const SizedBox(height: 6),
+            Text('Product required',
+                style:
+                    AppTypography.caption.copyWith(color: lum.dangerText)),
+          ],
+          const SizedBox(height: 12),
+          Row(
+            children: [
+              Expanded(child: _lineNumField(line.qtyCtrl, 'Qty')),
+              const SizedBox(width: 12),
+              Expanded(child: _lineNumField(line.costCtrl, 'Unit cost')),
+            ],
+          ),
+          const SizedBox(height: 12),
+          Row(
+            children: [
+              Expanded(child: _lineNumField(line.taxCtrl, 'Tax %')),
+              const SizedBox(width: 12),
+              Expanded(child: _lineNumField(line.discountCtrl, 'Disc %')),
+            ],
+          ),
+          const SizedBox(height: 12),
+          Row(
+            children: [
+              Expanded(
+                child: Text('Line total',
+                    style: AppTypography.subhead.copyWith(color: lum.g500)),
               ),
-            ),
-            const Icon(Icons.chevron_right, color: AppColors.separator),
-          ],
-        ),
+              AppMoneyText(line.lineAfterDiscount, size: 16),
+            ],
+          ),
+        ],
       ),
+    );
+  }
+
+  Widget _lineNumField(TextEditingController c, String label) => AppTextField(
+        controller: c,
+        label: label,
+        prefixIcon: LucideIcons.hash,
+        keyboardType: const TextInputType.numberWithOptions(decimal: true),
+        enabled: !_locked,
+      );
+
+  Widget _chargesNotesCard(BuildContext context) {
+    return AppSectionCard(
+      eyebrow: 'Charges & notes',
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          AppTextField(
+            controller: _freight,
+            label: 'Freight',
+            prefixIcon: LucideIcons.truck,
+            keyboardType:
+                const TextInputType.numberWithOptions(decimal: true),
+            enabled: !_locked,
+          ),
+          const SizedBox(height: 14),
+          AppTextField(
+            controller: _insurance,
+            label: 'Insurance',
+            prefixIcon: LucideIcons.shield,
+            keyboardType:
+                const TextInputType.numberWithOptions(decimal: true),
+            enabled: !_locked,
+          ),
+          const SizedBox(height: 14),
+          AppTextField(
+            controller: _customDuty,
+            label: 'Custom duty',
+            prefixIcon: LucideIcons.landmark,
+            keyboardType:
+                const TextInputType.numberWithOptions(decimal: true),
+            enabled: !_locked,
+          ),
+          const SizedBox(height: 14),
+          AppTextField(
+            controller: _discountTotal,
+            label: 'Order discount',
+            prefixIcon: LucideIcons.percent,
+            keyboardType:
+                const TextInputType.numberWithOptions(decimal: true),
+            enabled: !_locked,
+          ),
+          const SizedBox(height: 14),
+          AppTextField(
+            controller: _notes,
+            label: 'Notes',
+            prefixIcon: LucideIcons.messageSquare,
+            hint: 'Optional',
+            maxLines: 3,
+            enabled: !_locked,
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _totalsCard(BuildContext context) {
+    final lum = context.lum;
+    return AppSectionCard(
+      eyebrow: 'Totals',
+      child: Column(
+        children: [
+          _moneyRow(context, 'Subtotal', _subtotal),
+          _moneyRow(context, 'Order discount', -_num(_discountTotal),
+              danger: true),
+          _moneyRow(context, 'Tax', _taxTotal),
+          _moneyRow(context, 'Landed cost', _landedCost),
+          Divider(height: 22, color: lum.hairline),
+          Row(
+            children: [
+              Expanded(
+                child: Text('Grand total',
+                    style: AppTypography.headline
+                        .copyWith(color: lum.textPrimary)),
+              ),
+              AppMoneyText(_grandTotal, size: 22, color: lum.accent),
+            ],
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _moneyRow(BuildContext context, String k, double v,
+      {bool danger = false}) {
+    final lum = context.lum;
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 5),
+      child: Row(
+        children: [
+          Expanded(
+            child:
+                Text(k, style: AppTypography.subhead.copyWith(color: lum.g500)),
+          ),
+          AppMoneyText(v, size: 15, color: danger ? lum.dangerText : null),
+        ],
+      ),
+    );
+  }
+
+  Widget _labeled(BuildContext context, String label, Widget child) {
+    final lum = context.lum;
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Padding(
+          padding: const EdgeInsets.only(left: 2, bottom: 8),
+          child: Text(label,
+              style: AppTypography.fieldLabel.copyWith(color: lum.g700)),
+        ),
+        child,
+      ],
     );
   }
 }
 
-class _DateField extends StatelessWidget {
-  const _DateField(
-      {required this.label, required this.value, required this.onTap});
-  final String label;
-  final String value;
-  final VoidCallback? onTap;
-
-  @override
-  Widget build(BuildContext context) {
-    return InkWell(
-      onTap: onTap,
-      borderRadius: BorderRadius.circular(AppRadius.field),
-      child: Container(
-        padding: const EdgeInsets.symmetric(
-            horizontal: AppSpacing.base, vertical: AppSpacing.base),
-        decoration: BoxDecoration(
-          color: AppColors.fieldFill,
-          borderRadius: BorderRadius.circular(AppRadius.field),
-        ),
-        child: Row(
-          children: [
-            const Icon(Icons.calendar_today,
-                size: 16, color: AppColors.textMuted),
-            const SizedBox(width: AppSpacing.md),
-            Expanded(
-                child: Text(label,
-                    style: AppTypography.body
-                        .copyWith(color: AppColors.textPrimary))),
-            Text(value,
-                style: AppTypography.footnote
-                    .copyWith(color: AppColors.textMuted)),
-          ],
-        ),
-      ),
-    );
-  }
-}
-
-class _LineEditor extends StatelessWidget {
-  const _LineEditor({
-    required this.line,
-    required this.enabled,
-    required this.showProductError,
-    required this.onPickProduct,
-    required this.onRemove,
+/// A labelled, tappable clay well used for the supplier and date pickers. When
+/// [onTap] is null (a locked PO) the well renders non-interactive.
+class _PickerField extends StatelessWidget {
+  const _PickerField({
+    required this.label,
+    required this.icon,
+    required this.value,
+    required this.placeholder,
+    required this.onTap,
   });
 
-  final _LineDraft line;
-  final bool enabled;
-  final bool showProductError;
-  final VoidCallback onPickProduct;
-  final VoidCallback? onRemove;
+  final String label;
+  final IconData icon;
+  final String value;
+  final bool placeholder;
+  final VoidCallback? onTap;
 
   @override
   Widget build(BuildContext context) {
-    return Padding(
-      padding: const EdgeInsets.only(bottom: AppSpacing.md),
-      child: AppCard(
-        child: Padding(
-          padding: const EdgeInsets.all(AppSpacing.base),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Row(
-                children: [
-                  Expanded(
-                    child: InkWell(
-                      onTap: enabled ? onPickProduct : null,
-                      borderRadius: BorderRadius.circular(AppRadius.field),
-                      child: Container(
-                        padding: const EdgeInsets.symmetric(
-                            horizontal: AppSpacing.base,
-                            vertical: AppSpacing.md),
-                        decoration: BoxDecoration(
-                          color: AppColors.fieldFill,
-                          borderRadius: BorderRadius.circular(AppRadius.field),
-                          border: showProductError && line.productId == null
-                              ? Border.all(color: AppColors.destructive)
-                              : null,
-                        ),
-                        child: Row(
-                          children: [
-                            Icon(Icons.inventory_2_outlined,
-                                size: 18,
-                                color: line.productId == null
-                                    ? AppColors.accent
-                                    : AppColors.textMuted),
-                            const SizedBox(width: AppSpacing.md),
-                            Expanded(
-                              child: Text(
-                                line.productId == null
-                                    ? 'Select product'
-                                    : line.name,
-                                style: AppTypography.subhead.copyWith(
-                                  color: line.productId == null
-                                      ? AppColors.accent
-                                      : AppColors.textPrimary,
-                                  fontWeight: FontWeight.w600,
-                                ),
-                              ),
-                            ),
-                            const Icon(Icons.chevron_right,
-                                color: AppColors.separator),
-                          ],
+    final lum = context.lum;
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Padding(
+          padding: const EdgeInsets.only(left: 2, bottom: 8),
+          child: Text(label,
+              style: AppTypography.fieldLabel.copyWith(color: lum.g700)),
+        ),
+        Semantics(
+          button: true,
+          label: '$label: $value',
+          child: GestureDetector(
+            behavior: HitTestBehavior.opaque,
+            onTap: onTap,
+            child: Opacity(
+              opacity: onTap == null ? 0.7 : 1,
+              child: ClayContainer(
+                variant: ClayVariant.inset,
+                color: lum.surface2,
+                borderRadius: AppRadius.md,
+                isDark: lum.isDark,
+                height: 50,
+                padding: const EdgeInsets.symmetric(horizontal: 14),
+                child: Row(
+                  children: [
+                    Icon(icon, size: 18, color: lum.g400),
+                    const SizedBox(width: 10),
+                    Expanded(
+                      child: Text(
+                        value,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: AppTypography.fieldText.copyWith(
+                          color:
+                              placeholder ? lum.textTertiary : lum.textPrimary,
                         ),
                       ),
                     ),
-                  ),
-                  if (onRemove != null)
-                    IconButton(
-                      icon: const Icon(Icons.close,
-                          size: 18, color: AppColors.textMuted),
-                      onPressed: enabled ? onRemove : null,
-                    ),
-                ],
+                    Icon(LucideIcons.chevronRight, size: 18, color: lum.g400),
+                  ],
+                ),
               ),
-              if (showProductError && line.productId == null) ...[
-                const SizedBox(height: AppSpacing.xs),
-                Text('Product required',
-                    style: AppTypography.caption
-                        .copyWith(color: AppColors.destructive)),
-              ],
-              const SizedBox(height: AppSpacing.sm),
-              Row(
-                children: [
-                  Expanded(child: _numField(line.qtyCtrl, 'Qty')),
-                  const SizedBox(width: AppSpacing.sm),
-                  Expanded(child: _numField(line.costCtrl, 'Unit Cost')),
-                ],
-              ),
-              const SizedBox(height: AppSpacing.sm),
-              Row(
-                children: [
-                  Expanded(child: _numField(line.taxCtrl, 'Tax %')),
-                  const SizedBox(width: AppSpacing.sm),
-                  Expanded(child: _numField(line.discountCtrl, 'Disc %')),
-                ],
-              ),
-              const SizedBox(height: AppSpacing.sm),
-              Align(
-                alignment: Alignment.centerRight,
-                child: Text('Line: ${formatPkr(line.lineAfterDiscount)}',
-                    style: AppTypography.footnote.copyWith(
-                        color: AppColors.textPrimary,
-                        fontWeight: FontWeight.w600)),
-              ),
-            ],
+            ),
           ),
         ),
-      ),
-    );
-  }
-
-  Widget _numField(TextEditingController c, String label) {
-    return TextField(
-      controller: c,
-      enabled: enabled,
-      keyboardType:
-          const TextInputType.numberWithOptions(decimal: true),
-      inputFormatters: [
-        FilteringTextInputFormatter.allow(RegExp(r'[0-9.]')),
-      ],
-      style: AppTypography.fieldText,
-      decoration: InputDecoration(
-        labelText: label,
-        labelStyle: AppTypography.fieldLabel,
-        filled: true,
-        fillColor: AppColors.fieldFill,
-        isDense: true,
-        border: OutlineInputBorder(
-          borderRadius: BorderRadius.circular(AppRadius.field),
-          borderSide: BorderSide.none,
-        ),
-      ),
-    );
-  }
-}
-
-class _TotalsPanel extends StatelessWidget {
-  const _TotalsPanel({
-    required this.subtotal,
-    required this.tax,
-    required this.landedCost,
-    required this.grandTotal,
-  });
-
-  final double subtotal;
-  final double tax;
-  final double landedCost;
-  final double grandTotal;
-
-  @override
-  Widget build(BuildContext context) {
-    return AppCard(
-      child: Padding(
-        padding: const EdgeInsets.all(AppSpacing.xl),
-        child: Column(
-          children: [
-            _row('Subtotal', subtotal),
-            const SizedBox(height: AppSpacing.sm),
-            _row('Tax', tax),
-            const SizedBox(height: AppSpacing.sm),
-            _row('Landed Cost', landedCost),
-            const Divider(color: AppColors.separator, height: AppSpacing.xl),
-            _row('Grand Total', grandTotal, emphasize: true),
-          ],
-        ),
-      ),
-    );
-  }
-
-  Widget _row(String label, double value, {bool emphasize = false}) {
-    final style = emphasize
-        ? AppTypography.headline
-        : AppTypography.footnote.copyWith(color: AppColors.textMuted);
-    return Row(
-      mainAxisAlignment: MainAxisAlignment.spaceBetween,
-      children: [
-        Text(label, style: style),
-        Text(formatPkr(value), style: style),
       ],
     );
   }
@@ -867,72 +880,107 @@ class _ProductPickerSheetState extends ConsumerState<_ProductPickerSheet> {
 
   @override
   Widget build(BuildContext context) {
-    return SafeArea(
-      child: Padding(
-        padding: EdgeInsets.only(
-          left: AppSpacing.screenPadding,
-          right: AppSpacing.screenPadding,
-          top: AppSpacing.md,
-          bottom: AppSpacing.md + MediaQuery.of(context).viewInsets.bottom,
+    final lum = context.lum;
+    return Column(
+      mainAxisSize: MainAxisSize.min,
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        AppSheetHeader(title: 'Select product'),
+        AppSearchField(
+          controller: _searchCtrl,
+          hint: 'Search name or SKU…',
+          onSubmitted: _run,
+          onClear: () => _run(''),
         ),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Center(
-              child: Container(
-                width: 36,
-                height: 4,
-                decoration: BoxDecoration(
-                  color: AppColors.separator,
-                  borderRadius: BorderRadius.circular(2),
-                ),
-              ),
+        const SizedBox(height: 12),
+        if (_loading)
+          const Padding(
+            padding: EdgeInsets.symmetric(vertical: 28),
+            child: Center(child: CircularProgressIndicator()),
+          )
+        else if (_error != null)
+          AppInlineBanner(message: _error!, type: BannerType.error)
+        else if (_results.isEmpty)
+          Padding(
+            padding: const EdgeInsets.symmetric(vertical: 28),
+            child: Text('No products found.',
+                textAlign: TextAlign.center,
+                style: AppTypography.footnote.copyWith(color: lum.g500)),
+          )
+        else
+          for (final p in _results) ...[
+            _ProductTile(
+              product: p,
+              onTap: () => Navigator.of(context).pop(p),
             ),
-            const SizedBox(height: AppSpacing.md),
-            Text('Select Product', style: AppTypography.title2),
-            const SizedBox(height: AppSpacing.md),
-            AppTextField(
-              controller: _searchCtrl,
-              label: 'Search',
-              prefixIcon: Icons.search,
-              hint: 'Name or SKU',
-              onSubmitted: _run,
-            ),
-            const SizedBox(height: AppSpacing.md),
-            if (_loading)
-              const Padding(
-                padding: EdgeInsets.all(AppSpacing.xl),
-                child: Center(child: CircularProgressIndicator()),
-              )
-            else if (_error != null)
-              AppInlineBanner(message: _error!, type: BannerType.error)
-            else if (_results.isEmpty)
-              Padding(
-                padding: const EdgeInsets.symmetric(vertical: AppSpacing.xl),
-                child: Text('No products found.',
-                    style: AppTypography.footnote
-                        .copyWith(color: AppColors.textHint)),
-              )
-            else
-              Flexible(
-                child: ListView.builder(
-                  shrinkWrap: true,
-                  itemCount: _results.length,
-                  itemBuilder: (_, i) {
-                    final p = _results[i];
-                    return ListTile(
-                      contentPadding: EdgeInsets.zero,
-                      title: Text(p.name, style: AppTypography.headline),
-                      subtitle: Text('SKU ${p.sku} · ${formatPkr(p.costPrice)}',
-                          style: AppTypography.caption
-                              .copyWith(color: AppColors.textMuted)),
-                      onTap: () => Navigator.of(context).pop(p),
-                    );
-                  },
-                ),
-              ),
+            const SizedBox(height: 8),
           ],
+      ],
+    );
+  }
+}
+
+class _ProductTile extends StatelessWidget {
+  const _ProductTile({required this.product, required this.onTap});
+  final Product product;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    final lum = context.lum;
+    return Semantics(
+      button: true,
+      label: product.name,
+      child: Material(
+        color: Colors.transparent,
+        borderRadius: BorderRadius.circular(AppRadius.md),
+        child: InkWell(
+          onTap: onTap,
+          borderRadius: BorderRadius.circular(AppRadius.md),
+          child: ClayContainer(
+            variant: ClayVariant.inset,
+            color: lum.surface2,
+            borderRadius: AppRadius.md,
+            isDark: lum.isDark,
+            padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+            child: Row(
+              children: [
+                ClayContainer(
+                  variant: ClayVariant.soft,
+                  color: lum.accentSoft,
+                  borderRadius: AppRadius.sm,
+                  isDark: lum.isDark,
+                  width: 38,
+                  height: 38,
+                  child: Center(
+                    child: Icon(LucideIcons.package,
+                        size: 18, color: lum.accentPress),
+                  ),
+                ),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        product.name,
+                        style: AppTypography.headline
+                            .copyWith(color: lum.textPrimary),
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                      ),
+                      const SizedBox(height: 2),
+                      Text('SKU ${product.sku}',
+                          style:
+                              AppTypography.caption.copyWith(color: lum.g500)),
+                    ],
+                  ),
+                ),
+                const SizedBox(width: 10),
+                AppMoneyText(product.costPrice, size: 15),
+              ],
+            ),
+          ),
         ),
       ),
     );
