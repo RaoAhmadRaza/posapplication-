@@ -1,15 +1,22 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:lucide_icons_flutter/lucide_icons.dart';
 import '../../../../core/design/app_colors.dart';
-import '../../../../core/design/app_spacing.dart';
 import '../../../../core/design/app_typography.dart';
 import '../../../../core/design/widgets/app_button.dart';
 import '../../../../core/design/widgets/app_card.dart';
+import '../../../../core/design/widgets/app_confirm_dialog.dart';
+import '../../../../core/design/widgets/app_detail_scaffold.dart';
 import '../../../../core/design/widgets/app_inline_banner.dart';
+import '../../../../core/design/widgets/app_pill.dart';
+import '../../../../core/design/widgets/app_states.dart';
+import '../../../../core/design/widgets/app_toast.dart';
 import '../../../../core/widgets/permission_gate.dart';
 import '../../domain/entities/fiscal_period.dart';
 import '../../domain/failures/accounting_failure.dart';
 import '../controllers/fiscal_periods_controller.dart';
+import '../widgets/acct_date_field.dart';
+import '../widgets/accounting_ui.dart';
 
 class FiscalPeriodsPage extends ConsumerWidget {
   const FiscalPeriodsPage({super.key});
@@ -19,11 +26,15 @@ class FiscalPeriodsPage extends ConsumerWidget {
     WidgetRef ref,
     FiscalPeriod period,
   ) async {
-    final confirmed = await showDialog<bool>(
-      context: context,
-      builder: (_) => _CloseDialog(period: period),
+    final confirmed = await showAppConfirm(
+      context,
+      title: 'Close period?',
+      message: 'This stops new postings in ${period.name} until it is '
+          'reopened. You can reopen it later if you need to make an adjustment.',
+      confirmLabel: 'Close period',
+      destructive: true,
     );
-    if (confirmed != true) return;
+    if (!confirmed) return;
     final failure =
         await ref.read(fiscalPeriodsProvider.notifier).close(period.id);
     if (!context.mounted) return;
@@ -46,63 +57,56 @@ class FiscalPeriodsPage extends ConsumerWidget {
     AccountingFailure? failure,
     String success,
   ) {
-    final message = failure?.message ?? success;
-    ScaffoldMessenger.of(context)
-        .showSnackBar(SnackBar(content: Text(message)));
+    if (failure != null) {
+      showAppToast(context, failure.message, type: BannerType.error);
+      return;
+    }
+    showAppToast(context, success, type: BannerType.success);
   }
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final state = ref.watch(fiscalPeriodsProvider);
 
-    return Scaffold(
-      backgroundColor: AppColors.background,
-      appBar: AppBar(
-        backgroundColor: AppColors.background,
-        surfaceTintColor: AppColors.background,
-        leading: IconButton(
-          icon: const Icon(Icons.arrow_back_ios,
-              color: AppColors.accent, size: 20),
-          onPressed: () => Navigator.of(context).pop(),
+    return AppDetailScaffold(
+      eyebrow: 'Accounting',
+      title: 'Fiscal periods',
+      child: state.when(
+        loading: () => const Padding(
+          padding: EdgeInsets.only(top: 60),
+          child: Center(child: CircularProgressIndicator()),
         ),
-        title: Text('Fiscal Periods', style: AppTypography.headline),
-      ),
-      body: SafeArea(
-        child: state.when(
-          loading: () => const Center(child: CircularProgressIndicator()),
-          error: (e, _) => _ErrorState(
-            onRetry: () =>
-                ref.read(fiscalPeriodsProvider.notifier).refresh(),
-          ),
-          data: (periods) => periods.isEmpty
-              ? Center(
-                  child: Text('No fiscal periods',
-                      style: AppTypography.subhead
-                          .copyWith(color: AppColors.textMuted)),
-                )
-              : ListView.builder(
-                  padding: const EdgeInsets.symmetric(
-                      horizontal: AppSpacing.screenPadding,
-                      vertical: AppSpacing.md),
-                  itemCount: periods.length,
-                  itemBuilder: (_, i) => Padding(
-                    padding: EdgeInsets.only(
-                        bottom: i < periods.length - 1 ? AppSpacing.md : 0),
-                    child: _PeriodCard(
+        error: (e, _) => AppErrorState(
+          title: 'Couldn\'t load periods',
+          body: 'Your data is safe. Check the connection and try again.',
+          onRetry: () => ref.read(fiscalPeriodsProvider.notifier).refresh(),
+        ),
+        data: (periods) => periods.isEmpty
+            ? const AppEmptyState(
+                icon: LucideIcons.calendarRange,
+                title: 'No periods yet',
+                body: 'Fiscal periods will appear here once configured.',
+              )
+            : Column(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  for (var i = 0; i < periods.length; i++) ...[
+                    if (i > 0) const SizedBox(height: 12),
+                    _PeriodRow(
                       period: periods[i],
                       onClose: () => _close(context, ref, periods[i]),
                       onReopen: () => _reopen(context, ref, periods[i]),
                     ),
-                  ),
-                ),
-        ),
+                  ],
+                ],
+              ),
       ),
     );
   }
 }
 
-class _PeriodCard extends StatelessWidget {
-  const _PeriodCard({
+class _PeriodRow extends StatelessWidget {
+  const _PeriodRow({
     required this.period,
     required this.onClose,
     required this.onReopen,
@@ -112,29 +116,62 @@ class _PeriodCard extends StatelessWidget {
   final VoidCallback onClose;
   final VoidCallback onReopen;
 
-  String _day(DateTime d) => '${d.year}-${d.month.toString().padLeft(2, '0')}'
-      '-${d.day.toString().padLeft(2, '0')}';
-
   @override
   Widget build(BuildContext context) {
+    final lum = context.lum;
+
+    final (IconData icon, Color bg, Color fg) = switch (period.status) {
+      FiscalPeriodStatus.open => (
+          LucideIcons.calendarCheck,
+          lum.accentSoft,
+          lum.accent,
+        ),
+      FiscalPeriodStatus.closed => (
+          LucideIcons.calendarX,
+          lum.surface2,
+          lum.g500,
+        ),
+      FiscalPeriodStatus.locked => (
+          LucideIcons.lock,
+          lum.surface2,
+          lum.g600,
+        ),
+    };
+
+    final (String pillLabel, AppPillTone pillTone) = switch (period.status) {
+      FiscalPeriodStatus.open => ('Open', AppPillTone.lumen),
+      FiscalPeriodStatus.closed => ('Closed', AppPillTone.neutral),
+      FiscalPeriodStatus.locked => ('Locked', AppPillTone.neutral),
+    };
+
     return AppCard(
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
+      padding: const EdgeInsets.fromLTRB(16, 14, 16, 14),
+      child: Row(
         children: [
-          Row(
-            children: [
-              Expanded(
-                child: Text(period.name, style: AppTypography.headline),
-              ),
-              _StatusChip(status: period.status),
-            ],
+          AcctIconTile(icon: icon, background: bg, foreground: fg),
+          const SizedBox(width: 13),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  period.name,
+                  style: AppTypography.headline.copyWith(fontSize: 14.5),
+                ),
+                const SizedBox(height: 2),
+                Text(
+                  '${acctFormatDate(period.startDate)} – '
+                  '${acctFormatDate(period.endDate)}',
+                  style: AppTypography.subhead
+                      .copyWith(fontSize: 12.5, color: lum.g500),
+                ),
+              ],
+            ),
           ),
-          const SizedBox(height: AppSpacing.xs),
-          Text('${_day(period.startDate)} – ${_day(period.endDate)}',
-              style: AppTypography.footnote
-                  .copyWith(color: AppColors.textMuted)),
+          const SizedBox(width: 10),
+          AppPill(label: pillLabel, tone: pillTone),
           if (period.status != FiscalPeriodStatus.locked) ...[
-            const SizedBox(height: AppSpacing.md),
+            const SizedBox(width: 10),
             PermissionGate(
               module: 'accounting',
               action: 'approve',
@@ -142,106 +179,18 @@ class _PeriodCard extends StatelessWidget {
                   ? AppButton(
                       label: 'Close',
                       variant: AppButtonVariant.destructive,
+                      size: AppButtonSize.sm,
                       onPressed: onClose,
                     )
                   : AppButton(
                       label: 'Reopen',
                       variant: AppButtonVariant.tinted,
+                      size: AppButtonSize.sm,
                       onPressed: onReopen,
                     ),
             ),
           ],
         ],
-      ),
-    );
-  }
-}
-
-class _StatusChip extends StatelessWidget {
-  const _StatusChip({required this.status});
-  final FiscalPeriodStatus status;
-
-  @override
-  Widget build(BuildContext context) {
-    final (label, color) = switch (status) {
-      FiscalPeriodStatus.open => ('OPEN', AppColors.success),
-      FiscalPeriodStatus.closed => ('CLOSED', AppColors.textMuted),
-      FiscalPeriodStatus.locked => ('LOCKED', AppColors.destructive),
-    };
-    return Container(
-      padding: const EdgeInsets.symmetric(
-          horizontal: AppSpacing.sm, vertical: AppSpacing.xs),
-      decoration: BoxDecoration(
-        color: color.withValues(alpha: 0.12),
-        borderRadius: BorderRadius.circular(AppSpacing.sm),
-      ),
-      child: Text(label,
-          style: AppTypography.caption
-              .copyWith(color: color, fontWeight: FontWeight.w600)),
-    );
-  }
-}
-
-class _CloseDialog extends StatelessWidget {
-  const _CloseDialog({required this.period});
-  final FiscalPeriod period;
-
-  @override
-  Widget build(BuildContext context) {
-    return AlertDialog(
-      backgroundColor: AppColors.background,
-      title: Text('Close ${period.name}?', style: AppTypography.headline),
-      content: Column(
-        mainAxisSize: MainAxisSize.min,
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          if (period.isCurrent) ...[
-            AppInlineBanner(
-              message: 'This is the current period — new sales, payments, '
-                  'and journals will be REJECTED until it is reopened.',
-              type: BannerType.error,
-            ),
-            const SizedBox(height: AppSpacing.md),
-          ],
-          Text('Closing locks new postings dated within this period.',
-              style: AppTypography.subhead
-                  .copyWith(color: AppColors.textMuted)),
-        ],
-      ),
-      actions: [
-        TextButton(
-          onPressed: () => Navigator.of(context).pop(false),
-          child: const Text('Cancel'),
-        ),
-        TextButton(
-          onPressed: () => Navigator.of(context).pop(true),
-          child: const Text('Close Period'),
-        ),
-      ],
-    );
-  }
-}
-
-class _ErrorState extends StatelessWidget {
-  const _ErrorState({required this.onRetry});
-  final VoidCallback onRetry;
-
-  @override
-  Widget build(BuildContext context) {
-    return Center(
-      child: Padding(
-        padding:
-            const EdgeInsets.symmetric(horizontal: AppSpacing.screenPadding),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            AppInlineBanner(
-                message: 'Could not load fiscal periods.',
-                type: BannerType.error),
-            const SizedBox(height: AppSpacing.md),
-            AppButton(label: 'Retry', onPressed: onRetry),
-          ],
-        ),
       ),
     );
   }

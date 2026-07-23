@@ -1,19 +1,20 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
-import '../../../../core/design/app_colors.dart';
-import '../../../../core/design/app_radius.dart';
-import '../../../../core/design/app_spacing.dart';
-import '../../../../core/design/app_typography.dart';
+import 'package:lucide_icons_flutter/lucide_icons.dart';
 import '../../../../core/design/widgets/app_button.dart';
+import '../../../../core/design/widgets/app_card.dart';
+import '../../../../core/design/widgets/app_detail_scaffold.dart';
+import '../../../../core/design/widgets/app_dropdown.dart';
 import '../../../../core/design/widgets/app_inline_banner.dart';
 import '../../../../core/design/widgets/app_text_field.dart';
+import '../../../../core/design/widgets/app_toast.dart';
 import '../../../../core/widgets/permission_gate.dart';
 import '../../../auth/presentation/controllers/branch_controller.dart';
-import '../../domain/entities/bank_account.dart';
-import '../../domain/entities/expense_category.dart';
 import '../controllers/bank_accounts_controller.dart';
 import '../controllers/expenses_controller.dart';
+import '../widgets/acct_date_field.dart';
+import '../widgets/accounting_ui.dart';
 
 const _paymentMethods = <String, String>{
   'CASH': 'Cash',
@@ -50,16 +51,6 @@ class _ExpenseFormPageState extends ConsumerState<ExpenseFormPage> {
     _reference.dispose();
     _description.dispose();
     super.dispose();
-  }
-
-  Future<void> _pickDate() async {
-    final picked = await showDatePicker(
-      context: context,
-      initialDate: _date,
-      firstDate: DateTime(2000),
-      lastDate: DateTime(2100),
-    );
-    if (picked != null) setState(() => _date = picked);
   }
 
   Future<void> _submit() async {
@@ -106,14 +97,11 @@ class _ExpenseFormPageState extends ConsumerState<ExpenseFormPage> {
 
     if (!mounted) return;
     if (failure != null) {
-      setState(() {
-        _saving = false;
-        _error = failure.message;
-      });
+      setState(() => _saving = false);
+      showAppToast(context, failure.message, type: BannerType.error);
       return;
     }
-    ScaffoldMessenger.of(context)
-        .showSnackBar(const SnackBar(content: Text('Expense recorded')));
+    showAppToast(context, 'Expense recorded', type: BannerType.success);
     Navigator.of(context).pop();
   }
 
@@ -123,272 +111,205 @@ class _ExpenseFormPageState extends ConsumerState<ExpenseFormPage> {
         ref.watch(expenseCategoriesProvider).value ?? const [];
     final banks = ref.watch(bankAccountsProvider).value ?? const [];
 
-    return Scaffold(
-      backgroundColor: AppColors.background,
-      appBar: AppBar(
-        backgroundColor: AppColors.background,
-        surfaceTintColor: AppColors.background,
-        leading: IconButton(
-          icon: const Icon(Icons.arrow_back_ios,
-              color: AppColors.accent, size: 20),
-          onPressed: () => Navigator.of(context).pop(),
-        ),
-        title: Text('New Expense', style: AppTypography.headline),
-      ),
-      body: SafeArea(
-        child: LayoutBuilder(
-          builder: (context, c) => SingleChildScrollView(
-            padding: const EdgeInsets.symmetric(
-                horizontal: AppSpacing.screenPadding),
-            child: Center(
-              child: ConstrainedBox(
-                constraints: const BoxConstraints(maxWidth: 560),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.stretch,
-                  children: [
-                    const SizedBox(height: AppSpacing.lg),
-                    if (_error != null) ...[
-                      AppInlineBanner(
-                          message: _error!, type: BannerType.error),
-                      const SizedBox(height: AppSpacing.lg),
+    return AppDetailScaffold(
+      eyebrow: 'Accounting',
+      title: 'Record expense',
+      maxContentWidth: 720,
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          if (_error != null) ...[
+            AppInlineBanner(message: _error!, type: BannerType.error),
+            const SizedBox(height: 16),
+          ],
+          AppCard(
+            child: _FieldsGrid(
+              children: [
+                _Labeled(
+                  'Category',
+                  AppDropdown<String>(
+                    value: _categoryId,
+                    placeholder: 'Select category',
+                    options: [
+                      for (final c in categories)
+                        AppDropdownOption(value: c.id, label: c.name),
                     ],
-                    _group('Category'),
-                    _CategoryDropdown(
-                      value: _categoryId,
-                      categories: categories,
-                      onChanged: (v) => setState(() => _categoryId = v),
-                    ),
-                    const SizedBox(height: AppSpacing.fieldGap),
-                    AppTextField(
-                      controller: _amount,
-                      label: 'Amount',
-                      prefixIcon: Icons.attach_money,
-                      hint: '0',
-                      keyboardType: const TextInputType.numberWithOptions(
-                          decimal: true),
-                    ),
-                    const SizedBox(height: AppSpacing.fieldGap),
-                    AppTextField(
-                      controller: _tax,
-                      label: 'Tax Amount',
-                      prefixIcon: Icons.percent,
-                      keyboardType: const TextInputType.numberWithOptions(
-                          decimal: true),
-                    ),
-                    const SizedBox(height: AppSpacing.fieldGap),
-                    _group('Date'),
-                    _DateTile(date: _date, onTap: _pickDate),
-                    const SizedBox(height: AppSpacing.fieldGap),
-                    _group('Payment Method'),
-                    _MethodDropdown(
-                      value: _method,
-                      onChanged: (m) => setState(() => _method = m),
-                    ),
-                    if (_method != 'CASH') ...[
-                      const SizedBox(height: AppSpacing.fieldGap),
-                      _group('Bank Account'),
-                      _BankDropdown(
-                        value: _bankAccountId,
-                        banks: banks,
-                        onChanged: (v) =>
-                            setState(() => _bankAccountId = v),
-                      ),
-                    ],
-                    const SizedBox(height: AppSpacing.fieldGap),
-                    AppTextField(
-                      controller: _reference,
-                      label: 'Reference',
-                      prefixIcon: Icons.tag,
-                      hint: 'Optional',
-                    ),
-                    const SizedBox(height: AppSpacing.fieldGap),
-                    AppTextField(
-                      controller: _description,
-                      label: 'Description',
-                      prefixIcon: Icons.notes,
-                    ),
-                    const SizedBox(height: AppSpacing.md),
-                    Align(
-                      alignment: Alignment.centerLeft,
-                      child: AppButton(
-                        label: 'Manage Categories',
-                        variant: AppButtonVariant.plain,
-                        icon: Icons.settings,
-                        onPressed: () =>
-                            context.push('/accounting/expense-categories'),
-                      ),
-                    ),
-                    const SizedBox(height: AppSpacing.lg),
-                    PermissionGate(
-                      module: 'accounting',
-                      action: 'create',
-                      child: AppButton(
-                        label: 'Record Expense',
-                        loading: _saving,
-                        fullWidth: true,
-                        icon: Icons.check,
-                        onPressed: _submit,
-                      ),
-                    ),
-                    const SizedBox(height: AppSpacing.xxl),
-                  ],
+                    onSelected: (v) => setState(() => _categoryId = v),
+                  ),
                 ),
+                _Labeled(
+                  'Date',
+                  AcctDateField(
+                    value: _date,
+                    onChanged: (v) {
+                      if (v != null) setState(() => _date = v);
+                    },
+                  ),
+                ),
+                AppTextField(
+                  controller: _amount,
+                  label: 'Amount',
+                  prefixIcon: LucideIcons.banknote,
+                  hint: '0',
+                  keyboardType:
+                      const TextInputType.numberWithOptions(decimal: true),
+                ),
+                AppTextField(
+                  controller: _tax,
+                  label: 'Tax amount',
+                  prefixIcon: LucideIcons.percent,
+                  keyboardType:
+                      const TextInputType.numberWithOptions(decimal: true),
+                ),
+                _Labeled(
+                  'Payment method',
+                  AppDropdown<String>(
+                    value: _method,
+                    options: [
+                      for (final e in _paymentMethods.entries)
+                        AppDropdownOption(value: e.key, label: e.value),
+                    ],
+                    onSelected: (v) => setState(() => _method = v),
+                  ),
+                ),
+                _Labeled(
+                  'Bank account',
+                  AppDropdown<String>(
+                    value: _bankAccountId,
+                    placeholder: 'Select account',
+                    options: [
+                      for (final b in banks)
+                        AppDropdownOption(
+                            value: b.id, label: b.accountName),
+                    ],
+                    onSelected: (v) => setState(() => _bankAccountId = v),
+                  ),
+                ),
+                AppTextField(
+                  controller: _reference,
+                  label: 'Reference',
+                  prefixIcon: LucideIcons.hash,
+                  hint: 'Optional',
+                ),
+                AppTextField(
+                  controller: _description,
+                  label: 'Description',
+                  prefixIcon: LucideIcons.pencil,
+                ),
+              ],
+            ),
+          ),
+          const SizedBox(height: 20),
+          _Actions(
+            onManage: () => context.push('/accounting/expense-categories'),
+            submit: PermissionGate(
+              module: 'accounting',
+              action: 'create',
+              child: AppButton(
+                label: 'Record expense',
+                variant: AppButtonVariant.filled,
+                icon: LucideIcons.check,
+                loading: _saving,
+                fullWidth: true,
+                onPressed: _submit,
               ),
             ),
           ),
-        ),
+        ],
       ),
     );
   }
-
-  Widget _group(String label) => Padding(
-        padding: const EdgeInsets.only(bottom: AppSpacing.sm),
-        child: Text(label.toUpperCase(),
-            style: AppTypography.footnote.copyWith(
-                color: AppColors.textMuted, fontWeight: FontWeight.w600)),
-      );
 }
 
-class _CategoryDropdown extends StatelessWidget {
-  const _CategoryDropdown({
-    required this.value,
-    required this.categories,
-    required this.onChanged,
-  });
-  final String? value;
-  final List<ExpenseCategory> categories;
-  final ValueChanged<String?> onChanged;
+/// Two columns on a wide card, one on a narrow one — no fixed aspect ratio,
+/// each cell keeps its control's natural height.
+class _FieldsGrid extends StatelessWidget {
+  const _FieldsGrid({required this.children});
+
+  final List<Widget> children;
 
   @override
   Widget build(BuildContext context) {
-    return _DropdownShell(
-      child: DropdownButton<String>(
-        value: value,
-        isExpanded: true,
-        hint: Text('Select category',
-            style: AppTypography.subhead
-                .copyWith(color: AppColors.textHint)),
-        icon: const Icon(Icons.keyboard_arrow_down,
-            size: 18, color: AppColors.textMuted),
-        style: AppTypography.subhead,
-        onChanged: onChanged,
-        items: categories
-            .map((c) =>
-                DropdownMenuItem(value: c.id, child: Text(c.name)))
-            .toList(),
-      ),
+    const gap = 16.0;
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        final twoCol = constraints.maxWidth >= 460;
+        final width =
+            twoCol ? (constraints.maxWidth - gap) / 2 : constraints.maxWidth;
+        return Wrap(
+          spacing: gap,
+          runSpacing: gap,
+          children: [
+            for (final child in children) SizedBox(width: width, child: child),
+          ],
+        );
+      },
     );
   }
 }
 
-class _MethodDropdown extends StatelessWidget {
-  const _MethodDropdown({required this.value, required this.onChanged});
-  final String value;
-  final ValueChanged<String> onChanged;
+/// A section label stacked above a control that carries no label of its own.
+class _Labeled extends StatelessWidget {
+  const _Labeled(this.label, this.child);
 
-  @override
-  Widget build(BuildContext context) {
-    return _DropdownShell(
-      child: DropdownButton<String>(
-        value: value,
-        isExpanded: true,
-        icon: const Icon(Icons.keyboard_arrow_down,
-            size: 18, color: AppColors.textMuted),
-        style: AppTypography.subhead,
-        onChanged: (v) {
-          if (v != null) onChanged(v);
-        },
-        items: _paymentMethods.entries
-            .map((e) =>
-                DropdownMenuItem(value: e.key, child: Text(e.value)))
-            .toList(),
-      ),
-    );
-  }
-}
-
-class _BankDropdown extends StatelessWidget {
-  const _BankDropdown({
-    required this.value,
-    required this.banks,
-    required this.onChanged,
-  });
-  final String? value;
-  final List<BankAccount> banks;
-  final ValueChanged<String?> onChanged;
-
-  @override
-  Widget build(BuildContext context) {
-    return _DropdownShell(
-      child: DropdownButton<String>(
-        value: value,
-        isExpanded: true,
-        hint: Text('Select account',
-            style: AppTypography.subhead
-                .copyWith(color: AppColors.textHint)),
-        icon: const Icon(Icons.keyboard_arrow_down,
-            size: 18, color: AppColors.textMuted),
-        style: AppTypography.subhead,
-        onChanged: onChanged,
-        items: banks
-            .map((b) => DropdownMenuItem(
-                value: b.id, child: Text(b.accountName)))
-            .toList(),
-      ),
-    );
-  }
-}
-
-class _DropdownShell extends StatelessWidget {
-  const _DropdownShell({required this.child});
+  final String label;
   final Widget child;
 
   @override
   Widget build(BuildContext context) {
-    return Container(
-      height: 44,
-      padding: const EdgeInsets.symmetric(horizontal: AppSpacing.md),
-      decoration: BoxDecoration(
-        color: AppColors.background,
-        borderRadius: BorderRadius.circular(AppRadius.field),
-        border: Border.all(color: AppColors.separator),
-      ),
-      child: DropdownButtonHideUnderline(child: child),
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        AcctSectionLabel(label),
+        const SizedBox(height: 7),
+        child,
+      ],
     );
   }
 }
 
-class _DateTile extends StatelessWidget {
-  const _DateTile({required this.date, required this.onTap});
-  final DateTime date;
-  final VoidCallback onTap;
+class _Actions extends StatelessWidget {
+  const _Actions({required this.onManage, required this.submit});
+
+  final VoidCallback onManage;
+  final Widget submit;
 
   @override
   Widget build(BuildContext context) {
-    final label = '${date.year}-${date.month.toString().padLeft(2, '0')}'
-        '-${date.day.toString().padLeft(2, '0')}';
-    return InkWell(
-      onTap: onTap,
-      borderRadius: BorderRadius.circular(AppRadius.field),
-      child: Container(
-        padding: const EdgeInsets.symmetric(
-            horizontal: AppSpacing.base, vertical: AppSpacing.md),
-        decoration: BoxDecoration(
-          color: AppColors.fieldFill,
-          borderRadius: BorderRadius.circular(AppRadius.field),
-          border: Border.all(color: AppColors.separator),
-        ),
-        child: Row(
+    final manage = AppButton(
+      label: 'Manage categories',
+      variant: AppButtonVariant.tinted,
+      icon: LucideIcons.settings2,
+      onPressed: onManage,
+    );
+
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        if (constraints.maxWidth < 460) {
+          return Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              submit,
+              const SizedBox(height: 12),
+              AppButton(
+                label: 'Manage categories',
+                variant: AppButtonVariant.tinted,
+                icon: LucideIcons.settings2,
+                fullWidth: true,
+                onPressed: onManage,
+              ),
+            ],
+          );
+        }
+        return Row(
           children: [
-            const Icon(Icons.calendar_today,
-                size: 18, color: AppColors.textMuted),
-            const SizedBox(width: AppSpacing.md),
-            Expanded(child: Text(label, style: AppTypography.subhead)),
-            const Icon(Icons.chevron_right,
-                size: 20, color: AppColors.textHint),
+            manage,
+            const Spacer(),
+            submit,
           ],
-        ),
-      ),
+        );
+      },
     );
   }
 }

@@ -1,16 +1,23 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:lucide_icons_flutter/lucide_icons.dart';
 import '../../../../core/design/app_colors.dart';
-import '../../../../core/design/app_radius.dart';
-import '../../../../core/design/app_spacing.dart';
 import '../../../../core/design/app_typography.dart';
+import '../../../../core/design/widgets/app_button.dart';
+import '../../../../core/design/widgets/app_card.dart';
+import '../../../../core/design/widgets/app_detail_scaffold.dart';
+import '../../../../core/design/widgets/app_dropdown.dart';
 import '../../../../core/design/widgets/app_inline_banner.dart';
+import '../../../../core/design/widgets/app_sheet.dart';
+import '../../../../core/design/widgets/app_states.dart';
 import '../../../../core/design/widgets/app_text_field.dart';
+import '../../../../core/design/widgets/app_toast.dart';
 import '../../../../core/widgets/permission_gate.dart';
 import '../../domain/entities/account.dart';
 import '../../domain/entities/expense_category.dart';
 import '../controllers/chart_of_accounts_controller.dart';
 import '../controllers/expenses_controller.dart';
+import '../widgets/accounting_ui.dart';
 
 class ExpenseCategoriesPage extends ConsumerWidget {
   const ExpenseCategoriesPage({super.key});
@@ -20,108 +27,115 @@ class ExpenseCategoriesPage extends ConsumerWidget {
         .where((a) => a.type == AccountType.expense)
         .toList()
       ..sort((a, b) => a.code.compareTo(b.code));
-    final result = await showDialog<_NewCategory>(
+    final result = await showAppSheet<_NewCategory>(
       context: context,
-      builder: (_) => _AddCategoryDialog(accounts: accounts),
+      builder: (_) => _AddCategorySheet(accounts: accounts),
     );
     if (result == null) return;
-    final failure =
-        await ref.read(expensesProvider.notifier).createCategory(
-              name: result.name,
-              accountId: result.accountId,
-            );
+    final failure = await ref.read(expensesProvider.notifier).createCategory(
+          name: result.name,
+          accountId: result.accountId,
+        );
     if (!context.mounted) return;
     if (failure != null) {
-      ScaffoldMessenger.of(context)
-          .showSnackBar(SnackBar(content: Text(failure.message)));
+      showAppToast(context, failure.message, type: BannerType.error);
       return;
     }
-    ScaffoldMessenger.of(context)
-        .showSnackBar(const SnackBar(content: Text('Category added')));
+    showAppToast(context, 'Category added', type: BannerType.success);
   }
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final state = ref.watch(expenseCategoriesProvider);
 
-    return Scaffold(
-      backgroundColor: AppColors.background,
-      appBar: AppBar(
-        backgroundColor: AppColors.background,
-        surfaceTintColor: AppColors.background,
-        leading: IconButton(
-          icon: const Icon(Icons.arrow_back_ios,
-              color: AppColors.accent, size: 20),
-          onPressed: () => Navigator.of(context).pop(),
-        ),
-        title: Text('Expense Categories', style: AppTypography.headline),
-      ),
-      floatingActionButton: PermissionGate(
-        module: 'accounting',
-        action: 'create',
-        child: FloatingActionButton(
-          backgroundColor: AppColors.accent,
-          onPressed: () => _add(context, ref),
-          child: const Icon(Icons.add, color: Colors.white),
-        ),
-      ),
-      body: SafeArea(
-        child: state.when(
-          loading: () => const Center(child: CircularProgressIndicator()),
-          error: (e, _) => Center(
-            child: Padding(
-              padding: const EdgeInsets.symmetric(
-                  horizontal: AppSpacing.screenPadding),
-              child: AppInlineBanner(
-                  message: 'Could not load categories.',
-                  type: BannerType.error),
-            ),
+    return AppDetailScaffold(
+      eyebrow: 'Accounting',
+      title: 'Expense categories',
+      actions: [
+        PermissionGate(
+          module: 'accounting',
+          action: 'create',
+          child: AppButton(
+            label: 'New category',
+            size: AppButtonSize.sm,
+            icon: LucideIcons.plus,
+            onPressed: () => _add(context, ref),
           ),
-          data: (categories) => categories.isEmpty
-              ? Center(
-                  child: Text('No categories yet',
-                      style: AppTypography.subhead
-                          .copyWith(color: AppColors.textMuted)),
-                )
-              : ListView.separated(
-                  padding: const EdgeInsets.symmetric(
-                      horizontal: AppSpacing.screenPadding,
-                      vertical: AppSpacing.md),
-                  itemCount: categories.length,
-                  separatorBuilder: (_, _) =>
-                      const SizedBox(height: AppSpacing.sm),
-                  itemBuilder: (_, i) => _CategoryTile(category: categories[i]),
-                ),
         ),
+      ],
+      child: state.when(
+        loading: () => const Padding(
+          padding: EdgeInsets.only(top: 60),
+          child: Center(child: CircularProgressIndicator()),
+        ),
+        error: (e, _) => AppErrorState(
+          title: "Couldn't load categories",
+          body: 'Your data is safe. Check the connection and try again.',
+          onRetry: () =>
+              ref.read(expenseCategoriesProvider.notifier).refresh(),
+        ),
+        data: (categories) => categories.isEmpty
+            ? const AppEmptyState(
+                icon: LucideIcons.tag,
+                title: 'No categories yet',
+                body: 'Add a category to organise your expenses.',
+              )
+            : Column(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  for (var i = 0; i < categories.length; i++)
+                    Padding(
+                      padding: EdgeInsets.only(
+                          bottom: i < categories.length - 1 ? 12 : 0),
+                      child: _CategoryCard(category: categories[i]),
+                    ),
+                ],
+              ),
       ),
     );
   }
 }
 
-class _CategoryTile extends StatelessWidget {
-  const _CategoryTile({required this.category});
+class _CategoryCard extends ConsumerWidget {
+  const _CategoryCard({required this.category});
   final ExpenseCategory category;
 
   @override
-  Widget build(BuildContext context) {
-    return Container(
-      padding: const EdgeInsets.symmetric(
-          horizontal: AppSpacing.base, vertical: AppSpacing.md),
-      decoration: BoxDecoration(
-        color: AppColors.fieldFill,
-        borderRadius: BorderRadius.circular(AppRadius.field),
-        border: Border.all(color: AppColors.separator),
-      ),
+  Widget build(BuildContext context, WidgetRef ref) {
+    final lum = context.lum;
+    final accounts = ref.watch(chartOfAccountsProvider).value ?? const [];
+    final matches = accounts.where((a) => a.id == category.accountId);
+    final account = matches.isEmpty ? null : matches.first;
+    final accountLabel =
+        account == null ? '—' : '${account.code} · ${account.name}';
+
+    return AppCard(
+      padding: const EdgeInsets.fromLTRB(16, 14, 16, 14),
       child: Row(
         children: [
-          const Icon(Icons.folder, size: 18, color: AppColors.textMuted),
-          const SizedBox(width: AppSpacing.md),
+          AcctIconTile(
+            icon: LucideIcons.tag,
+            background: lum.surface2,
+            foreground: lum.g600,
+          ),
+          const SizedBox(width: 12),
           Expanded(
-              child: Text(category.name, style: AppTypography.subhead)),
-          if (!category.isActive)
-            Text('Inactive',
-                style: AppTypography.caption
-                    .copyWith(color: AppColors.textHint)),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  category.name,
+                  style: AppTypography.headline.copyWith(fontSize: 14.5),
+                ),
+                const SizedBox(height: 2),
+                Text(
+                  accountLabel,
+                  style: AppTypography.subhead
+                      .copyWith(fontSize: 12.5, color: lum.g500),
+                ),
+              ],
+            ),
+          ),
         ],
       ),
     );
@@ -134,15 +148,15 @@ class _NewCategory {
   final String accountId;
 }
 
-class _AddCategoryDialog extends StatefulWidget {
-  const _AddCategoryDialog({required this.accounts});
+class _AddCategorySheet extends StatefulWidget {
+  const _AddCategorySheet({required this.accounts});
   final List<Account> accounts;
 
   @override
-  State<_AddCategoryDialog> createState() => _AddCategoryDialogState();
+  State<_AddCategorySheet> createState() => _AddCategorySheetState();
 }
 
-class _AddCategoryDialogState extends State<_AddCategoryDialog> {
+class _AddCategorySheetState extends State<_AddCategorySheet> {
   final _name = TextEditingController();
   String? _accountId;
   String? _error;
@@ -169,58 +183,51 @@ class _AddCategoryDialogState extends State<_AddCategoryDialog> {
 
   @override
   Widget build(BuildContext context) {
-    return AlertDialog(
-      backgroundColor: AppColors.background,
-      title: Text('New Category', style: AppTypography.headline),
-      content: Column(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          if (_error != null) ...[
-            AppInlineBanner(message: _error!, type: BannerType.error),
-            const SizedBox(height: AppSpacing.md),
+    return Column(
+      mainAxisSize: MainAxisSize.min,
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        const AppSheetHeader(title: 'New category'),
+        AppTextField(
+          controller: _name,
+          label: 'Name',
+          prefixIcon: LucideIcons.tag,
+        ),
+        const SizedBox(height: 16),
+        AppDropdown<String>(
+          value: _accountId,
+          placeholder: 'Expense account',
+          options: [
+            for (final a in widget.accounts)
+              AppDropdownOption(value: a.id, label: '${a.code} · ${a.name}'),
           ],
-          AppTextField(
-            controller: _name,
-            label: 'Name',
-            prefixIcon: Icons.folder,
-          ),
-          const SizedBox(height: AppSpacing.fieldGap),
-          Container(
-            height: 44,
-            padding: const EdgeInsets.symmetric(horizontal: AppSpacing.md),
-            decoration: BoxDecoration(
-              color: AppColors.background,
-              borderRadius: BorderRadius.circular(AppRadius.field),
-              border: Border.all(color: AppColors.separator),
-            ),
-            child: DropdownButtonHideUnderline(
-              child: DropdownButton<String>(
-                value: _accountId,
-                isExpanded: true,
-                hint: Text('Expense account',
-                    style: AppTypography.subhead
-                        .copyWith(color: AppColors.textHint)),
-                icon: const Icon(Icons.keyboard_arrow_down,
-                    size: 18, color: AppColors.textMuted),
-                style: AppTypography.subhead,
-                onChanged: (v) => setState(() => _accountId = v),
-                items: widget.accounts
-                    .map((a) => DropdownMenuItem(
-                        value: a.id,
-                        child: Text('${a.code}  ${a.name}',
-                            overflow: TextOverflow.ellipsis)))
-                    .toList(),
+          onSelected: (v) => setState(() => _accountId = v),
+        ),
+        if (_error != null) ...[
+          const SizedBox(height: 16),
+          AppInlineBanner(message: _error!, type: BannerType.error),
+        ],
+        const SizedBox(height: 24),
+        Row(
+          children: [
+            Expanded(
+              child: AppButton(
+                label: 'Cancel',
+                variant: AppButtonVariant.tinted,
+                fullWidth: true,
+                onPressed: () => Navigator.of(context).pop(),
               ),
             ),
-          ),
-        ],
-      ),
-      actions: [
-        TextButton(
-          onPressed: () => Navigator.of(context).pop(),
-          child: const Text('Cancel'),
+            const SizedBox(width: 12),
+            Expanded(
+              child: AppButton(
+                label: 'Add',
+                fullWidth: true,
+                onPressed: _save,
+              ),
+            ),
+          ],
         ),
-        TextButton(onPressed: _save, child: const Text('Add')),
       ],
     );
   }
