@@ -1,15 +1,21 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:lucide_icons_flutter/lucide_icons.dart';
 import '../../../../core/design/app_colors.dart';
+import '../../../../core/design/app_radius.dart';
 import '../../../../core/design/app_spacing.dart';
 import '../../../../core/design/app_typography.dart';
+import '../../../../core/design/clay.dart';
 import '../../../../core/design/widgets/app_button.dart';
+import '../../../../core/design/widgets/app_detail_scaffold.dart';
 import '../../../../core/design/widgets/app_inline_banner.dart';
+import '../../../../core/design/widgets/app_states.dart';
 import '../../domain/entities/attendance.dart';
 import '../../domain/entities/employee.dart';
 import '../../data/models/attendance_model.dart';
 import '../controllers/attendance_controller.dart';
 import '../controllers/leaves_controller.dart';
+import '../widgets/hr_ui.dart';
 
 /// Simple self-service clock in/out for the signed-in user's linked employee.
 /// GPS / biometric deferred; source stamped MANUAL.
@@ -19,40 +25,29 @@ class ClockInOutPage extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final meAsync = ref.watch(myEmployeeProvider);
-    return Scaffold(
-      backgroundColor: AppColors.background,
-      appBar: AppBar(
-        backgroundColor: AppColors.background,
-        surfaceTintColor: AppColors.background,
-        leading: IconButton(
-          icon: const Icon(Icons.arrow_back_ios,
-              color: AppColors.accent, size: 20),
-          onPressed: () => Navigator.of(context).pop(),
+    return AppDetailScaffold(
+      eyebrow: 'HR',
+      title: 'Clock in / out',
+      maxContentWidth: 460,
+      child: meAsync.when(
+        loading: () => const Padding(
+          padding: EdgeInsets.all(AppSpacing.xxl),
+          child: Center(child: CircularProgressIndicator()),
         ),
-        title: Text('Clock In / Out', style: AppTypography.headline),
-      ),
-      body: SafeArea(
-        child: meAsync.when(
-          loading: () => const Center(child: CircularProgressIndicator()),
-          error: (e, _) => Center(
-            child: Padding(
-              padding: const EdgeInsets.all(AppSpacing.screenPadding),
-              child: AppInlineBanner(
-                  message: 'Could not load your record.',
-                  type: BannerType.error),
-            ),
-          ),
-          data: (me) {
-            if (me == null) {
-              return Center(
-                child: Text('No employee is linked to your account.',
-                    style: AppTypography.footnote
-                        .copyWith(color: AppColors.textMuted)),
-              );
-            }
-            return _ClockBody(employee: me);
-          },
+        error: (e, _) => const AppInlineBanner(
+          message: 'Could not load your record.',
+          type: BannerType.error,
         ),
+        data: (me) {
+          if (me == null) {
+            return const AppEmptyState(
+              icon: LucideIcons.userRoundX,
+              title: 'No linked employee',
+              body: 'No employee is linked to your account.',
+            );
+          }
+          return _ClockBody(employee: me);
+        },
       ),
     );
   }
@@ -117,60 +112,122 @@ class _ClockBodyState extends ConsumerState<_ClockBody> {
 
   @override
   Widget build(BuildContext context) {
+    final lum = context.lum;
     final async = ref.watch(attendanceMonthProvider(_query));
     return async.when(
-      loading: () => const Center(child: CircularProgressIndicator()),
-      error: (e, _) => Center(
-        child: Padding(
-          padding: const EdgeInsets.all(AppSpacing.screenPadding),
-          child: AppInlineBanner(
-              message: 'Could not load today.', type: BannerType.error),
-        ),
+      loading: () => const Padding(
+        padding: EdgeInsets.all(AppSpacing.xxl),
+        child: Center(child: CircularProgressIndicator()),
+      ),
+      error: (e, _) => const AppInlineBanner(
+        message: 'Could not load today.',
+        type: BannerType.error,
       ),
       data: (rows) {
         final today = _todayRow(rows);
         final checkedIn = today?.checkIn != null;
         final checkedOut = today?.checkOut != null;
-        return ListView(
-          padding: const EdgeInsets.all(AppSpacing.screenPadding),
+        return Column(
           children: [
-            Text(widget.employee.name, style: AppTypography.title2),
-            Text(_today.toIso8601String().substring(0, 10),
-                style: AppTypography.footnote
-                    .copyWith(color: AppColors.textMuted)),
-            const SizedBox(height: AppSpacing.xl),
-            _row('Check-in', _fmt(today?.checkIn)),
-            _row('Check-out', _fmt(today?.checkOut)),
-            if (_error != null) ...[
-              const SizedBox(height: AppSpacing.md),
-              AppInlineBanner(message: _error!, type: BannerType.error),
-            ],
-            const SizedBox(height: AppSpacing.xl),
-            if (!checkedIn)
-              AppButton(
-                label: 'Clock In',
-                icon: Icons.login,
-                fullWidth: true,
-                loading: _saving,
-                onPressed: _saving ? null : () => _punch(clockOut: false),
-              )
-            else if (!checkedOut)
-              AppButton(
-                label: 'Clock Out',
-                icon: Icons.logout,
-                variant: AppButtonVariant.destructive,
-                fullWidth: true,
-                loading: _saving,
-                onPressed: _saving
-                    ? null
-                    : () => _punch(clockOut: true, existing: today),
-              )
-            else
-              Center(
-                child: Text('Done for today.',
-                    style: AppTypography.footnote
-                        .copyWith(color: AppColors.textMuted)),
+            // ClayVariant.lumen paints no fill of its own — the accent wash
+            // has to be passed explicitly (trap #1).
+            ClayContainer(
+              variant: ClayVariant.lumen,
+              color: lum.accent,
+              borderRadius: AppRadius.lg,
+              isDark: lum.isDark,
+              width: 72,
+              height: 72,
+              child: Center(
+                child: Text(
+                  hrInitials(widget.employee.name),
+                  style: AppTypography.title1.copyWith(
+                    fontSize: 24,
+                    color: Colors.white,
+                  ),
+                ),
               ),
+            ),
+            const SizedBox(height: 16),
+            Text(
+              widget.employee.name,
+              textAlign: TextAlign.center,
+              style: AppTypography.title2.copyWith(color: lum.textPrimary),
+            ),
+            if (widget.employee.designation != null) ...[
+              const SizedBox(height: 2),
+              Text(
+                widget.employee.designation!,
+                textAlign: TextAlign.center,
+                style: AppTypography.subhead.copyWith(color: lum.g500),
+              ),
+            ],
+            const SizedBox(height: 24),
+            ClayContainer(
+              variant: ClayVariant.raised,
+              color: lum.surface,
+              borderRadius: AppRadius.xl,
+              isDark: lum.isDark,
+              padding: const EdgeInsets.all(24),
+              child: Column(
+                children: [
+                  _PunchRow(label: 'Check-in', value: _fmt(today?.checkIn)),
+                  Divider(height: 21, thickness: 1, color: lum.hairline),
+                  _PunchRow(label: 'Check-out', value: _fmt(today?.checkOut)),
+                  if (_error != null) ...[
+                    const SizedBox(height: AppSpacing.base),
+                    AppInlineBanner(message: _error!, type: BannerType.error),
+                  ],
+                  const SizedBox(height: 18),
+                  if (checkedIn && checkedOut)
+                    Padding(
+                      padding: const EdgeInsets.symmetric(vertical: 12),
+                      child: Row(
+                        mainAxisAlignment: MainAxisAlignment.center,
+                        children: [
+                          Icon(LucideIcons.checkCircle2,
+                              size: 20, color: lum.successText),
+                          const SizedBox(width: 9),
+                          Text(
+                            'Done for today.',
+                            style: AppTypography.headline.copyWith(
+                              fontSize: 15,
+                              color: lum.successText,
+                            ),
+                          ),
+                        ],
+                      ),
+                    )
+                  else if (checkedIn)
+                    AppButton(
+                      label: 'Clock out',
+                      icon: LucideIcons.logOut,
+                      variant: AppButtonVariant.destructive,
+                      fullWidth: true,
+                      loading: _saving,
+                      onPressed: _saving
+                          ? null
+                          : () => _punch(clockOut: true, existing: today),
+                    )
+                  else
+                    AppButton(
+                      label: 'Clock in',
+                      icon: LucideIcons.logIn,
+                      fullWidth: true,
+                      loading: _saving,
+                      onPressed:
+                          _saving ? null : () => _punch(clockOut: false),
+                    ),
+                ],
+              ),
+            ),
+            const SizedBox(height: 16),
+            Text(
+              'Self-service punch for your own linked employee record. '
+              'Times are recorded to the second.',
+              textAlign: TextAlign.center,
+              style: AppTypography.caption.copyWith(color: lum.g500),
+            ),
           ],
         );
       },
@@ -183,18 +240,29 @@ class _ClockBodyState extends ConsumerState<_ClockBody> {
     return '${l.hour.toString().padLeft(2, '0')}:'
         '${l.minute.toString().padLeft(2, '0')}';
   }
+}
 
-  Widget _row(String k, String v) => Padding(
-        padding: const EdgeInsets.only(bottom: AppSpacing.sm),
-        child: Row(
-          children: [
-            SizedBox(
-                width: 120,
-                child: Text(k,
-                    style: AppTypography.footnote
-                        .copyWith(color: AppColors.textMuted))),
-            Text(v, style: AppTypography.body),
-          ],
+class _PunchRow extends StatelessWidget {
+  const _PunchRow({required this.label, required this.value});
+  final String label;
+  final String value;
+
+  @override
+  Widget build(BuildContext context) {
+    final lum = context.lum;
+    return Row(
+      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+      children: [
+        Text(label, style: AppTypography.body.copyWith(color: lum.g500)),
+        Text(
+          value,
+          style: AppTypography.monoValue.copyWith(
+            fontSize: 15,
+            fontWeight: FontWeight.w600,
+            color: lum.textPrimary,
+          ),
         ),
-      );
+      ],
+    );
+  }
 }
