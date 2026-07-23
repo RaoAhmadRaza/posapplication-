@@ -384,6 +384,43 @@ dialogs/snackbars/FABs — now **zero** static-colour refs across the module, wo
   tab + 900px rail/bottom-bar boundary, back from every sub-page → hub, the 9 push deep-links return to
   origin, the itemized P&L/balance-sheet + journal amounts, voucher balance strip, and a screenshot diff.
 
+## UI Redesign — approvals module (DONE 2026-07-23; detail in DECISIONS)
+Eleventh design export ("Approvals Feature Design System"), SAME design-system UUID (5cd3f8f0-…) →
+tokens untouched; consumer-side reskin of all 5 approvals screens. Approvals was the LAST feature on
+light-only static `AppColors` (76 refs, 0 `context.lum`) + raw Material Scaffold/AppBar/Switch/
+DropdownButton/FAB — now **zero** static-colour refs, works in Counter mode.
+- **Promoted to a nav-shell branch (index 9)** (user choice via AskUserQuestion, mirrors accounting=8).
+  The 4 `/approvals*` routes moved from top-level GoRoutes into a new `StatefulShellBranch` (after
+  accounting=8, no index shifts) on pageBuilder + `_fadePage`; `/approvals/:id` last; hub = branch root.
+  `bottom_nav_shell.dart` gained an Approvals item (`LucideIcons.checkSquare2`, gated `approvals:read`,
+  before pinned Settings) + `_kApprovalsBranch=9` — no sub-rail (history/workflows are in-page header
+  actions, not rail siblings). Only the branch-root inbound `inventory_hub_page:210` flipped push→go;
+  `/approvals/:id` deep-links (notifications etc.) stay push.
+- **Chrome**: pending hub = `ModuleScaffold` (branch root, no back; history + gear header actions, gear
+  `PermissionGate approvals:update`); detail/history/workflows/form = `AppDetailScaffold` (clay back→hub).
+  Decorative ⌘K header search **omitted** (no pending-list search backing it); History's real search stays.
+- **Honest data** — 3 invented design fields substituted, none fabricated: friendly entity numbers
+  (`PO-2026-0217`) don't exist → card/detail title = `reason` (fallback `workflowName`/type label), type
+  label eyebrow, real `approvalEntityRoute` "Open {noun}" deep-link kept; the "Awaiting you/In review"
+  `mine` pill has no per-user backing → real `ApprovalStatus` badge; requestor dept not stored → name only.
+  Urgency (Escalated=status; Overdue/Due-soon from `expiresAt`; else age) unchanged. Ladder/timeline/
+  workflow-form fields all 1:1 real (`workflow.levels`, `ApprovalAction`, `currentLevel`).
+- New module widgets (presentation/widgets/): `approvals_ui.dart` (label maps, pill-tone/urgency/date
+  helpers), `approval_request_card` (open vs closed variants), `approval_ladder`, `approval_timeline`,
+  `approval_workflow_card`. Forms → AppDropdown/AppToggle/AppQtyStepper (min-approvers)/AppTextField;
+  raw Switch/DropdownButton/FAB/SnackBar retired; toggle/save failures → showAppToast; decision act →
+  showAppToast + pop. `approval_status_ui.dart` deleted (helpers moved to `approvals_ui.dart`). Form nav
+  still `MaterialPageRoute`. No core/design edits, no new deps. All provider/usecase/PermissionGate
+  bindings (`approvals:update`/`approvals:approve`) byte-identical.
+- Side effect: pull-to-refresh dropped on history/workflows (AppDetailScaffold has no RefreshIndicator
+  slot; autoDispose refetch on revisit); pending keeps it.
+- GATE: `flutter analyze` **8 issues, 0 new** (baseline 8); macOS debug build succeeds (exit 0); `flutter
+  test` = the same 2 pre-existing failures as clean HEAD (widget_test smoke + kpi_layout), none in approvals.
+- **VERIFY OWED (on-device eyeball)** — agent env can't foreground/screenshot: all 5 screens light + dark,
+  the Approvals nav tab + 900px rail/bottom-bar boundary for an approvals:read user, back from every
+  sub-page → hub, pending filter chips + empty/error/loading, detail ladder/timeline + Approve/Reject/
+  Cancel, history search, workflow toggle + form create/edit/level-reorder, and a screenshot diff vs renders.
+
 ## Auth UX pass — Phases 1–4 DONE (2026-07-20)
 Interaction/UX depth pass on top of the LUMINA reskin (plan: friction→feedback→flow→a11y; delight
 Phase 5 deferred). Frontend + minimal flow/routing (user-approved exception to UI-only guardrail).
