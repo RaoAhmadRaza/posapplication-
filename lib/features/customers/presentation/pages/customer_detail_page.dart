@@ -1,19 +1,27 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
+import 'package:lucide_icons_flutter/lucide_icons.dart';
 import '../../../../core/design/app_colors.dart';
 import '../../../../core/design/app_radius.dart';
-import '../../../../core/design/app_spacing.dart';
 import '../../../../core/design/app_typography.dart';
-import '../../../../core/design/format.dart';
+import '../../../../core/design/clay.dart';
 import '../../../../core/design/widgets/app_button.dart';
 import '../../../../core/design/widgets/app_card.dart';
 import '../../../../core/design/widgets/app_inline_banner.dart';
+import '../../../../core/design/widgets/app_money_text.dart';
+import '../../../../core/design/widgets/app_pill.dart';
+import '../../../../core/design/widgets/app_states.dart';
+import '../../../../core/design/widgets/app_confirm_dialog.dart';
+import '../../../../core/design/widgets/app_toast.dart';
+import '../../../../core/widgets/module_scaffold.dart';
 import '../../../../core/widgets/permission_gate.dart';
 import '../../domain/entities/customer.dart';
 import '../../domain/entities/customer_ledger.dart';
 import '../../domain/usecases/load_customer.dart';
 import '../controllers/customers_controller.dart';
+import '../widgets/customer_card.dart';
+import '../widgets/customer_ledger_card.dart';
 
 final _customerProvider =
     FutureProvider.autoDispose.family<Customer, String>((ref, id) async {
@@ -31,95 +39,81 @@ class CustomerDetailPage extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final customerAsync = ref.watch(_customerProvider(customerId));
 
-    return Scaffold(
-      backgroundColor: AppColors.background,
-      appBar: AppBar(
-        backgroundColor: AppColors.background,
-        surfaceTintColor: AppColors.background,
-        leading: IconButton(
-          icon: const Icon(Icons.arrow_back_ios,
-              color: AppColors.accent, size: 20),
-          onPressed: () => Navigator.of(context).pop(),
+    return ModuleScaffold(
+      title: customerAsync.value?.name ?? 'Customer',
+      maxContentWidth: 900,
+      leading: _BackButton(),
+      actions: [
+        PermissionGate(
+          module: 'sales',
+          action: 'create',
+          child: _IconAction(
+            icon: LucideIcons.handCoins,
+            tooltip: 'Collect payment',
+            accent: true,
+            onTap: () => customerAsync.whenData((c) {
+              context.push('/customers/$customerId/collect',
+                  extra: {'customerName': c.name});
+            }),
+          ),
         ),
-        title: Text('Customer', style: AppTypography.headline),
-        actions: [
-          PermissionGate(
-            module: 'sales',
-            action: 'create',
-            child: IconButton(
-              icon: const Icon(Icons.payments_outlined,
-                  color: AppColors.accent, size: 20),
-              onPressed: () => customerAsync.whenData((c) {
-                context.push('/customers/$customerId/collect',
-                    extra: {'customerName': c.name});
-              }),
-            ),
+        PermissionGate(
+          module: 'customers',
+          action: 'update',
+          child: _IconAction(
+            icon: LucideIcons.squarePen,
+            tooltip: 'Edit',
+            onTap: () => context.push('/customers/$customerId/edit'),
           ),
-          PermissionGate(
-            module: 'customers',
-            action: 'update',
-            child: IconButton(
-              icon: const Icon(Icons.edit, color: AppColors.accent, size: 20),
-              onPressed: () => context.push('/customers/$customerId/edit'),
-            ),
+        ),
+        PermissionGate(
+          module: 'customers',
+          action: 'delete',
+          child: _IconAction(
+            icon: LucideIcons.trash2,
+            tooltip: 'Delete',
+            destructive: true,
+            onTap: () => _confirmDelete(context, ref),
           ),
-          PermissionGate(
-            module: 'customers',
-            action: 'delete',
-            child: IconButton(
-              icon: const Icon(Icons.delete_outline,
-                  color: AppColors.destructive, size: 20),
-              onPressed: () => _confirmDelete(context, ref),
-            ),
-          ),
-        ],
-      ),
-      body: customerAsync.when(
+        ),
+        const SizedBox(width: 4),
+      ],
+      child: customerAsync.when(
         loading: () => const Center(child: CircularProgressIndicator()),
-        error: (e, _) => Center(
-          child: Padding(
-            padding: const EdgeInsets.symmetric(
-                horizontal: AppSpacing.screenPadding),
-            child: AppInlineBanner(
-                message: 'Could not load customer.',
-                type: BannerType.error),
-          ),
+        error: (e, _) => AppErrorState(
+          icon: LucideIcons.cloudOff,
+          title: "We couldn't load this customer",
+          body: 'Something went wrong reaching the server. Your data is safe '
+              '— try again in a moment.',
+          retryLabel: 'Retry',
+          onRetry: () => ref.invalidate(_customerProvider(customerId)),
         ),
         data: (customer) => _Body(customer: customer),
       ),
     );
   }
 
-  void _confirmDelete(BuildContext context, WidgetRef ref) {
-    showDialog(
-      context: context,
-      builder: (ctx) => AlertDialog(
-        title: const Text('Delete Customer'),
-        content: const Text(
-            'Soft-delete this customer? It will be hidden from lists.'),
-        actions: [
-          TextButton(
-              onPressed: () => Navigator.of(ctx).pop(),
-              child: const Text('Cancel')),
-          TextButton(
-            onPressed: () async {
-              Navigator.of(ctx).pop();
-              final failure =
-                  await ref.read(customersProvider.notifier).remove(customerId);
-              if (!context.mounted) return;
-              if (failure != null) {
-                ScaffoldMessenger.of(context).showSnackBar(
-                    SnackBar(content: Text(failure.message)));
-                return;
-              }
-              Navigator.of(context).pop();
-            },
-            child: Text('Delete',
-                style: TextStyle(color: AppColors.destructive)),
-          ),
-        ],
-      ),
+  Future<void> _confirmDelete(BuildContext context, WidgetRef ref) async {
+    final confirmed = await showAppConfirm(
+      context,
+      title: 'Delete customer',
+      message: 'Soft-delete this customer? They\'ll be hidden from lists but '
+          'their history is kept — nothing is permanently removed.',
+      confirmLabel: 'Delete',
+      destructive: true,
     );
+    if (!confirmed || !context.mounted) return;
+
+    final failure =
+        await ref.read(customersProvider.notifier).remove(customerId);
+    if (!context.mounted) return;
+    if (failure != null) {
+      showAppToast(context, failure.message, type: BannerType.error);
+      return;
+    }
+    showAppToast(context, 'Customer hidden from lists.',
+        type: BannerType.success);
+    Navigator.of(context).pop();
   }
 }
 
@@ -130,16 +124,17 @@ class _Body extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final ledgerAsync = ref.watch(customerLedgerProvider(customer.id));
+    final isWide = ModuleScaffold.isWideOf(context);
 
     return ListView(
-      padding: const EdgeInsets.symmetric(
-          horizontal: AppSpacing.screenPadding, vertical: AppSpacing.md),
+      padding: EdgeInsets.fromLTRB(
+          isWide ? 32 : 16, 12, isWide ? 32 : 16, isWide ? 32 : 24),
       children: [
-        _HeaderCard(customer: customer),
-        const SizedBox(height: AppSpacing.md),
+        _IdentityCard(customer: customer, isWide: isWide),
+        const SizedBox(height: 16),
         ledgerAsync.when(
           loading: () => const Padding(
-            padding: EdgeInsets.all(AppSpacing.xl),
+            padding: EdgeInsets.all(32),
             child: Center(child: CircularProgressIndicator()),
           ),
           error: (e, _) => AppInlineBanner(
@@ -148,16 +143,23 @@ class _Body extends ConsumerWidget {
           data: (ledger) => Column(
             children: [
               _CreditSummaryCard(customer: customer, ledger: ledger),
-              const SizedBox(height: AppSpacing.md),
-              _LedgerSection(ledger: ledger),
+              const SizedBox(height: 16),
+              CustomerLedgerCard(ledger: ledger, isWide: isWide),
+              const SizedBox(height: 16),
+              _DetailsCard(customer: customer, isWide: isWide),
+              if (customer.notes != null &&
+                  customer.notes!.trim().isNotEmpty) ...[
+                const SizedBox(height: 16),
+                _NotesCard(notes: customer.notes!),
+              ],
               if (ledger.outstanding > 0) ...[
-                const SizedBox(height: AppSpacing.lg),
+                const SizedBox(height: 20),
                 PermissionGate(
                   module: 'sales',
                   action: 'create',
                   child: AppButton(
-                    label: 'Collect Payment',
-                    icon: Icons.payments_outlined,
+                    label: 'Collect payment',
+                    icon: LucideIcons.handCoins,
                     fullWidth: true,
                     onPressed: () => context.push(
                       '/customers/${customer.id}/collect',
@@ -169,72 +171,83 @@ class _Body extends ConsumerWidget {
             ],
           ),
         ),
-        const SizedBox(height: AppSpacing.xxl),
       ],
     );
   }
 }
 
-class _HeaderCard extends StatelessWidget {
-  const _HeaderCard({required this.customer});
+/// Identity card — avatar, name + status, and the contact line the design puts
+/// up front. The business/individual label has no backing field and is omitted.
+class _IdentityCard extends StatelessWidget {
+  const _IdentityCard({required this.customer, required this.isWide});
   final Customer customer;
+  final bool isWide;
 
   @override
   Widget build(BuildContext context) {
-    final (color, label) = switch (customer.status) {
-      CustomerStatus.active => (AppColors.success, 'Active'),
-      CustomerStatus.inactive => (AppColors.textMuted, 'Inactive'),
-      CustomerStatus.blacklisted => (AppColors.destructive, 'Blacklisted'),
-    };
+    final lum = context.lum;
+    final (statusLabel, tone) = customerStatusUi(customer.status);
+    final terms = customer.creditTerms > 0
+        ? 'Net ${customer.creditTerms} days'
+        : 'Due on receipt';
+
     return AppCard(
-      child: Padding(
-        padding: const EdgeInsets.all(AppSpacing.xl),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Row(
-              children: [
-                Expanded(
-                  child: Text(customer.name, style: AppTypography.largeTitle),
-                ),
-                Container(
-                  padding: const EdgeInsets.symmetric(
-                      horizontal: AppSpacing.sm, vertical: 4),
-                  decoration: BoxDecoration(
-                    color: color.withValues(alpha: 0.12),
-                    borderRadius: BorderRadius.circular(AppRadius.chip),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              // Explicit accent fill — the lumen clay variant paints none.
+              ClayContainer(
+                variant: ClayVariant.soft,
+                color: lum.accent,
+                borderRadius: 18,
+                isDark: lum.isDark,
+                width: 60,
+                height: 60,
+                child: Center(
+                  child: Text(
+                    customerInitials(customer.name),
+                    style: AppTypography.title1.copyWith(
+                      fontSize: 20,
+                      color: Colors.white,
+                    ),
                   ),
-                  child: Text(label,
-                      style: AppTypography.caption.copyWith(
-                          color: color, fontWeight: FontWeight.w600)),
                 ),
-              ],
-            ),
-            if (customer.phone != null) _line(Icons.phone, customer.phone!),
-            if (customer.email != null) _line(Icons.email, customer.email!),
-            const SizedBox(height: AppSpacing.sm),
-            _line(Icons.schedule, 'Terms: ${customer.creditTerms} days'),
-          ],
-        ),
+              ),
+              const SizedBox(width: 16),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      customer.name,
+                      style: AppTypography.title1
+                          .copyWith(fontSize: 20, color: lum.textPrimary),
+                    ),
+                    const SizedBox(height: 6),
+                    AppPill(label: statusLabel, tone: tone),
+                  ],
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 18),
+          _FieldGrid(
+            columns: isWide ? 3 : 1,
+            fields: [
+              _Field('Phone', customer.phone, mono: true),
+              _Field('Email', customer.email),
+              _Field('Terms', terms),
+            ],
+          ),
+        ],
       ),
     );
   }
-
-  Widget _line(IconData icon, String text) => Padding(
-        padding: const EdgeInsets.only(top: 4),
-        child: Row(
-          children: [
-            Icon(icon, size: 15, color: AppColors.textMuted),
-            const SizedBox(width: AppSpacing.sm),
-            Expanded(
-                child: Text(text,
-                    style: AppTypography.footnote
-                        .copyWith(color: AppColors.textMuted))),
-          ],
-        ),
-      );
 }
 
+/// Credit summary — the design's three stat tiles.
 class _CreditSummaryCard extends StatelessWidget {
   const _CreditSummaryCard({required this.customer, required this.ledger});
   final Customer customer;
@@ -242,133 +255,323 @@ class _CreditSummaryCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final lum = context.lum;
     final limit = customer.creditLimit;
     final outstanding = ledger.outstanding;
     final remaining = limit - outstanding;
-    return AppCard(
-      child: Padding(
-        padding: const EdgeInsets.all(AppSpacing.xl),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Text('CREDIT',
-                style: AppTypography.footnote.copyWith(
-                    color: AppColors.textMuted,
-                    fontWeight: FontWeight.w600)),
-            const SizedBox(height: AppSpacing.sm),
-            _row('Credit Limit', formatPkr(limit)),
-            _row('Outstanding', formatPkr(outstanding),
-                color: outstanding > 0
-                    ? AppColors.destructive
-                    : AppColors.textPrimary),
-            const Divider(color: AppColors.separator, height: AppSpacing.xl),
-            _row(
-              limit > 0 ? 'Remaining Credit' : 'Remaining Credit (no limit set)',
-              limit > 0 ? formatPkr(remaining) : '—',
-              emphasize: true,
-              color: limit > 0 && remaining <= 0
-                  ? AppColors.destructive
-                  : AppColors.success,
-            ),
-          ],
-        ),
-      ),
-    );
-  }
+    final remainingLow = limit > 0 && remaining <= 0;
 
-  Widget _row(String label, String value,
-      {bool emphasize = false, Color? color}) {
-    final style = emphasize
-        ? AppTypography.headline
-        : AppTypography.footnote.copyWith(color: AppColors.textMuted);
-    return Padding(
-      padding: const EdgeInsets.only(top: 4),
-      child: Row(
-        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+    return AppCard(
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Text(label, style: style),
-          Text(value, style: style.copyWith(color: color)),
+          Text(
+            'Credit summary',
+            style: AppTypography.title2
+                .copyWith(fontSize: 16, color: lum.textPrimary),
+          ),
+          const SizedBox(height: 16),
+          Row(
+            children: [
+              Expanded(
+                child: _StatTile(label: 'Credit limit', amount: limit),
+              ),
+              const SizedBox(width: 12),
+              Expanded(
+                child: _StatTile(label: 'Outstanding', amount: outstanding),
+              ),
+              const SizedBox(width: 12),
+              Expanded(
+                child: _StatTile(
+                  label: 'Remaining',
+                  amount: limit > 0 ? remaining : null,
+                  color: remainingLow ? lum.dangerText : null,
+                ),
+              ),
+            ],
+          ),
         ],
       ),
     );
   }
 }
 
-class _LedgerSection extends StatelessWidget {
-  const _LedgerSection({required this.ledger});
-  final CustomerLedger ledger;
+class _StatTile extends StatelessWidget {
+  const _StatTile({required this.label, required this.amount, this.color});
+  final String label;
+
+  /// Null renders an em-dash — used when no credit limit is set, so no false
+  /// "remaining" figure is invented.
+  final double? amount;
+  final Color? color;
 
   @override
   Widget build(BuildContext context) {
-    final owed = ledger.currentBalance;
-    return AppCard(
-      child: Padding(
-        padding: const EdgeInsets.all(AppSpacing.xl),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Row(
-              mainAxisAlignment: MainAxisAlignment.spaceBetween,
-              children: [
-                Text('Balance', style: AppTypography.footnote),
-                Text(formatPkr(owed),
-                    style: AppTypography.headline.copyWith(
-                        color: owed > 0
-                            ? AppColors.destructive
-                            : AppColors.textPrimary)),
-              ],
-            ),
-            const Divider(color: AppColors.separator, height: AppSpacing.xl),
-            Text('Ledger', style: AppTypography.footnote),
-            const SizedBox(height: AppSpacing.sm),
-            if (ledger.entries.isEmpty)
-              Padding(
-                padding: const EdgeInsets.symmetric(vertical: AppSpacing.md),
-                child: Text('No transactions yet.',
-                    style: AppTypography.footnote
-                        .copyWith(color: AppColors.textHint)),
-              )
-            else
-              for (final e in ledger.entries) _EntryRow(entry: e),
-          ],
-        ),
+    final lum = context.lum;
+    return Container(
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: lum.surface2,
+        borderRadius: BorderRadius.circular(AppRadius.md),
       ),
-    );
-  }
-}
-
-class _EntryRow extends StatelessWidget {
-  const _EntryRow({required this.entry});
-  final CustomerLedgerEntry entry;
-
-  @override
-  Widget build(BuildContext context) {
-    final isInvoice = entry.kind == 'INVOICE';
-    final amount = isInvoice ? entry.debit : entry.credit;
-    final color = isInvoice ? AppColors.destructive : AppColors.success;
-    return Padding(
-      padding: const EdgeInsets.symmetric(vertical: 6),
-      child: Row(
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Icon(isInvoice ? Icons.receipt_long : Icons.payments,
-              size: 18, color: color),
-          const SizedBox(width: AppSpacing.sm),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(entry.reference ?? entry.kind,
-                    style: AppTypography.footnote),
-                Text('Running: ${formatPkr(entry.runningBalance)}',
-                    style: AppTypography.caption
-                        .copyWith(color: AppColors.textHint)),
-              ],
+          Text(
+            label.toUpperCase(),
+            style: AppTypography.caption.copyWith(
+              fontSize: 11,
+              fontWeight: FontWeight.w700,
+              letterSpacing: 0.55,
+              color: lum.g500,
             ),
           ),
-          Text('${isInvoice ? '+' : '-'}${formatPkr(amount)}',
-              style: AppTypography.footnote
-                  .copyWith(color: color, fontWeight: FontWeight.w600)),
+          const SizedBox(height: 8),
+          amount == null
+              ? Text(
+                  '—',
+                  style: AppTypography.monoValue
+                      .copyWith(fontSize: 20, color: color ?? lum.textPrimary),
+                )
+              : AppMoneyText(
+                  amount!,
+                  size: 20,
+                  decimals: 2,
+                  color: color ?? lum.textPrimary,
+                ),
         ],
+      ),
+    );
+  }
+}
+
+/// Address, tax number and tags — captured by the form but shown on no other
+/// screen. Every value here is a real stored field, none invented.
+class _DetailsCard extends StatelessWidget {
+  const _DetailsCard({required this.customer, required this.isWide});
+  final Customer customer;
+  final bool isWide;
+
+  @override
+  Widget build(BuildContext context) {
+    final lum = context.lum;
+    final address = [
+      customer.addressLine1,
+      customer.addressLine2,
+      customer.city,
+      customer.state,
+      customer.postalCode,
+      customer.country,
+    ].where((p) => p != null && p.trim().isNotEmpty).join(', ');
+
+    return AppCard(
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            'Details',
+            style: AppTypography.title2
+                .copyWith(fontSize: 16, color: lum.textPrimary),
+          ),
+          const SizedBox(height: 16),
+          _FieldGrid(
+            columns: isWide ? 2 : 1,
+            fields: [
+              _Field('Tax number', customer.taxNumber, mono: true),
+              _Field('Tags', (customer.tags ?? []).isEmpty
+                  ? null
+                  : customer.tags!.join(', ')),
+            ],
+          ),
+          const SizedBox(height: 20),
+          _FieldGrid(
+            columns: 1,
+            fields: [_Field('Address', address.isEmpty ? null : address)],
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _NotesCard extends StatelessWidget {
+  const _NotesCard({required this.notes});
+  final String notes;
+
+  @override
+  Widget build(BuildContext context) {
+    final lum = context.lum;
+    return AppCard(
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            'NOTES',
+            style: AppTypography.caption.copyWith(
+              fontSize: 11,
+              fontWeight: FontWeight.w700,
+              letterSpacing: 0.55,
+              color: lum.g500,
+            ),
+          ),
+          const SizedBox(height: 8),
+          Text(
+            notes,
+            style: AppTypography.body.copyWith(color: lum.g700, height: 1.5),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _Field {
+  const _Field(this.label, this.value, {this.mono = false});
+  final String label;
+  final String? value;
+  final bool mono;
+}
+
+/// Fixed-column field grid. The column count is passed by the caller from a
+/// width check — never a hand-picked aspect ratio.
+class _FieldGrid extends StatelessWidget {
+  const _FieldGrid({required this.columns, required this.fields});
+  final int columns;
+  final List<_Field> fields;
+
+  @override
+  Widget build(BuildContext context) {
+    final rows = <Widget>[];
+    for (var i = 0; i < fields.length; i += columns) {
+      final slice = fields.skip(i).take(columns).toList();
+      rows.add(Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          for (var c = 0; c < columns; c++) ...[
+            if (c > 0) const SizedBox(width: 20),
+            Expanded(
+              child: c < slice.length
+                  ? _FieldCell(field: slice[c])
+                  : const SizedBox.shrink(),
+            ),
+          ],
+        ],
+      ));
+    }
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        for (var i = 0; i < rows.length; i++) ...[
+          if (i > 0) const SizedBox(height: 20),
+          rows[i],
+        ],
+      ],
+    );
+  }
+}
+
+class _FieldCell extends StatelessWidget {
+  const _FieldCell({required this.field});
+  final _Field field;
+
+  @override
+  Widget build(BuildContext context) {
+    final lum = context.lum;
+    final value = (field.value == null || field.value!.trim().isEmpty)
+        ? '—'
+        : field.value!;
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(
+          field.label.toUpperCase(),
+          style: AppTypography.caption.copyWith(
+            fontSize: 11,
+            fontWeight: FontWeight.w700,
+            letterSpacing: 0.55,
+            color: lum.g400,
+          ),
+        ),
+        const SizedBox(height: 4),
+        Text(
+          value,
+          style: (field.mono ? AppTypography.monoValue : AppTypography.body)
+              .copyWith(fontSize: 14.5, color: lum.textPrimary),
+        ),
+      ],
+    );
+  }
+}
+
+/// Clay back arrow, matching the design's page header.
+class _BackButton extends StatelessWidget {
+  @override
+  Widget build(BuildContext context) {
+    return _IconAction(
+      icon: LucideIcons.arrowLeft,
+      tooltip: 'Back',
+      onTap: () => Navigator.of(context).maybePop(),
+      trailingGap: 12,
+    );
+  }
+}
+
+class _IconAction extends StatelessWidget {
+  const _IconAction({
+    required this.icon,
+    required this.tooltip,
+    required this.onTap,
+    this.destructive = false,
+    this.accent = false,
+    this.trailingGap = 0,
+  });
+
+  final IconData icon;
+  final String tooltip;
+  final VoidCallback onTap;
+  final bool destructive;
+  final bool accent;
+  final double trailingGap;
+
+  @override
+  Widget build(BuildContext context) {
+    final lum = context.lum;
+    final tileColor = accent ? lum.accentSoft : lum.surface;
+    final iconColor = destructive
+        ? lum.dangerText
+        : accent
+            ? lum.accent
+            : lum.g700;
+    return Padding(
+      padding: EdgeInsets.only(right: trailingGap, left: 4),
+      child: Tooltip(
+        message: tooltip,
+        child: Semantics(
+          button: true,
+          label: tooltip,
+          child: InkWell(
+            onTap: onTap,
+            borderRadius: BorderRadius.circular(AppRadius.sm),
+            // 44dp target around the design's 40px tile.
+            child: SizedBox(
+              width: 44,
+              height: 44,
+              child: Center(
+                child: ClayContainer(
+                  variant: ClayVariant.soft,
+                  color: tileColor,
+                  borderRadius: AppRadius.sm,
+                  isDark: lum.isDark,
+                  width: 40,
+                  height: 40,
+                  child: Center(
+                    child: Icon(icon, size: 19, color: iconColor),
+                  ),
+                ),
+              ),
+            ),
+          ),
+        ),
       ),
     );
   }
