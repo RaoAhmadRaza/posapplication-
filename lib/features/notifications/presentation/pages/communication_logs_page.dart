@@ -1,12 +1,16 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:lucide_icons_flutter/lucide_icons.dart';
 
 import '../../../../core/design/app_colors.dart';
 import '../../../../core/design/app_radius.dart';
 import '../../../../core/design/app_spacing.dart';
 import '../../../../core/design/app_typography.dart';
 import '../../../../core/design/widgets/app_card.dart';
-import '../../../../core/design/widgets/app_inline_banner.dart';
+import '../../../../core/design/widgets/app_detail_scaffold.dart';
+import '../../../../core/design/widgets/app_filter_chips.dart';
+import '../../../../core/design/widgets/app_pill.dart';
+import '../../../../core/design/widgets/app_states.dart';
 import '../../domain/entities/communication_log.dart';
 import '../controllers/admin_controllers.dart';
 
@@ -19,136 +23,89 @@ class CommunicationLogsPage extends ConsumerStatefulWidget {
 }
 
 class _CommunicationLogsPageState extends ConsumerState<CommunicationLogsPage> {
-  String? _channel; // null = all
+  int _channelIndex = 0; // 0 = all
   String? _status; // null = all
 
-  static const _channels = ['SMS', 'EMAIL', 'WHATSAPP', 'PUSH'];
+  // Index 0 is "All"; the rest map 1:1 onto these channel codes.
+  static const _channelCodes = ['SMS', 'EMAIL', 'WHATSAPP', 'PUSH'];
+  static const _channelLabels = ['All', 'SMS', 'Email', 'WhatsApp', 'Push'];
   static const _statuses = ['PENDING', 'SENT', 'FAILED'];
+
+  String? get _channel =>
+      _channelIndex == 0 ? null : _channelCodes[_channelIndex - 1];
 
   @override
   Widget build(BuildContext context) {
     final state = ref.watch(communicationLogProvider);
 
-    return Scaffold(
-      backgroundColor: AppColors.background,
-      appBar: AppBar(
-        backgroundColor: AppColors.background,
-        surfaceTintColor: AppColors.background,
-        leading: IconButton(
-          icon: const Icon(Icons.arrow_back_ios, color: AppColors.accent, size: 20),
-          onPressed: () => Navigator.of(context).pop(),
-        ),
-        title: Text('Communication Logs', style: AppTypography.headline),
-      ),
-      body: Column(
+    return AppDetailScaffold(
+      eyebrow: 'Notifications',
+      title: 'Communication logs',
+      description: "Every message we've tried to send.",
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          _FilterBar(
-            channel: _channel,
-            status: _status,
-            channels: _channels,
-            statuses: _statuses,
-            onChannel: (c) => setState(() => _channel = c),
-            onStatus: (s) => setState(() => _status = s),
+          AppFilterChips(
+            labels: _channelLabels,
+            selected: _channelIndex,
+            onSelected: (i) => setState(() => _channelIndex = i),
           ),
-          Expanded(
-            child: state.when(
-              loading: () => const Center(child: CircularProgressIndicator()),
-              error: (e, _) => Center(
-                child: Padding(
-                  padding: const EdgeInsets.symmetric(
-                      horizontal: AppSpacing.screenPadding),
-                  child: AppInlineBanner(
-                    message: 'Could not load logs.',
-                    type: BannerType.error,
-                  ),
+          const SizedBox(height: AppSpacing.sm),
+          Wrap(
+            spacing: 9,
+            runSpacing: 9,
+            children: [
+              for (final s in _statuses)
+                AppFilterChip(
+                  label: _statusLabel(s),
+                  active: _status == s,
+                  onTap: () =>
+                      setState(() => _status = _status == s ? null : s),
                 ),
-              ),
-              data: (all) {
-                final items = all.where((e) {
-                  if (_channel != null && e.channel != _channel) return false;
-                  if (_status != null && e.status != _status) return false;
-                  return true;
-                }).toList();
-                return RefreshIndicator(
-                  onRefresh: () =>
-                      ref.read(communicationLogProvider.notifier).refresh(),
-                  child: items.isEmpty
-                      ? ListView(children: const [
-                          SizedBox(height: 140),
-                          Center(child: Text('No messages')),
-                        ])
-                      : ListView.builder(
-                          padding: const EdgeInsets.symmetric(
-                            horizontal: AppSpacing.screenPadding,
-                            vertical: AppSpacing.md,
-                          ),
-                          itemCount: items.length,
-                          itemBuilder: (_, i) => Padding(
-                            padding: EdgeInsets.only(
-                              bottom: i < items.length - 1 ? AppSpacing.md : 0,
-                            ),
-                            child: _LogCard(entry: items[i]),
-                          ),
-                        ),
-                );
-              },
+            ],
+          ),
+          const SizedBox(height: AppSpacing.lg),
+          state.when(
+            loading: () => const Padding(
+              padding: EdgeInsets.only(top: 64),
+              child: Center(child: CircularProgressIndicator()),
             ),
+            error: (e, _) => AppErrorState(
+              title: 'Could not load logs',
+              body: 'Something went wrong while loading the message history. '
+                  'Try again.',
+              onRetry: () =>
+                  ref.read(communicationLogProvider.notifier).refresh(),
+            ),
+            data: (all) {
+              final items = all.where((e) {
+                if (_channel != null && e.channel != _channel) return false;
+                if (_status != null && e.status != _status) return false;
+                return true;
+              }).toList();
+              if (items.isEmpty) {
+                return const Padding(
+                  padding: EdgeInsets.only(top: 48),
+                  child: AppEmptyState(
+                    icon: LucideIcons.inbox,
+                    title: 'No messages',
+                    body: 'Messages you send will show up here with their '
+                        'delivery status.',
+                  ),
+                );
+              }
+              return Column(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  for (var i = 0; i < items.length; i++) ...[
+                    if (i > 0) const SizedBox(height: AppSpacing.md),
+                    _LogCard(entry: items[i]),
+                  ],
+                ],
+              );
+            },
           ),
         ],
-      ),
-    );
-  }
-}
-
-class _FilterBar extends StatelessWidget {
-  const _FilterBar({
-    required this.channel,
-    required this.status,
-    required this.channels,
-    required this.statuses,
-    required this.onChannel,
-    required this.onStatus,
-  });
-
-  final String? channel;
-  final String? status;
-  final List<String> channels;
-  final List<String> statuses;
-  final ValueChanged<String?> onChannel;
-  final ValueChanged<String?> onStatus;
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      padding: const EdgeInsets.symmetric(
-        horizontal: AppSpacing.screenPadding,
-        vertical: AppSpacing.sm,
-      ),
-      decoration: const BoxDecoration(
-        border: Border(bottom: BorderSide(color: AppColors.separator, width: 0.5)),
-      ),
-      child: SingleChildScrollView(
-        scrollDirection: Axis.horizontal,
-        child: Row(
-          children: [
-            _Chip(label: 'All', selected: channel == null, onTap: () => onChannel(null)),
-            for (final c in channels) ...[
-              const SizedBox(width: AppSpacing.sm),
-              _Chip(label: c, selected: channel == c, onTap: () => onChannel(c)),
-            ],
-            const SizedBox(width: AppSpacing.sm),
-            Container(width: 0.5, height: 20, color: AppColors.separator),
-            const SizedBox(width: AppSpacing.sm),
-            for (final s in statuses) ...[
-              _Chip(
-                label: _statusLabel(s),
-                selected: status == s,
-                onTap: () => onStatus(status == s ? null : s),
-              ),
-              const SizedBox(width: AppSpacing.sm),
-            ],
-          ],
-        ),
       ),
     );
   }
@@ -161,11 +118,11 @@ String _statusLabel(String s) => switch (s) {
       _ => s,
     };
 
-Color _statusColor(String s) => switch (s) {
-      'SENT' => AppColors.success,
-      'FAILED' => AppColors.destructive,
-      'PENDING' => AppColors.warning,
-      _ => AppColors.textMuted,
+AppPillTone _statusTone(String s) => switch (s) {
+      'SENT' => AppPillTone.success,
+      'FAILED' => AppPillTone.danger,
+      'PENDING' => AppPillTone.warning,
+      _ => AppPillTone.neutral,
     };
 
 class _LogCard extends StatelessWidget {
@@ -174,61 +131,87 @@ class _LogCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final color = _statusColor(entry.status);
+    final lum = context.lum;
     return AppCard(
-      child: Padding(
-        padding: const EdgeInsets.all(AppSpacing.lg),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Row(
-              children: [
-                Expanded(
-                  child: Text(
-                    entry.recipient ?? entry.channel,
-                    style: AppTypography.callout.copyWith(fontWeight: FontWeight.w600),
-                    overflow: TextOverflow.ellipsis,
+      padding: const EdgeInsets.all(AppSpacing.base),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Expanded(
+                child: Text(
+                  entry.recipient ?? entry.channel,
+                  style: AppTypography.monoValue.copyWith(
+                    fontSize: 13.5,
+                    color: lum.textPrimary,
                   ),
+                  overflow: TextOverflow.ellipsis,
                 ),
-                Container(
-                  padding: const EdgeInsets.symmetric(
-                      horizontal: AppSpacing.sm, vertical: 2),
-                  decoration: BoxDecoration(
-                    color: color.withValues(alpha: 0.12),
-                    borderRadius: BorderRadius.circular(AppRadius.chip),
-                  ),
-                  child: Text(
-                    _statusLabel(entry.status),
-                    style: AppTypography.caption
-                        .copyWith(color: color, fontWeight: FontWeight.w600),
-                  ),
-                ),
-              ],
-            ),
-            const SizedBox(height: 4),
-            Text(
-              '${entry.channel} · ${_sourceLabel(entry.source)}'
-              '${entry.templateCode != null ? ' · ${entry.templateCode}' : ''}',
-              style: AppTypography.footnote.copyWith(color: AppColors.textMuted),
-            ),
-            if (entry.error != null) ...[
-              const SizedBox(height: 4),
-              Text(
-                entry.error!,
-                style: AppTypography.caption.copyWith(color: AppColors.destructive),
-                maxLines: 2,
-                overflow: TextOverflow.ellipsis,
+              ),
+              const SizedBox(width: 10),
+              AppPill(
+                label: _statusLabel(entry.status),
+                tone: _statusTone(entry.status),
+                showDot: false,
               ),
             ],
-            const SizedBox(height: 6),
-            Text(
-              entry.sentAt != null
-                  ? 'Sent ${_fmt(entry.sentAt!)}'
-                  : 'Created ${_fmt(entry.createdAt)}',
-              style: AppTypography.caption.copyWith(color: AppColors.textHint),
+          ),
+          const SizedBox(height: 8),
+          Wrap(
+            crossAxisAlignment: WrapCrossAlignment.center,
+            spacing: 8,
+            runSpacing: 6,
+            children: [
+              AppPill(
+                label: entry.channel,
+                tone: AppPillTone.neutral,
+                showDot: false,
+              ),
+              Text(_sourceLabel(entry.source),
+                  style: AppTypography.caption.copyWith(color: lum.g500)),
+              if (entry.templateCode != null) ...[
+                Text('·', style: AppTypography.caption.copyWith(color: lum.g400)),
+                Text(entry.templateCode!,
+                    style: AppTypography.monoValue
+                        .copyWith(fontSize: 12, color: lum.g500)),
+              ],
+              Text('·', style: AppTypography.caption.copyWith(color: lum.g400)),
+              Text(
+                entry.sentAt != null ? _fmt(entry.sentAt!) : _fmt(entry.createdAt),
+                style: AppTypography.caption.copyWith(color: lum.g500),
+              ),
+            ],
+          ),
+          if (entry.error != null) ...[
+            const SizedBox(height: 10),
+            Container(
+              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 9),
+              decoration: BoxDecoration(
+                color: lum.dangerSoft,
+                borderRadius: BorderRadius.circular(AppRadius.sm),
+              ),
+              child: Row(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Icon(LucideIcons.circleAlert, size: 15, color: lum.dangerText),
+                  const SizedBox(width: 8),
+                  Expanded(
+                    child: Text(
+                      entry.error!,
+                      style: AppTypography.caption.copyWith(
+                        color: lum.dangerText,
+                        fontWeight: FontWeight.w500,
+                      ),
+                      maxLines: 2,
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                  ),
+                ],
+              ),
             ),
           ],
-        ),
+        ],
       ),
     );
   }
@@ -241,39 +224,4 @@ class _LogCard extends StatelessWidget {
 
   String _fmt(DateTime dt) =>
       '${dt.day}/${dt.month}/${dt.year} ${dt.hour.toString().padLeft(2, '0')}:${dt.minute.toString().padLeft(2, '0')}';
-}
-
-class _Chip extends StatelessWidget {
-  const _Chip({required this.label, required this.selected, required this.onTap});
-
-  final String label;
-  final bool selected;
-  final VoidCallback onTap;
-
-  @override
-  Widget build(BuildContext context) {
-    return GestureDetector(
-      onTap: onTap,
-      child: Container(
-        padding: const EdgeInsets.symmetric(horizontal: AppSpacing.md, vertical: 6),
-        decoration: BoxDecoration(
-          color: selected
-              ? AppColors.accent.withValues(alpha: 0.12)
-              : AppColors.fieldFill,
-          borderRadius: BorderRadius.circular(AppRadius.chip),
-          border: Border.all(
-            color: selected ? AppColors.accent : AppColors.separator,
-            width: 0.5,
-          ),
-        ),
-        child: Text(
-          label,
-          style: AppTypography.footnote.copyWith(
-            color: selected ? AppColors.accent : AppColors.textMuted,
-            fontWeight: selected ? FontWeight.w600 : FontWeight.w400,
-          ),
-        ),
-      ),
-    );
-  }
 }
