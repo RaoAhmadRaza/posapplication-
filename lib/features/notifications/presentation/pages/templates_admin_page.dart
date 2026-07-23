@@ -1,14 +1,20 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:lucide_icons_flutter/lucide_icons.dart';
 
 import '../../../../core/design/app_colors.dart';
 import '../../../../core/design/app_radius.dart';
 import '../../../../core/design/app_spacing.dart';
 import '../../../../core/design/app_typography.dart';
 import '../../../../core/design/widgets/app_button.dart';
-import '../../../../core/design/widgets/app_card.dart';
+import '../../../../core/design/widgets/app_detail_scaffold.dart';
 import '../../../../core/design/widgets/app_inline_banner.dart';
+import '../../../../core/design/widgets/app_pill.dart';
+import '../../../../core/design/widgets/app_section_card.dart';
+import '../../../../core/design/widgets/app_sheet.dart';
 import '../../../../core/design/widgets/app_text_field.dart';
+import '../../../../core/design/widgets/app_toast.dart';
+import '../../../../core/design/widgets/app_toggle.dart';
 import '../../domain/entities/message_template.dart';
 import '../controllers/admin_controllers.dart';
 
@@ -19,42 +25,41 @@ class TemplatesAdminPage extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final state = ref.watch(messageTemplatesProvider);
 
-    return Scaffold(
-      backgroundColor: AppColors.background,
-      appBar: AppBar(
-        backgroundColor: AppColors.background,
-        surfaceTintColor: AppColors.background,
-        leading: IconButton(
-          icon: const Icon(Icons.arrow_back_ios, color: AppColors.accent, size: 20),
-          onPressed: () => Navigator.of(context).pop(),
+    return AppDetailScaffold(
+      eyebrow: 'Notifications',
+      title: 'Message templates',
+      description: 'SMS & email copy sent to your customers.',
+      child: state.when(
+        loading: () => const Padding(
+          padding: EdgeInsets.only(top: 64),
+          child: Center(child: CircularProgressIndicator()),
         ),
-        title: Text('Message Templates', style: AppTypography.headline),
-      ),
-      body: state.when(
-        loading: () => const Center(child: CircularProgressIndicator()),
-        error: (e, _) => Center(
-          child: Padding(
-            padding: const EdgeInsets.symmetric(horizontal: AppSpacing.screenPadding),
-            child: AppInlineBanner(
-              message: 'Could not load templates.',
-              type: BannerType.error,
-            ),
-          ),
+        error: (e, _) => const AppInlineBanner(
+          message: 'Could not load templates.',
+          type: BannerType.error,
         ),
         data: (templates) {
-          final sms = templates.where((t) => t.channel == TemplateChannel.sms);
-          final email = templates.where((t) => t.channel == TemplateChannel.email);
-          return ListView(
-            padding: const EdgeInsets.symmetric(
-              horizontal: AppSpacing.screenPadding,
-              vertical: AppSpacing.md,
-            ),
+          final sms =
+              templates.where((t) => t.channel == TemplateChannel.sms).toList();
+          final email = templates
+              .where((t) => t.channel == TemplateChannel.email)
+              .toList();
+          return Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
-              _SectionHeader(label: 'SMS'),
-              for (final t in sms) _TemplateRow(template: t),
-              const SizedBox(height: AppSpacing.xl),
-              _SectionHeader(label: 'Email'),
-              for (final t in email) _TemplateRow(template: t),
+              _TemplateSection(
+                eyebrow: 'SMS templates',
+                templates: sms,
+                icon: LucideIcons.messageSquare,
+                accent: TemplateChannel.sms,
+              ),
+              const SizedBox(height: AppSpacing.lg),
+              _TemplateSection(
+                eyebrow: 'Email templates',
+                templates: email,
+                icon: LucideIcons.mail,
+                accent: TemplateChannel.email,
+              ),
             ],
           );
         },
@@ -63,53 +68,108 @@ class TemplatesAdminPage extends ConsumerWidget {
   }
 }
 
-class _SectionHeader extends StatelessWidget {
-  const _SectionHeader({required this.label});
-  final String label;
-  @override
-  Widget build(BuildContext context) => Padding(
-        padding: const EdgeInsets.only(bottom: AppSpacing.sm),
-        child: Text(label, style: AppTypography.footnote.copyWith(color: AppColors.textMuted)),
-      );
-}
+class _TemplateSection extends ConsumerWidget {
+  const _TemplateSection({
+    required this.eyebrow,
+    required this.templates,
+    required this.icon,
+    required this.accent,
+  });
 
-class _TemplateRow extends ConsumerWidget {
-  const _TemplateRow({required this.template});
-  final MessageTemplate template;
+  final String eyebrow;
+  final List<MessageTemplate> templates;
+  final IconData icon;
+  final TemplateChannel accent;
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    return Padding(
-      padding: const EdgeInsets.only(bottom: AppSpacing.md),
-      child: AppCard(
-        child: InkWell(
-          borderRadius: BorderRadius.circular(AppRadius.card),
-          onTap: () => _openEditor(context, ref, template),
-          child: Padding(
-            padding: const EdgeInsets.all(AppSpacing.lg),
-            child: Row(
-              children: [
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(template.name, style: AppTypography.callout),
-                      const SizedBox(height: 2),
-                      Text(template.templateCode,
-                          style: AppTypography.caption
-                              .copyWith(color: AppColors.textHint)),
-                    ],
-                  ),
-                ),
-                if (!template.isActive)
-                  Text('Off',
-                      style: AppTypography.caption
-                          .copyWith(color: AppColors.textMuted)),
-                const SizedBox(width: AppSpacing.sm),
-                Icon(Icons.chevron_right, size: 18, color: AppColors.separator),
-              ],
+    final lum = context.lum;
+    return AppSectionCard(
+      eyebrow: eyebrow,
+      padded: false,
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          for (var i = 0; i < templates.length; i++) ...[
+            if (i > 0) Divider(height: 1, color: lum.hairline),
+            _TemplateRow(
+              template: templates[i],
+              icon: icon,
+              isEmail: accent == TemplateChannel.email,
+              onTap: () => _openEditor(context, ref, templates[i]),
             ),
-          ),
+          ],
+        ],
+      ),
+    );
+  }
+}
+
+class _TemplateRow extends StatelessWidget {
+  const _TemplateRow({
+    required this.template,
+    required this.icon,
+    required this.isEmail,
+    required this.onTap,
+  });
+
+  final MessageTemplate template;
+  final IconData icon;
+  final bool isEmail;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    final lum = context.lum;
+    return InkWell(
+      onTap: onTap,
+      child: Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+        child: Row(
+          children: [
+            Container(
+              width: 36,
+              height: 36,
+              decoration: BoxDecoration(
+                color: isEmail ? lum.beamSoft : lum.accentSoft,
+                borderRadius: BorderRadius.circular(AppRadius.sm),
+              ),
+              child: Icon(icon,
+                  size: 18, color: isEmail ? lum.beam : lum.accent),
+            ),
+            const SizedBox(width: 14),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Text(
+                    template.name,
+                    style: AppTypography.callout.copyWith(
+                      fontWeight: FontWeight.w600,
+                      color: lum.textPrimary,
+                    ),
+                  ),
+                  const SizedBox(height: 2),
+                  Text(
+                    template.templateCode,
+                    style: AppTypography.monoValue.copyWith(
+                      fontSize: 11.5,
+                      color: lum.g500,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            const SizedBox(width: 8),
+            AppPill(
+              label: template.isActive ? 'On' : 'Off',
+              tone: template.isActive ? AppPillTone.success : AppPillTone.neutral,
+              showDot: false,
+            ),
+            const SizedBox(width: 8),
+            Icon(LucideIcons.chevronRight, size: 18, color: lum.g400),
+          ],
         ),
       ),
     );
@@ -117,13 +177,8 @@ class _TemplateRow extends ConsumerWidget {
 }
 
 void _openEditor(BuildContext context, WidgetRef ref, MessageTemplate t) {
-  showModalBottomSheet<void>(
+  showAppSheet<void>(
     context: context,
-    isScrollControlled: true,
-    backgroundColor: AppColors.background,
-    shape: const RoundedRectangleBorder(
-      borderRadius: BorderRadius.vertical(top: Radius.circular(16)),
-    ),
     builder: (_) => _TemplateEditor(template: t, ref: ref),
   );
 }
@@ -177,94 +232,86 @@ class _TemplateEditorState extends State<_TemplateEditor> {
     );
     try {
       await widget.ref.read(messageTemplatesProvider.notifier).upsert(updated);
-      if (mounted) Navigator.of(context).pop();
+      if (mounted) {
+        Navigator.of(context).pop();
+        showAppToast(context, 'Template saved', type: BannerType.success);
+      }
     } on Object catch (e) {
       if (mounted) {
         setState(() => _saving = false);
-        ScaffoldMessenger.of(context)
-            .showSnackBar(SnackBar(content: Text('Save failed: $e')));
+        showAppToast(context, 'Save failed: $e', type: BannerType.error);
       }
     }
   }
 
   @override
   Widget build(BuildContext context) {
+    final lum = context.lum;
     final isEmail = widget.template.channel == TemplateChannel.email;
-    return Padding(
-      padding: EdgeInsets.only(
-        left: AppSpacing.screenPadding,
-        right: AppSpacing.screenPadding,
-        top: AppSpacing.lg,
-        bottom: MediaQuery.of(context).viewInsets.bottom + AppSpacing.lg,
-      ),
-      child: SingleChildScrollView(
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.start,
+    return Column(
+      mainAxisSize: MainAxisSize.min,
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        AppSheetHeader(
+          title: 'Edit template',
+          subtitle: widget.template.templateCode,
+        ),
+        AppTextField(
+          controller: _name,
+          label: 'Name',
+          prefixIcon: LucideIcons.tag,
+        ),
+        const SizedBox(height: AppSpacing.md),
+        if (isEmail) ...[
+          AppTextField(
+            controller: _subject,
+            label: 'Subject',
+            prefixIcon: LucideIcons.type,
+          ),
+          const SizedBox(height: AppSpacing.md),
+        ],
+        AppTextField(
+          controller: _body,
+          label: isEmail ? 'Body (HTML)' : 'Body',
+          prefixIcon: LucideIcons.alignLeft,
+          maxLines: 5,
+          helperText:
+              'Placeholders like {{name}}, {{amount}}, {{invoice_number}} '
+              'are filled per recipient when sent.',
+        ),
+        const SizedBox(height: AppSpacing.md),
+        AppTextField(
+          controller: _language,
+          label: 'Language',
+          prefixIcon: LucideIcons.languages,
+        ),
+        const SizedBox(height: AppSpacing.md),
+        Row(
           children: [
-            Text(widget.template.templateCode, style: AppTypography.headline),
-            const SizedBox(height: AppSpacing.md),
-            AppTextField(
-              controller: _name,
-              label: 'Name',
-              prefixIcon: Icons.label_outline,
-            ),
-            const SizedBox(height: AppSpacing.md),
-            if (isEmail) ...[
-              AppTextField(
-                controller: _subject,
-                label: 'Subject',
-                prefixIcon: Icons.subject,
-              ),
-              const SizedBox(height: AppSpacing.md),
-            ],
-            Text(isEmail ? 'Body (HTML)' : 'Body',
-                style: AppTypography.footnote.copyWith(color: AppColors.textMuted)),
-            const SizedBox(height: AppSpacing.xs),
-            Container(
-              decoration: BoxDecoration(
-                color: AppColors.fieldFill,
-                borderRadius: BorderRadius.circular(AppRadius.card),
-              ),
-              padding: const EdgeInsets.symmetric(horizontal: AppSpacing.md),
-              child: TextField(
-                controller: _body,
-                maxLines: 6,
-                minLines: 3,
-                decoration: const InputDecoration(
-                  border: InputBorder.none,
-                  hintText: 'Use {{name}}, {{amount}}, {{invoice_number}} placeholders',
+            Expanded(
+              child: Text(
+                'Active',
+                style: AppTypography.callout.copyWith(
+                  fontWeight: FontWeight.w600,
+                  color: lum.textPrimary,
                 ),
               ),
             ),
-            const SizedBox(height: 6),
-            Text('Placeholders like {{name}} are filled per recipient when sent.',
-                style: AppTypography.caption.copyWith(color: AppColors.textHint)),
-            const SizedBox(height: AppSpacing.md),
-            AppTextField(
-              controller: _language,
-              label: 'Language',
-              prefixIcon: Icons.translate,
-            ),
-            const SizedBox(height: AppSpacing.md),
-            Row(
-              children: [
-                Expanded(child: Text('Active', style: AppTypography.callout)),
-                Switch(
-                  value: _active,
-                  activeThumbColor: AppColors.accent,
-                  onChanged: (v) => setState(() => _active = v),
-                ),
-              ],
-            ),
-            const SizedBox(height: AppSpacing.md),
-            AppButton(
-              label: _saving ? 'Saving…' : 'Save',
-              onPressed: _saving ? null : _save,
+            AppToggle(
+              value: _active,
+              semanticLabel: 'Active',
+              onChanged: (v) => setState(() => _active = v),
             ),
           ],
         ),
-      ),
+        const SizedBox(height: AppSpacing.lg),
+        AppButton(
+          label: 'Save',
+          fullWidth: true,
+          loading: _saving,
+          onPressed: _saving ? null : _save,
+        ),
+      ],
     );
   }
 }
