@@ -1,15 +1,21 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:lucide_icons_flutter/lucide_icons.dart';
 import '../../../../core/design/app_colors.dart';
 import '../../../../core/design/app_radius.dart';
-import '../../../../core/design/app_spacing.dart';
 import '../../../../core/design/app_typography.dart';
 import '../../../../core/design/widgets/app_button.dart';
+import '../../../../core/design/widgets/app_card.dart';
+import '../../../../core/design/widgets/app_detail_scaffold.dart';
+import '../../../../core/design/widgets/app_dropdown.dart';
 import '../../../../core/design/widgets/app_inline_banner.dart';
+import '../../../../core/design/widgets/app_qty_stepper.dart';
 import '../../../../core/design/widgets/app_text_field.dart';
+import '../../../../core/design/widgets/app_toast.dart';
+import '../../../../core/design/widgets/app_toggle.dart';
 import '../../domain/entities/approval.dart';
 import '../controllers/workflows_controller.dart';
-import '../widgets/approval_status_ui.dart';
+import '../widgets/approvals_ui.dart';
 
 /// A mutable draft of one approval level (level number is positional).
 class _LevelDraft {
@@ -71,7 +77,7 @@ class _WorkflowFormPageState extends ConsumerState<WorkflowFormPage> {
   Future<void> _save() async {
     final name = _nameCtrl.text.trim();
     if (name.isEmpty) {
-      setState(() => _error = 'Name is required.');
+      setState(() => _error = 'Give the workflow a name.');
       return;
     }
     if (_levels.isEmpty) {
@@ -79,7 +85,7 @@ class _WorkflowFormPageState extends ConsumerState<WorkflowFormPage> {
       return;
     }
     if (_levels.any((l) => l.requiredRole == null)) {
-      setState(() => _error = 'Every level needs a required role.');
+      setState(() => _error = 'Add a name and a role for every level before saving.');
       return;
     }
     final levels = [
@@ -120,153 +126,201 @@ class _WorkflowFormPageState extends ConsumerState<WorkflowFormPage> {
       });
       return;
     }
+    showAppToast(
+      context,
+      _isEdit ? 'Workflow saved' : 'Workflow created',
+      type: BannerType.success,
+    );
     Navigator.of(context).pop();
   }
 
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
-      backgroundColor: AppColors.background,
-      appBar: AppBar(
-        backgroundColor: AppColors.background,
-        surfaceTintColor: AppColors.background,
-        leading: IconButton(
-          icon: const Icon(Icons.arrow_back_ios,
-              color: AppColors.accent, size: 20),
-          onPressed: () => Navigator.of(context).pop(),
-        ),
-        title: Text(_isEdit ? 'Edit Workflow' : 'New Workflow',
-            style: AppTypography.headline),
-      ),
-      body: SafeArea(
-        child: ListView(
-          padding: const EdgeInsets.all(AppSpacing.screenPadding),
-          children: [
-            _label('Type'),
-            _TypeDropdown(
-              value: _type,
-              // type is immutable once created (identity of the config).
-              enabled: !_isEdit,
-              onChanged: (t) => setState(() => _type = t),
-            ),
-            const SizedBox(height: AppSpacing.md),
-            AppTextField(
-                controller: _nameCtrl, label: 'Name', prefixIcon: Icons.label),
-            const SizedBox(height: AppSpacing.md),
-            AppTextField(
-                controller: _descCtrl,
-                label: 'Description (optional)',
-                prefixIcon: Icons.notes),
-            const SizedBox(height: AppSpacing.md),
-            AppTextField(
-              controller: _thresholdCtrl,
-              label: 'Threshold amount (blank = always)',
-              prefixIcon: Icons.attach_money,
-              keyboardType:
-                  const TextInputType.numberWithOptions(decimal: true),
-            ),
-            const SizedBox(height: AppSpacing.md),
-            AppTextField(
-              controller: _ttlCtrl,
-              label: 'Escalation TTL (hours)',
-              prefixIcon: Icons.timer_outlined,
-              keyboardType: TextInputType.number,
-            ),
-            const SizedBox(height: AppSpacing.md),
-            Row(
+    final lum = context.lum;
+
+    return AppDetailScaffold(
+      eyebrow: 'Workflows',
+      title: _isEdit ? 'Edit workflow' : 'New workflow',
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          AppCard(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
               children: [
-                Expanded(
-                  child: Text('Active',
-                      style: AppTypography.subhead
-                          .copyWith(fontWeight: FontWeight.w600)),
+                _fieldLabel('Request type', lum),
+                const SizedBox(height: 8),
+                AppDropdown<ApprovalWorkflowType>(
+                  value: _type,
+                  enabled: !_isEdit,
+                  options: [
+                    for (final t in ApprovalWorkflowType.values)
+                      AppDropdownOption(
+                          value: t, label: approvalTypeLabels[t]!),
+                  ],
+                  onSelected: (t) => setState(() => _type = t),
                 ),
-                Switch(
-                  value: _active,
-                  activeThumbColor: AppColors.accent,
-                  onChanged: (v) => setState(() => _active = v),
+                if (_isEdit) ...[
+                  const SizedBox(height: 7),
+                  Text(
+                    "Type can't change once a workflow is created.",
+                    style: AppTypography.caption.copyWith(color: lum.g500),
+                  ),
+                ],
+                const SizedBox(height: 16),
+                AppTextField(
+                  controller: _nameCtrl,
+                  label: 'Name',
+                  hint: 'e.g. Standard PO approval',
+                  prefixIcon: Icons.label_outline,
+                ),
+                const SizedBox(height: 16),
+                AppTextField(
+                  controller: _descCtrl,
+                  label: 'Description',
+                  hint: 'Optional — what this covers',
+                  prefixIcon: Icons.notes,
+                ),
+                const SizedBox(height: 16),
+                AppTextField(
+                  controller: _thresholdCtrl,
+                  label: 'Threshold amount',
+                  hint: 'Blank = always required',
+                  helperText: 'Blank = every request needs approval',
+                  prefixIcon: Icons.attach_money,
+                  keyboardType:
+                      const TextInputType.numberWithOptions(decimal: true),
+                ),
+                const SizedBox(height: 16),
+                AppTextField(
+                  controller: _ttlCtrl,
+                  label: 'Escalation TTL (hours)',
+                  prefixIcon: Icons.timer_outlined,
+                  keyboardType: TextInputType.number,
+                ),
+                const SizedBox(height: 18),
+                Row(
+                  children: [
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            'Active',
+                            style: AppTypography.subhead.copyWith(
+                              fontWeight: FontWeight.w600,
+                              color: lum.textPrimary,
+                            ),
+                          ),
+                          const SizedBox(height: 1),
+                          Text(
+                            'Route matching requests through this ladder',
+                            style:
+                                AppTypography.caption.copyWith(color: lum.g500),
+                          ),
+                        ],
+                      ),
+                    ),
+                    AppToggle(
+                      value: _active,
+                      semanticLabel: 'Workflow active',
+                      onChanged: (v) => setState(() => _active = v),
+                    ),
+                  ],
                 ),
               ],
             ),
-            const SizedBox(height: AppSpacing.lg),
-            Row(
+          ),
+          const SizedBox(height: 14),
+          AppCard(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
               children: [
-                Expanded(child: _label('Levels')),
-                TextButton.icon(
-                  onPressed: () =>
-                      setState(() => _levels.add(_LevelDraft())),
-                  icon: const Icon(Icons.add, size: 18),
-                  label: const Text('Add level'),
+                Row(
+                  children: [
+                    Expanded(
+                      child: Text(
+                        'Approval levels',
+                        style: AppTypography.title3.copyWith(
+                          fontSize: 16,
+                          color: lum.textPrimary,
+                        ),
+                      ),
+                    ),
+                    Text(
+                      '${_levels.length} ${_levels.length == 1 ? 'level' : 'levels'}',
+                      style: AppTypography.caption.copyWith(color: lum.g500),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 12),
+                for (var i = 0; i < _levels.length; i++)
+                  Padding(
+                    padding: const EdgeInsets.only(bottom: 12),
+                    child: _LevelEditor(
+                      index: i,
+                      draft: _levels[i],
+                      canMoveUp: i > 0,
+                      canMoveDown: i < _levels.length - 1,
+                      canRemove: _levels.length > 1,
+                      onChanged: () => setState(() {}),
+                      onMoveUp: () => setState(() {
+                        final l = _levels.removeAt(i);
+                        _levels.insert(i - 1, l);
+                      }),
+                      onMoveDown: () => setState(() {
+                        final l = _levels.removeAt(i);
+                        _levels.insert(i + 1, l);
+                      }),
+                      onRemove: () => setState(() => _levels.removeAt(i)),
+                    ),
+                  ),
+                Align(
+                  alignment: Alignment.centerLeft,
+                  child: AppButton(
+                    label: 'Add level',
+                    variant: AppButtonVariant.plain,
+                    icon: LucideIcons.plus,
+                    onPressed: () => setState(() => _levels.add(_LevelDraft())),
+                  ),
                 ),
               ],
             ),
-            for (var i = 0; i < _levels.length; i++)
-              _LevelEditor(
-                index: i,
-                draft: _levels[i],
-                canMoveUp: i > 0,
-                canMoveDown: i < _levels.length - 1,
-                canRemove: _levels.length > 1,
-                onChanged: () => setState(() {}),
-                onMoveUp: () => setState(() {
-                  final l = _levels.removeAt(i);
-                  _levels.insert(i - 1, l);
-                }),
-                onMoveDown: () => setState(() {
-                  final l = _levels.removeAt(i);
-                  _levels.insert(i + 1, l);
-                }),
-                onRemove: () => setState(() => _levels.removeAt(i)),
+          ),
+          if (_error != null) ...[
+            const SizedBox(height: 14),
+            AppInlineBanner(message: _error!, type: BannerType.error),
+          ],
+          const SizedBox(height: 18),
+          Row(
+            mainAxisAlignment: MainAxisAlignment.end,
+            children: [
+              AppButton(
+                label: 'Cancel',
+                variant: AppButtonVariant.tinted,
+                onPressed: _saving ? null : () => Navigator.of(context).pop(),
               ),
-            if (_error != null) ...[
-              const SizedBox(height: AppSpacing.md),
-              AppInlineBanner(message: _error!, type: BannerType.error),
-            ],
-            const SizedBox(height: AppSpacing.lg),
-            AppButton(
-                label: 'Save',
-                fullWidth: true,
+              const SizedBox(width: 12),
+              AppButton(
+                label: _isEdit ? 'Save workflow' : 'Create workflow',
+                icon: LucideIcons.check,
                 loading: _saving,
-                onPressed: _saving ? null : _save),
-          ],
-        ),
+                onPressed: _saving ? null : _save,
+              ),
+            ],
+          ),
+        ],
       ),
     );
   }
 
-  Widget _label(String text) => Padding(
-        padding: const EdgeInsets.only(left: 4, bottom: 6),
-        child: Text(text, style: AppTypography.fieldLabel),
+  Widget _fieldLabel(String text, LumColors lum) => Text(
+        text,
+        style: AppTypography.subhead.copyWith(
+          fontWeight: FontWeight.w600,
+          color: lum.g700,
+        ),
       );
-}
-
-class _TypeDropdown extends StatelessWidget {
-  const _TypeDropdown(
-      {required this.value, required this.enabled, required this.onChanged});
-  final ApprovalWorkflowType value;
-  final bool enabled;
-  final ValueChanged<ApprovalWorkflowType> onChanged;
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 12),
-      decoration: BoxDecoration(
-        color: AppColors.fieldFill,
-        borderRadius: BorderRadius.circular(12),
-      ),
-      child: DropdownButtonHideUnderline(
-        child: DropdownButton<ApprovalWorkflowType>(
-          isExpanded: true,
-          value: value,
-          items: [
-            for (final t in ApprovalWorkflowType.values)
-              DropdownMenuItem(value: t, child: Text(approvalTypeLabels[t]!)),
-          ],
-          onChanged: enabled ? (t) => t == null ? null : onChanged(t) : null,
-        ),
-      ),
-    );
-  }
 }
 
 class _LevelEditor extends ConsumerWidget {
@@ -293,82 +347,81 @@ class _LevelEditor extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
+    final lum = context.lum;
     final rolesAsync = ref.watch(tenantRoleNamesProvider);
+    final roles = rolesAsync.value ?? const <String>[];
+
     return Container(
-      margin: const EdgeInsets.only(bottom: AppSpacing.sm),
-      padding: const EdgeInsets.all(AppSpacing.md),
+      padding: const EdgeInsets.all(14),
       decoration: BoxDecoration(
-        color: AppColors.fieldFill,
-        borderRadius: BorderRadius.circular(AppRadius.card),
+        color: lum.paper,
+        borderRadius: BorderRadius.circular(AppRadius.md),
+        border: Border.all(color: lum.hairline),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Row(
             children: [
-              Text('Level ${index + 1}',
-                  style: AppTypography.subhead
-                      .copyWith(fontWeight: FontWeight.w700)),
-              const Spacer(),
-              IconButton(
-                visualDensity: VisualDensity.compact,
-                icon: const Icon(Icons.arrow_upward, size: 18),
-                color: canMoveUp ? AppColors.accent : AppColors.textMuted,
-                onPressed: canMoveUp ? onMoveUp : null,
+              Expanded(
+                child: Text(
+                  'LEVEL ${index + 1}',
+                  style: AppTypography.caption.copyWith(
+                    fontWeight: FontWeight.w700,
+                    letterSpacing: 0.5,
+                    color: lum.g600,
+                  ),
+                ),
               ),
-              IconButton(
-                visualDensity: VisualDensity.compact,
-                icon: const Icon(Icons.arrow_downward, size: 18),
-                color: canMoveDown ? AppColors.accent : AppColors.textMuted,
-                onPressed: canMoveDown ? onMoveDown : null,
-              ),
-              IconButton(
-                visualDensity: VisualDensity.compact,
-                icon: const Icon(Icons.delete_outline, size: 18),
-                color:
-                    canRemove ? AppColors.destructive : AppColors.textMuted,
-                onPressed: canRemove ? onRemove : null,
-              ),
+              _iconBtn(LucideIcons.chevronUp, canMoveUp, onMoveUp, lum,
+                  'Move up'),
+              _iconBtn(LucideIcons.chevronDown, canMoveDown, onMoveDown, lum,
+                  'Move down'),
+              _iconBtn(LucideIcons.trash2, canRemove, onRemove, lum,
+                  'Remove level',
+                  danger: true),
             ],
           ),
-          const SizedBox(height: AppSpacing.xs),
-          rolesAsync.when(
-            loading: () => const LinearProgressIndicator(),
-            error: (_, _) => Text('Could not load roles.',
-                style: AppTypography.caption
-                    .copyWith(color: AppColors.destructive)),
-            data: (roles) => Container(
-              padding: const EdgeInsets.symmetric(horizontal: 12),
-              decoration: BoxDecoration(
-                color: AppColors.background,
-                borderRadius: BorderRadius.circular(10),
-              ),
-              child: DropdownButtonHideUnderline(
-                child: DropdownButton<String>(
-                  isExpanded: true,
+          const SizedBox(height: 12),
+          Text(
+            'Required role',
+            style: AppTypography.caption.copyWith(
+              fontWeight: FontWeight.w600,
+              color: lum.g700,
+            ),
+          ),
+          const SizedBox(height: 7),
+          rolesAsync.hasError
+              ? Text(
+                  'Could not load roles.',
+                  style:
+                      AppTypography.caption.copyWith(color: lum.dangerText),
+                )
+              : AppDropdown<String>(
                   value: draft.requiredRole,
-                  hint: Text('Required role',
-                      style: AppTypography.fieldHint),
-                  items: [
+                  placeholder: 'Select a role…',
+                  options: [
                     for (final r in roles)
-                      DropdownMenuItem(value: r, child: Text(r)),
+                      AppDropdownOption(value: r, label: r),
                   ],
-                  onChanged: (v) {
+                  onSelected: (v) {
                     draft.requiredRole = v;
                     onChanged();
                   },
                 ),
-              ),
-            ),
-          ),
-          const SizedBox(height: AppSpacing.sm),
+          const SizedBox(height: 14),
           Row(
             children: [
-              Text('Min approvers',
-                  style: AppTypography.caption
-                      .copyWith(color: AppColors.textMuted)),
-              const Spacer(),
-              _Stepper(
+              Expanded(
+                child: Text(
+                  'Min. approvers',
+                  style: AppTypography.caption.copyWith(
+                    fontWeight: FontWeight.w600,
+                    color: lum.g700,
+                  ),
+                ),
+              ),
+              AppQtyStepper(
                 value: draft.minApprovers,
                 onChanged: (v) {
                   draft.minApprovers = v;
@@ -381,33 +434,25 @@ class _LevelEditor extends ConsumerWidget {
       ),
     );
   }
-}
 
-class _Stepper extends StatelessWidget {
-  const _Stepper({required this.value, required this.onChanged});
-  final int value;
-  final ValueChanged<int> onChanged;
-
-  @override
-  Widget build(BuildContext context) {
-    return Row(
-      children: [
-        IconButton(
-          visualDensity: VisualDensity.compact,
-          icon: const Icon(Icons.remove_circle_outline, size: 20),
-          color: value > 1 ? AppColors.accent : AppColors.textMuted,
-          onPressed: value > 1 ? () => onChanged(value - 1) : null,
-        ),
-        Text('$value',
-            style:
-                AppTypography.subhead.copyWith(fontWeight: FontWeight.w600)),
-        IconButton(
-          visualDensity: VisualDensity.compact,
-          icon: const Icon(Icons.add_circle_outline, size: 20),
-          color: AppColors.accent,
-          onPressed: () => onChanged(value + 1),
-        ),
-      ],
+  Widget _iconBtn(
+    IconData icon,
+    bool enabled,
+    VoidCallback onTap,
+    LumColors lum,
+    String tooltip, {
+    bool danger = false,
+  }) {
+    final color = !enabled
+        ? lum.g300
+        : danger
+            ? lum.danger
+            : lum.g600;
+    return IconButton(
+      visualDensity: VisualDensity.compact,
+      icon: Icon(icon, size: 18, color: color),
+      tooltip: tooltip,
+      onPressed: enabled ? onTap : null,
     );
   }
 }

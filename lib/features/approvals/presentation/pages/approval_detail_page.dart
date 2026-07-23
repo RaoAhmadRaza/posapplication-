@@ -1,18 +1,24 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
+import 'package:lucide_icons_flutter/lucide_icons.dart';
 import '../../../../core/design/app_colors.dart';
-import '../../../../core/design/app_radius.dart';
-import '../../../../core/design/app_spacing.dart';
 import '../../../../core/design/app_typography.dart';
-import '../../../../core/design/format.dart';
 import '../../../../core/design/widgets/app_button.dart';
+import '../../../../core/design/widgets/app_card.dart';
+import '../../../../core/design/widgets/app_detail_scaffold.dart';
 import '../../../../core/design/widgets/app_inline_banner.dart';
+import '../../../../core/design/widgets/app_money_text.dart';
+import '../../../../core/design/widgets/app_pill.dart';
+import '../../../../core/design/widgets/app_states.dart';
 import '../../../../core/design/widgets/app_text_field.dart';
+import '../../../../core/design/widgets/app_toast.dart';
 import '../../../../core/widgets/permission_gate.dart';
 import '../../domain/entities/approval.dart';
 import '../controllers/approvals_controller.dart';
-import '../widgets/approval_status_ui.dart';
+import '../widgets/approval_ladder.dart';
+import '../widgets/approval_timeline.dart';
+import '../widgets/approvals_ui.dart';
 
 class ApprovalDetailPage extends ConsumerWidget {
   const ApprovalDetailPage({super.key, required this.requestId});
@@ -22,32 +28,26 @@ class ApprovalDetailPage extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final async = ref.watch(approvalDetailProvider(requestId));
 
-    return Scaffold(
-      backgroundColor: AppColors.background,
-      appBar: AppBar(
-        backgroundColor: AppColors.background,
-        surfaceTintColor: AppColors.background,
-        leading: IconButton(
-          icon: const Icon(Icons.arrow_back_ios,
-              color: AppColors.accent, size: 20),
-          onPressed: () => Navigator.of(context).pop(),
-        ),
-        title: Text('Request', style: AppTypography.headline),
-      ),
-      body: SafeArea(
-        child: async.when(
-          loading: () => const Center(child: CircularProgressIndicator()),
-          error: (e, _) => Center(
-            child: Padding(
-              padding: const EdgeInsets.all(AppSpacing.screenPadding),
-              child: AppInlineBanner(
-                  message: 'Could not load this request.',
-                  type: BannerType.error),
-            ),
-          ),
-          data: (detail) => _DetailBody(detail: detail),
+    return async.when(
+      loading: () => const AppDetailScaffold(
+        eyebrow: 'Approvals',
+        title: 'Request',
+        child: Padding(
+          padding: EdgeInsets.only(top: 80),
+          child: Center(child: CircularProgressIndicator()),
         ),
       ),
+      error: (e, _) => AppDetailScaffold(
+        eyebrow: 'Approvals',
+        title: 'Request',
+        child: AppErrorState(
+          title: "We couldn't load this request",
+          body:
+              "We couldn't reach the server. Try again once you're back online.",
+          onRetry: () => ref.invalidate(approvalDetailProvider(requestId)),
+        ),
+      ),
+      data: (detail) => _DetailBody(detail: detail),
     );
   }
 }
@@ -58,203 +58,171 @@ class _DetailBody extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
+    final lum = context.lum;
     final r = detail.request;
     final entityRoute = approvalEntityRoute(r.entityType, r.entityId);
-    return ListView(
-      padding: const EdgeInsets.all(AppSpacing.screenPadding),
-      children: [
-        // Summary
-        Container(
-          padding: const EdgeInsets.all(AppSpacing.md),
-          decoration: BoxDecoration(
-            color: AppColors.background,
-            borderRadius: BorderRadius.circular(AppRadius.card),
-            border: Border.all(color: AppColors.separator, width: 0.5),
-          ),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Row(
-                children: [
-                  Expanded(
-                    child: Text(
-                      r.workflowType == null
-                          ? r.entityType
-                          : approvalTypeLabels[r.workflowType]!,
-                      style: AppTypography.title2
-                          .copyWith(fontWeight: FontWeight.w700),
-                    ),
-                  ),
-                  ApprovalStatusBadge(status: r.status),
-                ],
-              ),
-              const SizedBox(height: AppSpacing.sm),
-              _row('Entity', '${r.entityType} · ${r.entityId}'),
-              if (r.amount != null) _row('Amount', formatPkr(r.amount!)),
-              _row('Requested by', r.requestorName ?? '—'),
-              _row('Level', '${r.currentLevel} of ${detail.workflow.levelCount}'),
-              if (r.reason != null && r.reason!.isNotEmpty)
-                _row('Reason', r.reason!),
-              if (entityRoute != null) ...[
-                const SizedBox(height: AppSpacing.sm),
-                AppButton(
-                  label: 'Open ${r.entityType}',
-                  variant: AppButtonVariant.tinted,
-                  // Repair lives in the nav shell, so it is entered with go;
-                  // purchasing and HR are pushed as before.
-                  onPressed: () => entityRoute.startsWith('/repair')
-                      ? context.go(entityRoute)
-                      : context.push(entityRoute),
-                ),
-              ],
-            ],
-          ),
-        ),
-        const SizedBox(height: AppSpacing.lg),
+    final entityNoun = approvalEntityNouns[r.entityType] ?? r.entityType;
+    final title = r.reason?.trim().isNotEmpty == true
+        ? r.reason!.trim()
+        : (r.workflowName ?? approvalRequestType(r));
+    final urgency = approvalUrgency(r);
+    final stage = r.isOpen
+        ? 'Level ${r.currentLevel} of ${detail.workflow.levelCount}'
+        : 'Closed · ${detail.workflow.levelCount} of ${detail.workflow.levelCount} levels';
 
-        // Level ladder
-        Text('Approval ladder',
-            style: AppTypography.footnote.copyWith(
-                color: AppColors.textMuted, fontWeight: FontWeight.w600)),
-        const SizedBox(height: AppSpacing.sm),
-        for (final l in detail.workflow.levels)
-          _LadderRow(level: l, currentLevel: r.currentLevel, status: r.status),
-        const SizedBox(height: AppSpacing.lg),
-
-        // Timeline
-        Text('History',
-            style: AppTypography.footnote.copyWith(
-                color: AppColors.textMuted, fontWeight: FontWeight.w600)),
-        const SizedBox(height: AppSpacing.sm),
-        if (detail.actions.isEmpty)
-          Text('No actions yet.',
-              style: AppTypography.caption
-                  .copyWith(color: AppColors.textMuted))
+    return AppDetailScaffold(
+      eyebrow: approvalRequestType(r),
+      title: title,
+      actions: [
+        if (r.isOpen)
+          AppPill(label: urgency.label, tone: urgency.tone)
         else
-          for (final a in detail.actions) _TimelineRow(action: a),
-
-        const SizedBox(height: AppSpacing.lg),
-
-        // Decision buttons (open requests only)
-        if (r.isOpen) _DecisionBar(request: r),
+          AppPill(
+            label: approvalStatusLabels[r.status]!,
+            tone: approvalStatusTone(r.status),
+          ),
       ],
-    );
-  }
-
-  Widget _row(String label, String value) {
-    return Padding(
-      padding: const EdgeInsets.only(bottom: 4),
-      child: Row(
-        crossAxisAlignment: CrossAxisAlignment.start,
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          SizedBox(
-            width: 110,
-            child: Text(label,
-                style: AppTypography.caption
-                    .copyWith(color: AppColors.textMuted)),
-          ),
-          Expanded(
-            child: Text(value, style: AppTypography.subhead),
-          ),
-        ],
-      ),
-    );
-  }
-}
-
-class _LadderRow extends StatelessWidget {
-  const _LadderRow({
-    required this.level,
-    required this.currentLevel,
-    required this.status,
-  });
-  final ApprovalLevel level;
-  final int currentLevel;
-  final ApprovalStatus status;
-
-  @override
-  Widget build(BuildContext context) {
-    final done = level.level < currentLevel ||
-        status == ApprovalStatus.approved;
-    final active = level.level == currentLevel &&
-        (status == ApprovalStatus.pending ||
-            status == ApprovalStatus.escalated);
-    final color = done
-        ? AppColors.success
-        : active
-            ? AppColors.accent
-            : AppColors.textMuted;
-    final icon = done
-        ? Icons.check_circle
-        : active
-            ? Icons.radio_button_checked
-            : Icons.radio_button_unchecked;
-    return Padding(
-      padding: const EdgeInsets.only(bottom: AppSpacing.xs),
-      child: Row(
-        children: [
-          Icon(icon, color: color, size: 18),
-          const SizedBox(width: AppSpacing.sm),
-          Text('Level ${level.level}',
-              style: AppTypography.subhead
-                  .copyWith(fontWeight: FontWeight.w600)),
-          const SizedBox(width: AppSpacing.sm),
-          Expanded(
-            child: Text(
-              '${level.requiredRole} · ${level.minApprovers} approver(s)',
-              style: AppTypography.caption
-                  .copyWith(color: AppColors.textMuted),
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-}
-
-class _TimelineRow extends StatelessWidget {
-  const _TimelineRow({required this.action});
-  final ApprovalAction action;
-
-  @override
-  Widget build(BuildContext context) {
-    final color = approvalActionColor(action.action);
-    return Padding(
-      padding: const EdgeInsets.only(bottom: AppSpacing.sm),
-      child: Row(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Container(
-            margin: const EdgeInsets.only(top: 4),
-            width: 8,
-            height: 8,
-            decoration: BoxDecoration(color: color, shape: BoxShape.circle),
-          ),
-          const SizedBox(width: AppSpacing.sm),
-          Expanded(
+          // Summary
+          AppCard(
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Text(
-                  '${action.action} · Level ${action.level}',
-                  style: AppTypography.subhead.copyWith(
-                      color: color, fontWeight: FontWeight.w600),
+                LayoutBuilder(
+                  builder: (context, constraints) {
+                    // Two columns once the card is wide enough; else one.
+                    final twoUp = constraints.maxWidth >= 440;
+                    final cellW = twoUp
+                        ? (constraints.maxWidth - 20) / 2
+                        : constraints.maxWidth;
+                    final cells = <(String, Widget)>[
+                      (
+                        'Amount',
+                        r.amount != null
+                            ? AppMoneyText(r.amount!, size: 19)
+                            : _value('—', lum),
+                      ),
+                      ('Requested by', _value(r.requestorName ?? '—', lum)),
+                      (
+                        'Submitted',
+                        _value(approvalDateShort(r.createdAt, withTime: true),
+                            lum),
+                      ),
+                      ('Stage', _value(stage, lum)),
+                    ];
+                    return Wrap(
+                      spacing: 20,
+                      runSpacing: 18,
+                      children: [
+                        for (final (label, child) in cells)
+                          SizedBox(
+                            width: cellW,
+                            child: _MetaCell(label: label, child: child),
+                          ),
+                      ],
+                    );
+                  },
                 ),
-                Text(
-                  '${action.actorName ?? '—'} · '
-                  '${action.actedAt.toIso8601String().substring(0, 16).replaceFirst('T', ' ')}',
-                  style: AppTypography.caption
-                      .copyWith(color: AppColors.textMuted),
-                ),
-                if (action.comments != null && action.comments!.isNotEmpty)
-                  Text(action.comments!,
-                      style: AppTypography.caption
-                          .copyWith(color: AppColors.textPrimary)),
+                if (entityRoute != null) ...[
+                  const SizedBox(height: 18),
+                  Align(
+                    alignment: Alignment.centerLeft,
+                    child: AppButton(
+                      label: 'Open $entityNoun',
+                      variant: AppButtonVariant.tinted,
+                      size: AppButtonSize.sm,
+                      icon: LucideIcons.externalLink,
+                      // Repair lives in the nav shell, so it is entered with go;
+                      // purchasing and HR are pushed as before.
+                      onPressed: () => entityRoute.startsWith('/repair')
+                          ? context.go(entityRoute)
+                          : context.push(entityRoute),
+                    ),
+                  ),
+                ],
               ],
             ),
           ),
+          const SizedBox(height: 14),
+
+          // Approval ladder
+          AppCard(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                _sectionTitle('Approval ladder', lum),
+                const SizedBox(height: 16),
+                ApprovalLadder(
+                  workflow: detail.workflow,
+                  request: r,
+                  actions: detail.actions,
+                ),
+              ],
+            ),
+          ),
+          const SizedBox(height: 14),
+
+          // Activity
+          AppCard(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                _sectionTitle('Activity', lum),
+                const SizedBox(height: 16),
+                ApprovalTimeline(request: r, actions: detail.actions),
+              ],
+            ),
+          ),
+
+          if (r.isOpen) ...[
+            const SizedBox(height: 14),
+            _DecisionBar(request: r),
+          ],
         ],
       ),
+    );
+  }
+
+  Widget _sectionTitle(String label, LumColors lum) => Text(
+        label,
+        style: AppTypography.title3.copyWith(
+          fontSize: 16,
+          color: lum.textPrimary,
+        ),
+      );
+
+  Widget _value(String v, LumColors lum) => Text(
+        v,
+        style: AppTypography.subhead.copyWith(color: lum.textPrimary),
+      );
+}
+
+/// A labelled summary cell: an uppercase caption over its value. Width is set
+/// by the parent from the card's measured constraints.
+class _MetaCell extends StatelessWidget {
+  const _MetaCell({required this.label, required this.child});
+  final String label;
+  final Widget child;
+
+  @override
+  Widget build(BuildContext context) {
+    final lum = context.lum;
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(
+          label.toUpperCase(),
+          style: AppTypography.caption.copyWith(
+            fontWeight: FontWeight.w700,
+            letterSpacing: 0.5,
+            color: lum.g500,
+          ),
+        ),
+        const SizedBox(height: 5),
+        child,
+      ],
     );
   }
 }
@@ -282,7 +250,7 @@ class _DecisionBarState extends ConsumerState<_DecisionBar> {
     final comments =
         _commentCtrl.text.trim().isEmpty ? null : _commentCtrl.text.trim();
     if (action == 'REJECTED' && comments == null) {
-      setState(() => _error = 'A reason is required to reject.');
+      setState(() => _error = 'Add a comment before rejecting.');
       return;
     }
     setState(() {
@@ -300,13 +268,17 @@ class _DecisionBarState extends ConsumerState<_DecisionBar> {
       setState(() => _error = failure.message);
       return;
     }
-    _commentCtrl.clear();
+    showAppToast(
+      context,
+      action == 'APPROVED' ? 'Approved · request advanced' : 'Rejected · requestor notified',
+      type: BannerType.success,
+    );
+    Navigator.of(context).maybePop();
   }
 
   Future<void> _cancel() async {
-    final reason = _commentCtrl.text.trim().isEmpty
-        ? null
-        : _commentCtrl.text.trim();
+    final reason =
+        _commentCtrl.text.trim().isEmpty ? null : _commentCtrl.text.trim();
     setState(() {
       _busy = true;
       _error = null;
@@ -316,54 +288,65 @@ class _DecisionBarState extends ConsumerState<_DecisionBar> {
         .cancel(requestId: widget.request.id, reason: reason);
     if (!mounted) return;
     setState(() => _busy = false);
-    if (failure != null) setState(() => _error = failure.message);
+    if (failure != null) {
+      setState(() => _error = failure.message);
+      return;
+    }
+    showAppToast(context, 'Request cancelled', type: BannerType.success);
+    Navigator.of(context).maybePop();
   }
 
   @override
   Widget build(BuildContext context) {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.stretch,
-      children: [
-        AppTextField(
+    return AppCard(
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          AppTextField(
             controller: _commentCtrl,
-            label: 'Comments (required to reject)',
-            prefixIcon: Icons.notes),
-        if (_error != null) ...[
-          const SizedBox(height: AppSpacing.sm),
-          AppInlineBanner(message: _error!, type: BannerType.error),
-        ],
-        const SizedBox(height: AppSpacing.md),
-        PermissionGate(
-          module: 'approvals',
-          action: 'approve',
-          child: Row(
-            children: [
-              Expanded(
-                child: AppButton(
-                  label: 'Approve',
-                  variant: AppButtonVariant.tinted,
-                  loading: _busy,
-                  onPressed: _busy ? null : () => _act('APPROVED'),
-                ),
-              ),
-              const SizedBox(width: AppSpacing.sm),
-              Expanded(
-                child: AppButton(
-                  label: 'Reject',
-                  variant: AppButtonVariant.plain,
-                  onPressed: _busy ? null : () => _act('REJECTED'),
-                ),
-              ),
-            ],
+            label: 'Comment',
+            hint: 'Required to reject',
+            prefixIcon: Icons.mode_comment_outlined,
+            enabled: !_busy,
+            errorText: _error,
           ),
-        ),
-        const SizedBox(height: AppSpacing.sm),
-        AppButton(
-          label: 'Cancel request',
-          variant: AppButtonVariant.plain,
-          onPressed: _busy ? null : _cancel,
-        ),
-      ],
+          const SizedBox(height: 14),
+          PermissionGate(
+            module: 'approvals',
+            action: 'approve',
+            child: Row(
+              children: [
+                Expanded(
+                  child: AppButton(
+                    label: 'Approve',
+                    icon: LucideIcons.check,
+                    fullWidth: true,
+                    loading: _busy,
+                    onPressed: _busy ? null : () => _act('APPROVED'),
+                  ),
+                ),
+                const SizedBox(width: 10),
+                Expanded(
+                  child: AppButton(
+                    label: 'Reject',
+                    variant: AppButtonVariant.destructive,
+                    icon: LucideIcons.x,
+                    fullWidth: true,
+                    onPressed: _busy ? null : () => _act('REJECTED'),
+                  ),
+                ),
+              ],
+            ),
+          ),
+          const SizedBox(height: 10),
+          AppButton(
+            label: 'Cancel request',
+            variant: AppButtonVariant.plain,
+            fullWidth: true,
+            onPressed: _busy ? null : _cancel,
+          ),
+        ],
+      ),
     );
   }
 }
