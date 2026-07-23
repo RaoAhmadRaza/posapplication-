@@ -1,16 +1,19 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
+import 'package:lucide_icons_flutter/lucide_icons.dart';
 import '../../../../core/design/app_colors.dart';
-import '../../../../core/design/app_spacing.dart';
 import '../../../../core/design/app_typography.dart';
-import '../../../../core/design/format.dart';
 import '../../../../core/design/widgets/app_button.dart';
 import '../../../../core/design/widgets/app_card.dart';
-import '../../../../core/design/widgets/app_inline_banner.dart';
+import '../../../../core/design/widgets/app_detail_scaffold.dart';
+import '../../../../core/design/widgets/app_money_text.dart';
+import '../../../../core/design/widgets/app_pill.dart';
+import '../../../../core/design/widgets/app_states.dart';
 import '../../../../core/widgets/permission_gate.dart';
 import '../../domain/entities/bank_account.dart';
 import '../controllers/bank_accounts_controller.dart';
+import '../widgets/accounting_ui.dart';
 
 class BankAccountsPage extends ConsumerWidget {
   const BankAccountsPage({super.key});
@@ -19,48 +22,52 @@ class BankAccountsPage extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final state = ref.watch(bankAccountsProvider);
 
-    return Scaffold(
-      backgroundColor: AppColors.background,
-      appBar: AppBar(
-        backgroundColor: AppColors.background,
-        surfaceTintColor: AppColors.background,
-        leading: IconButton(
-          icon: const Icon(Icons.arrow_back_ios,
-              color: AppColors.accent, size: 20),
-          onPressed: () => Navigator.of(context).pop(),
+    return AppDetailScaffold(
+      eyebrow: 'Accounting',
+      title: 'Bank accounts',
+      actions: [
+        PermissionGate(
+          module: 'accounting',
+          action: 'create',
+          child: AppButton(
+            label: 'New account',
+            icon: LucideIcons.plus,
+            size: AppButtonSize.sm,
+            onPressed: () => context.push('/accounting/banks/create'),
+          ),
         ),
-        title: Text('Bank Accounts', style: AppTypography.headline),
-      ),
-      floatingActionButton: PermissionGate(
-        module: 'accounting',
-        action: 'create',
-        child: FloatingActionButton(
-          backgroundColor: AppColors.accent,
-          onPressed: () => context.push('/accounting/banks/create'),
-          child: const Icon(Icons.add, color: Colors.white),
+      ],
+      child: state.when(
+        loading: () => const Padding(
+          padding: EdgeInsets.only(top: 60),
+          child: Center(child: CircularProgressIndicator()),
         ),
-      ),
-      body: SafeArea(
-        child: state.when(
-          loading: () => const Center(child: CircularProgressIndicator()),
-          error: (e, _) => _ErrorState(
+        error: (e, _) => Padding(
+          padding: const EdgeInsets.only(top: 30),
+          child: AppErrorState(
+            title: 'Couldn\'t load bank accounts',
+            body: 'Your data is safe. Check the connection and try again.',
             onRetry: () => ref.read(bankAccountsProvider.notifier).refresh(),
           ),
-          data: (accounts) => accounts.isEmpty
-              ? const _EmptyState()
-              : ListView.builder(
-                  padding: const EdgeInsets.symmetric(
-                      horizontal: AppSpacing.screenPadding,
-                      vertical: AppSpacing.md),
-                  itemCount: accounts.length,
-                  itemBuilder: (_, i) => Padding(
-                    padding: EdgeInsets.only(
-                        bottom:
-                            i < accounts.length - 1 ? AppSpacing.md : 0),
-                    child: _BankCard(account: accounts[i]),
-                  ),
-                ),
         ),
+        data: (accounts) => accounts.isEmpty
+            ? const Padding(
+                padding: EdgeInsets.only(top: 20),
+                child: AppEmptyState(
+                  icon: LucideIcons.landmark,
+                  title: 'No bank accounts yet',
+                  body: 'Add a bank account to start reconciling.',
+                ),
+              )
+            : Column(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  for (final a in accounts) ...[
+                    _BankCard(account: a),
+                    const SizedBox(height: 12),
+                  ],
+                ],
+              ),
       ),
     );
   }
@@ -72,87 +79,95 @@ class _BankCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final lum = context.lum;
+    final sub = [account.bankName, account.accountNumber]
+        .where((s) => s != null && s.isNotEmpty)
+        .join(' · ');
+
     return AppCard(
-      child: InkWell(
-        onTap: () => context.push('/accounting/banks/${account.id}/edit'),
-        borderRadius: BorderRadius.circular(AppSpacing.md),
-        child: Padding(
-          padding: const EdgeInsets.all(AppSpacing.base),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
+      padding: const EdgeInsets.all(20),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
             children: [
-              Row(
-                children: [
-                  Expanded(
-                    child: Text(account.accountName,
-                        style: AppTypography.headline),
-                  ),
-                  Text(formatPkr(account.currentBalance),
-                      style: AppTypography.headline),
-                ],
+              AcctIconTile(
+                icon: LucideIcons.landmark,
+                background: lum.accentSoft,
+                foreground: lum.accent,
               ),
-              const SizedBox(height: AppSpacing.xs),
-              Text(account.bankName ?? '—',
-                  style: AppTypography.footnote
-                      .copyWith(color: AppColors.textMuted)),
-              Align(
-                alignment: Alignment.centerRight,
-                child: TextButton.icon(
-                  onPressed: () => context
-                      .push('/accounting/banks/${account.id}/reconcile'),
-                  icon: const Icon(Icons.rule, size: 16),
-                  label: const Text('Reconcile'),
+              const SizedBox(width: 13),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Text(
+                      account.accountName,
+                      style: AppTypography.headline
+                          .copyWith(fontSize: 15, color: lum.textPrimary),
+                    ),
+                    if (sub.isNotEmpty) ...[
+                      const SizedBox(height: 2),
+                      Text(
+                        sub,
+                        style: AppTypography.subhead
+                            .copyWith(fontSize: 12.5, color: lum.g500),
+                      ),
+                    ],
+                  ],
                 ),
+              ),
+              if (account.isActive) ...[
+                const SizedBox(width: 10),
+                const AppPill(label: 'Active', tone: AppPillTone.success),
+              ],
+            ],
+          ),
+          const SizedBox(height: 14),
+          Container(
+            padding: const EdgeInsets.symmetric(vertical: 12),
+            decoration: BoxDecoration(
+              border: Border(
+                top: BorderSide(color: lum.hairline),
+                bottom: BorderSide(color: lum.hairline),
+              ),
+            ),
+            child: Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              children: [
+                Text(
+                  'Balance',
+                  style: AppTypography.subhead
+                      .copyWith(fontSize: 13, color: lum.g500),
+                ),
+                AppMoneyText(account.currentBalance, size: 17),
+              ],
+            ),
+          ),
+          const SizedBox(height: 14),
+          Row(
+            children: [
+              AppButton(
+                label: 'Edit',
+                variant: AppButtonVariant.tinted,
+                size: AppButtonSize.sm,
+                icon: LucideIcons.pencil,
+                onPressed: () =>
+                    context.push('/accounting/banks/${account.id}/edit'),
+              ),
+              const SizedBox(width: 10),
+              AppButton(
+                label: 'Reconcile',
+                variant: AppButtonVariant.plain,
+                size: AppButtonSize.sm,
+                icon: LucideIcons.gitCompareArrows,
+                onPressed: () =>
+                    context.push('/accounting/banks/${account.id}/reconcile'),
               ),
             ],
           ),
-        ),
-      ),
-    );
-  }
-}
-
-class _EmptyState extends StatelessWidget {
-  const _EmptyState();
-
-  @override
-  Widget build(BuildContext context) {
-    return Center(
-      child: Column(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          const Icon(Icons.account_balance,
-              size: 48, color: AppColors.textHint),
-          const SizedBox(height: AppSpacing.md),
-          Text('No bank accounts',
-              style:
-                  AppTypography.subhead.copyWith(color: AppColors.textMuted)),
         ],
-      ),
-    );
-  }
-}
-
-class _ErrorState extends StatelessWidget {
-  const _ErrorState({required this.onRetry});
-  final VoidCallback onRetry;
-
-  @override
-  Widget build(BuildContext context) {
-    return Center(
-      child: Padding(
-        padding:
-            const EdgeInsets.symmetric(horizontal: AppSpacing.screenPadding),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            AppInlineBanner(
-                message: 'Could not load bank accounts.',
-                type: BannerType.error),
-            const SizedBox(height: AppSpacing.md),
-            AppButton(label: 'Retry', onPressed: onRetry),
-          ],
-        ),
       ),
     );
   }

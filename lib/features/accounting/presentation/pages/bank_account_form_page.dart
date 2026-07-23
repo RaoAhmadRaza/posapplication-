@@ -1,12 +1,16 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:lucide_icons_flutter/lucide_icons.dart';
 import '../../../../core/design/app_colors.dart';
-import '../../../../core/design/app_radius.dart';
-import '../../../../core/design/app_spacing.dart';
 import '../../../../core/design/app_typography.dart';
 import '../../../../core/design/widgets/app_button.dart';
+import '../../../../core/design/widgets/app_card.dart';
+import '../../../../core/design/widgets/app_detail_scaffold.dart';
+import '../../../../core/design/widgets/app_dropdown.dart';
 import '../../../../core/design/widgets/app_inline_banner.dart';
 import '../../../../core/design/widgets/app_text_field.dart';
+import '../../../../core/design/widgets/app_toast.dart';
+import '../../../../core/design/widgets/app_toggle.dart';
 import '../../../../core/widgets/permission_gate.dart';
 import '../../domain/entities/account.dart';
 import '../../domain/entities/bank_account.dart';
@@ -117,19 +121,21 @@ class _BankAccountFormPageState extends ConsumerState<BankAccountFormPage> {
 
     if (!mounted) return;
     if (failure != null) {
-      setState(() {
-        _saving = false;
-        _error = failure.message;
-      });
+      setState(() => _saving = false);
+      showAppToast(context, failure.message, type: BannerType.error);
       return;
     }
-    ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-        content: Text(_isEditing ? 'Bank account updated' : 'Bank account added')));
+    showAppToast(
+      context,
+      _isEditing ? 'Bank account updated' : 'Bank account added',
+      type: BannerType.success,
+    );
     Navigator.of(context).pop();
   }
 
   @override
   Widget build(BuildContext context) {
+    final lum = context.lum;
     final assets = (ref.watch(chartOfAccountsProvider).value ?? const [])
         .where((a) => a.type == AccountType.asset)
         .toList()
@@ -145,165 +151,186 @@ class _BankAccountFormPageState extends ConsumerState<BankAccountFormPage> {
       }
     }
 
-    return Scaffold(
-      backgroundColor: AppColors.background,
-      appBar: AppBar(
-        backgroundColor: AppColors.background,
-        surfaceTintColor: AppColors.background,
-        leading: IconButton(
-          icon: const Icon(Icons.arrow_back_ios,
-              color: AppColors.accent, size: 20),
-          onPressed: () => Navigator.of(context).pop(),
-        ),
-        title: Text(_isEditing ? 'Edit Bank Account' : 'New Bank Account',
-            style: AppTypography.headline),
+    final fields = <Widget>[
+      AppTextField(
+        controller: _accountName,
+        label: 'Account name',
+        prefixIcon: LucideIcons.landmark,
       ),
-      body: SafeArea(
-        child: LayoutBuilder(
-          builder: (context, c) => SingleChildScrollView(
-            padding: const EdgeInsets.symmetric(
-                horizontal: AppSpacing.screenPadding),
-            child: Center(
-              child: ConstrainedBox(
-                constraints: const BoxConstraints(maxWidth: 560),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.stretch,
+      AppTextField(
+        controller: _bankName,
+        label: 'Bank name',
+        prefixIcon: LucideIcons.building2,
+      ),
+      AppTextField(
+        controller: _accountNumber,
+        label: 'Account number',
+        prefixIcon: LucideIcons.hash,
+      ),
+      AppTextField(
+        controller: _iban,
+        label: 'IBAN',
+        prefixIcon: LucideIcons.hash,
+        hint: 'Optional',
+      ),
+      AppTextField(
+        controller: _swift,
+        label: 'SWIFT',
+        prefixIcon: LucideIcons.globe,
+        hint: 'Optional',
+      ),
+      AppTextField(
+        controller: _currency,
+        label: 'Currency',
+        prefixIcon: LucideIcons.coins,
+      ),
+      AppTextField(
+        controller: _openingBalance,
+        label: 'Opening balance',
+        prefixIcon: LucideIcons.banknote,
+        keyboardType: const TextInputType.numberWithOptions(
+            decimal: true, signed: true),
+      ),
+      _LabeledField(
+        label: 'Chart account',
+        child: AppDropdown<String>(
+          value: _chartAccountId,
+          placeholder: 'Select account',
+          options: [
+            for (final a in assets)
+              AppDropdownOption(value: a.id, label: '${a.code} · ${a.name}'),
+          ],
+          onSelected: (v) => setState(() => _chartAccountId = v),
+        ),
+      ),
+    ];
+
+    return AppDetailScaffold(
+      eyebrow: 'Accounting',
+      title: _isEditing ? 'Edit bank account' : 'New bank account',
+      maxContentWidth: 720,
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          if (_error != null) ...[
+            AppInlineBanner(message: _error!, type: BannerType.error),
+            const SizedBox(height: 16),
+          ],
+          AppCard(
+            padding: const EdgeInsets.all(20),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                LayoutBuilder(
+                  builder: (context, c) => _grid(fields, c.maxWidth < 560),
+                ),
+                const SizedBox(height: 20),
+                Row(
                   children: [
-                    const SizedBox(height: AppSpacing.lg),
-                    if (_error != null) ...[
-                      AppInlineBanner(
-                          message: _error!, type: BannerType.error),
-                      const SizedBox(height: AppSpacing.lg),
-                    ],
-                    AppTextField(
-                      controller: _accountName,
-                      label: 'Account Name',
-                      prefixIcon: Icons.account_balance,
-                    ),
-                    const SizedBox(height: AppSpacing.fieldGap),
-                    AppTextField(
-                      controller: _bankName,
-                      label: 'Bank Name',
-                      prefixIcon: Icons.business,
-                    ),
-                    const SizedBox(height: AppSpacing.fieldGap),
-                    AppTextField(
-                      controller: _accountNumber,
-                      label: 'Account Number',
-                      prefixIcon: Icons.numbers,
-                    ),
-                    const SizedBox(height: AppSpacing.fieldGap),
-                    AppTextField(
-                      controller: _iban,
-                      label: 'IBAN',
-                      prefixIcon: Icons.tag,
-                      hint: 'Optional',
-                    ),
-                    const SizedBox(height: AppSpacing.fieldGap),
-                    AppTextField(
-                      controller: _swift,
-                      label: 'SWIFT Code',
-                      prefixIcon: Icons.swap_horiz,
-                      hint: 'Optional',
-                    ),
-                    const SizedBox(height: AppSpacing.fieldGap),
-                    AppTextField(
-                      controller: _currency,
-                      label: 'Currency',
-                      prefixIcon: Icons.attach_money,
-                    ),
-                    const SizedBox(height: AppSpacing.fieldGap),
-                    AppTextField(
-                      controller: _openingBalance,
-                      label: 'Opening Balance',
-                      prefixIcon: Icons.account_balance_wallet,
-                      keyboardType: const TextInputType.numberWithOptions(
-                          decimal: true, signed: true),
-                    ),
-                    const SizedBox(height: AppSpacing.fieldGap),
-                    _group('Chart Account'),
-                    _AccountDropdown(
-                      value: _chartAccountId,
-                      accounts: assets,
-                      onChanged: (v) => setState(() => _chartAccountId = v),
-                    ),
-                    const SizedBox(height: AppSpacing.md),
-                    SwitchListTile(
-                      contentPadding: EdgeInsets.zero,
-                      activeThumbColor: AppColors.accent,
-                      title: Text('Active', style: AppTypography.subhead),
-                      value: _isActive,
-                      onChanged: (v) => setState(() => _isActive = v),
-                    ),
-                    const SizedBox(height: AppSpacing.lg),
-                    PermissionGate(
-                      module: 'accounting',
-                      action: _isEditing ? 'update' : 'create',
-                      child: AppButton(
-                        label: _isEditing ? 'Update' : 'Create',
-                        loading: _saving,
-                        fullWidth: true,
-                        onPressed: _submit,
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text('Active',
+                              style: AppTypography.headline.copyWith(
+                                  fontSize: 14.5, color: lum.textPrimary)),
+                          const SizedBox(height: 2),
+                          Text('Show this account in pickers and reports',
+                              style: AppTypography.subhead
+                                  .copyWith(color: lum.g500)),
+                        ],
                       ),
                     ),
-                    const SizedBox(height: AppSpacing.xxl),
+                    const SizedBox(width: 16),
+                    AppToggle(
+                      value: _isActive,
+                      semanticLabel: 'Active',
+                      onChanged: (v) => setState(() => _isActive = v),
+                    ),
                   ],
                 ),
-              ),
+              ],
             ),
           ),
-        ),
+          const SizedBox(height: 20),
+          PermissionGate(
+            module: 'accounting',
+            action: _isEditing ? 'update' : 'create',
+            child: AppButton(
+              label: _isEditing ? 'Update account' : 'Create account',
+              icon: LucideIcons.check,
+              loading: _saving,
+              fullWidth: true,
+              onPressed: _submit,
+            ),
+          ),
+        ],
       ),
     );
   }
 
-  Widget _group(String label) => Padding(
-        padding: const EdgeInsets.only(bottom: AppSpacing.sm),
-        child: Text(label.toUpperCase(),
-            style: AppTypography.footnote.copyWith(
-                color: AppColors.textMuted, fontWeight: FontWeight.w600)),
+  /// Lays the fields out as a single column (narrow) or paired two-up rows
+  /// (wide), each cell taking an equal half — no hand-picked ratio.
+  Widget _grid(List<Widget> fields, bool narrow) {
+    const gap = 16.0;
+    if (narrow) {
+      return Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          for (var i = 0; i < fields.length; i++) ...[
+            if (i > 0) const SizedBox(height: gap),
+            fields[i],
+          ],
+        ],
       );
+    }
+    final rows = <Widget>[];
+    for (var i = 0; i < fields.length; i += 2) {
+      final left = fields[i];
+      final right = i + 1 < fields.length ? fields[i + 1] : null;
+      rows.add(Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Expanded(child: left),
+          const SizedBox(width: gap),
+          Expanded(child: right ?? const SizedBox.shrink()),
+        ],
+      ));
+    }
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        for (var i = 0; i < rows.length; i++) ...[
+          if (i > 0) const SizedBox(height: gap),
+          rows[i],
+        ],
+      ],
+    );
+  }
 }
 
-class _AccountDropdown extends StatelessWidget {
-  const _AccountDropdown({
-    required this.value,
-    required this.accounts,
-    required this.onChanged,
-  });
-  final String? value;
-  final List<Account> accounts;
-  final ValueChanged<String?> onChanged;
+/// A field label rendered in the AppTextField label style, stacked over a
+/// non-text control (the chart-account dropdown) so it aligns with its
+/// neighbours in the grid.
+class _LabeledField extends StatelessWidget {
+  const _LabeledField({required this.label, required this.child});
+
+  final String label;
+  final Widget child;
 
   @override
   Widget build(BuildContext context) {
-    return Container(
-      height: 44,
-      padding: const EdgeInsets.symmetric(horizontal: AppSpacing.md),
-      decoration: BoxDecoration(
-        color: AppColors.background,
-        borderRadius: BorderRadius.circular(AppRadius.field),
-        border: Border.all(color: AppColors.separator),
-      ),
-      child: DropdownButtonHideUnderline(
-        child: DropdownButton<String>(
-          value: value,
-          isExpanded: true,
-          hint: Text('Select account',
-              style: AppTypography.subhead
-                  .copyWith(color: AppColors.textHint)),
-          icon: const Icon(Icons.keyboard_arrow_down,
-              size: 18, color: AppColors.textMuted),
-          style: AppTypography.subhead,
-          onChanged: onChanged,
-          items: accounts
-              .map((a) => DropdownMenuItem(
-                  value: a.id,
-                  child: Text('${a.code}  ${a.name}',
-                      overflow: TextOverflow.ellipsis)))
-              .toList(),
+    final lum = context.lum;
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Padding(
+          padding: const EdgeInsets.only(left: 2, bottom: 8),
+          child: Text(label,
+              style: AppTypography.fieldLabel.copyWith(color: lum.g700)),
         ),
-      ),
+        child,
+      ],
     );
   }
 }
