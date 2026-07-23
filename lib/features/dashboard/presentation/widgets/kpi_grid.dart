@@ -141,7 +141,11 @@ class _GridEntry extends ConsumerWidget {
     final nav = desc.drill?.call(branchId, date);
     final VoidCallback? onTap = nav != null
         ? () => context.push('/dashboard/drilldown', extra: nav)
-        : (desc.route != null ? () => context.push(desc.route!) : null);
+        : (desc.route != null
+            ? () => desc.route!.startsWith('/reports')
+                ? context.go(desc.route!)
+                : context.push(desc.route!)
+            : null);
     if (onTap == null) return tile;
 
     return InkWell(

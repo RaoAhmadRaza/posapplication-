@@ -117,7 +117,9 @@ final kpiDescriptors = <String, KpiDesc>{
     KpiAccent.neutral,
     (s) => s.stockValue,
     subLabel: 'at cost',
-    route: '/reports/inventory',
+    // Reports is now its own shell branch — deep-link to the hub (its own
+    // Navigator has no route beneath a go'd sub-page, so back would be dead).
+    route: '/reports',
   ),
   'low_stock': KpiDesc(
     'Low stock',

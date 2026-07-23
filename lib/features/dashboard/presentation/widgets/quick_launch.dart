@@ -32,8 +32,8 @@ class QuickLaunch extends ConsumerWidget {
     final lum = context.lum;
     final matrix = ref.watch(permissionMatrixProvider).value ?? <String>{};
 
-    // Nav verbs differ deliberately: POS and Inventory are shell branches
-    // (go), history and reports are pushed on top of the current branch.
+    // Nav verbs differ deliberately: POS, Inventory and Reports are shell
+    // branches (go — switch branch), sales history is pushed on the branch.
     final actions = <_Action>[
       _Action('POS', LucideIcons.scanLine, 'sales:create',
           (c) => c.go('/sales/pos'),
@@ -43,7 +43,7 @@ class QuickLaunch extends ConsumerWidget {
       _Action('Sales history', LucideIcons.history, 'sales:read',
           (c) => c.push('/sales/history')),
       _Action('Reports', LucideIcons.barChart3, 'reports:read',
-          (c) => c.push('/reports')),
+          (c) => c.go('/reports')),
     ];
 
     return Column(
