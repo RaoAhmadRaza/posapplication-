@@ -26,7 +26,8 @@ class _NavItem {
 }
 
 // Indexed by shell branch: 0 Dashboard, 1 Inventory, 2 Purchase, 3 Sales,
-// 4 Settings, 5 Repair. Repair is appended so the earlier indices never shift.
+// 4 Settings, 5 Repair, 6 Customers. Repair and Customers are appended so the
+// earlier indices never shift.
 const _allItems = [
   _NavItem('Dashboard', LucideIcons.layoutGrid),
   _NavItem('Inventory', LucideIcons.box),
@@ -34,12 +35,14 @@ const _allItems = [
   _NavItem('Sales', LucideIcons.shoppingCart),
   _NavItem('Settings', LucideIcons.settings),
   _NavItem('Repair', LucideIcons.wrench),
+  _NavItem('Customers', LucideIcons.users),
 ];
 
 /// Shell branch indices, per the router's branch order.
 const _kPurchaseBranch = 2;
 const _kSalesBranch = 3;
 const _kRepairBranch = 5;
+const _kCustomersBranch = 6;
 
 /// A destination inside a module's own branch. These navigate with `go` —
 /// `goBranch` is only for switching module.
@@ -78,6 +81,14 @@ const _repairDests = [
   _ModuleDest('History', 'History', LucideIcons.history, '/repair/history'),
 ];
 
+// The customer detail / form / collect screens all start with /customers, so
+// they keep Customers lit; receivables is the only sibling destination.
+const _customersDests = [
+  _ModuleDest('Customers', 'Customers', LucideIcons.users, '/customers'),
+  _ModuleDest(
+      'Receivables', 'Aging', LucideIcons.receiptText, '/receivables'),
+];
+
 /// Which sales destination owns [path]. Checkout (payment/success/receipt) is
 /// part of selling, so it keeps Point of sale lit.
 int _salesIndexFor(String path) {
@@ -102,6 +113,11 @@ int _repairIndexFor(String path) {
   return 0;
 }
 
+/// Which customers destination owns [path]. Every /customers screen keeps
+/// Customers lit; /receivables is the only other destination.
+int _customersIndexFor(String path) =>
+    path.startsWith('/receivables') ? 1 : 0;
+
 class BottomNavShell extends ConsumerWidget {
   const BottomNavShell({super.key, required this.navigationShell});
 
@@ -113,6 +129,7 @@ class BottomNavShell extends ConsumerWidget {
     final hasPurchase = matrix.contains('purchase:read');
     final hasSales = matrix.contains('sales:read');
     final hasRepair = matrix.contains('repair:read');
+    final hasCustomers = matrix.contains('customers:read');
 
     final branchMap = [
       0,
@@ -120,6 +137,7 @@ class BottomNavShell extends ConsumerWidget {
       if (hasPurchase) 2,
       if (hasSales) 3,
       if (hasRepair) _kRepairBranch,
+      if (hasCustomers) _kCustomersBranch,
       4,
     ];
     final items = [for (final b in branchMap) _allItems[b]];
@@ -144,6 +162,11 @@ class BottomNavShell extends ConsumerWidget {
         ),
       _kSalesBranch => (_salesDests, _salesIndexFor(path), 'Sales'),
       _kRepairBranch => (_repairDests, _repairIndexFor(path), 'Repair'),
+      _kCustomersBranch => (
+          _customersDests,
+          _customersIndexFor(path),
+          'Customers',
+        ),
       _ => (const <_ModuleDest>[], -1, ''),
     };
 
