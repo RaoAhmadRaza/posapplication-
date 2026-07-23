@@ -1,19 +1,26 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:lucide_icons_flutter/lucide_icons.dart';
 import '../../../../core/design/app_colors.dart';
 import '../../../../core/design/app_radius.dart';
-import '../../../../core/design/app_spacing.dart';
 import '../../../../core/design/app_typography.dart';
+import '../../../../core/design/clay.dart';
 import '../../../../core/design/format.dart';
 import '../../../../core/design/widgets/app_button.dart';
+import '../../../../core/design/widgets/app_card.dart';
+import '../../../../core/design/widgets/app_dropdown.dart';
 import '../../../../core/design/widgets/app_inline_banner.dart';
 import '../../../../core/design/widgets/app_text_field.dart';
+import '../../../../core/design/widgets/app_toast.dart';
+import '../../../../core/design/widgets/app_detail_scaffold.dart';
 import '../../../../core/widgets/permission_gate.dart';
 import '../../../auth/presentation/controllers/branch_controller.dart';
 import '../../domain/entities/account.dart';
 import '../../domain/entities/voucher.dart';
 import '../controllers/chart_of_accounts_controller.dart';
 import '../controllers/vouchers_controller.dart';
+import '../widgets/acct_account_picker.dart';
+import '../widgets/accounting_ui.dart';
 
 const _voucherLabels = <VoucherType, String>{
   VoucherType.payment: 'Payment',
@@ -131,8 +138,7 @@ class _ManualVoucherPageState extends ConsumerState<ManualVoucherPage> {
       });
       return;
     }
-    ScaffoldMessenger.of(context)
-        .showSnackBar(const SnackBar(content: Text('Voucher created')));
+    showAppToast(context, 'Voucher posted', type: BannerType.success);
     Navigator.of(context).pop();
   }
 
@@ -142,142 +148,154 @@ class _ManualVoucherPageState extends ConsumerState<ManualVoucherPage> {
     final totalDebit = _sum(true);
     final totalCredit = _sum(false);
 
-    return Scaffold(
-      backgroundColor: AppColors.background,
-      appBar: AppBar(
-        backgroundColor: AppColors.background,
-        surfaceTintColor: AppColors.background,
-        leading: IconButton(
-          icon: const Icon(Icons.arrow_back_ios,
-              color: AppColors.accent, size: 20),
-          onPressed: () => Navigator.of(context).pop(),
-        ),
-        title: Text('Manual Voucher', style: AppTypography.headline),
-      ),
-      body: SafeArea(
-        child: LayoutBuilder(
-          builder: (context, c) => SingleChildScrollView(
-            padding: const EdgeInsets.symmetric(
-                horizontal: AppSpacing.screenPadding),
-            child: Center(
-              child: ConstrainedBox(
-                constraints: const BoxConstraints(maxWidth: 560),
-                child: Column(
+    return AppDetailScaffold(
+      eyebrow: 'Accounting',
+      title: 'New voucher',
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          if (_error != null) ...[
+            AppInlineBanner(message: _error!, type: BannerType.error),
+            const SizedBox(height: 14),
+          ],
+          AppCard(
+            padding: const EdgeInsets.all(20),
+            child: LayoutBuilder(
+              builder: (context, c) {
+                final wide = c.maxWidth >= 520;
+                final type = _LabeledField(
+                  label: 'Voucher type',
+                  child: AppDropdown<VoucherType>(
+                    value: _type,
+                    onSelected: (t) => setState(() => _type = t),
+                    options: [
+                      for (final t in VoucherType.values)
+                        AppDropdownOption(
+                            value: t, label: _voucherLabels[t] ?? t.name),
+                    ],
+                  ),
+                );
+                final reference = _LabeledField(
+                  label: 'Reference',
+                  child: AppTextField(
+                    controller: _reference,
+                    label: '',
+                    prefixIcon: LucideIcons.hash,
+                    hint: 'Optional',
+                  ),
+                );
+                return Column(
                   crossAxisAlignment: CrossAxisAlignment.stretch,
                   children: [
-                    const SizedBox(height: AppSpacing.lg),
-                    if (_error != null) ...[
-                      AppInlineBanner(
-                          message: _error!, type: BannerType.error),
-                      const SizedBox(height: AppSpacing.lg),
+                    if (wide)
+                      Row(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Expanded(child: type),
+                          const SizedBox(width: 14),
+                          Expanded(child: reference),
+                        ],
+                      )
+                    else ...[
+                      type,
+                      const SizedBox(height: 14),
+                      reference,
                     ],
-                    _group('Type'),
-                    _TypeDropdown(
-                      value: _type,
-                      onChanged: (t) => setState(() => _type = t),
-                    ),
-                    const SizedBox(height: AppSpacing.fieldGap),
-                    AppTextField(
-                      controller: _description,
+                    const SizedBox(height: 14),
+                    _LabeledField(
                       label: 'Description',
-                      prefixIcon: Icons.notes,
-                    ),
-                    const SizedBox(height: AppSpacing.fieldGap),
-                    AppTextField(
-                      controller: _reference,
-                      label: 'Reference',
-                      prefixIcon: Icons.tag,
-                      hint: 'Optional',
-                    ),
-                    const SizedBox(height: AppSpacing.xl),
-                    _group('Lines'),
-                    for (var i = 0; i < _lines.length; i++) ...[
-                      _LineEditor(
-                        line: _lines[i],
-                        accounts: accounts,
-                        canRemove: _lines.length > 2,
-                        onChanged: () => setState(() {}),
-                        onPickAccount: (a) => setState(() {
-                          _lines[i].accountId = a.id;
-                          _lines[i].accountCode = a.code;
-                        }),
-                        onRemove: () => _removeLine(i),
-                      ),
-                      const SizedBox(height: AppSpacing.md),
-                    ],
-                    Align(
-                      alignment: Alignment.centerLeft,
-                      child: AppButton(
-                        label: 'Add Line',
-                        variant: AppButtonVariant.tinted,
-                        icon: Icons.add,
-                        onPressed: _addLine,
+                      child: AppTextField(
+                        controller: _description,
+                        label: '',
+                        prefixIcon: LucideIcons.pencil,
+                        hint: 'What is this voucher for?',
                       ),
                     ),
-                    const SizedBox(height: AppSpacing.lg),
-                    _Totals(debit: totalDebit, credit: totalCredit),
-                    const SizedBox(height: AppSpacing.xl),
-                    PermissionGate(
-                      module: 'accounting',
-                      action: 'create',
-                      child: AppButton(
-                        label: 'Post Voucher',
-                        loading: _saving,
-                        fullWidth: true,
-                        icon: Icons.check,
-                        onPressed: _balanced ? _submit : null,
-                      ),
-                    ),
-                    const SizedBox(height: AppSpacing.xxl),
                   ],
-                ),
-              ),
+                );
+              },
             ),
           ),
-        ),
+          const SizedBox(height: 12),
+          AppCard(
+            padding: const EdgeInsets.all(20),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                const AcctSectionLabel('Lines'),
+                const SizedBox(height: 12),
+                for (var i = 0; i < _lines.length; i++) ...[
+                  _LineEditor(
+                    line: _lines[i],
+                    accounts: accounts,
+                    canRemove: _lines.length > 2,
+                    onChanged: () => setState(() {}),
+                    onPickAccount: (a) => setState(() {
+                      _lines[i].accountId = a.id;
+                      _lines[i].accountCode = a.code;
+                    }),
+                    onRemove: () => _removeLine(i),
+                  ),
+                  const SizedBox(height: 10),
+                ],
+                Align(
+                  alignment: Alignment.centerLeft,
+                  child: AppButton(
+                    label: 'Add line',
+                    variant: AppButtonVariant.plain,
+                    size: AppButtonSize.sm,
+                    icon: LucideIcons.plus,
+                    onPressed: _addLine,
+                  ),
+                ),
+                const SizedBox(height: 10),
+                _BalanceStrip(debit: totalDebit, credit: totalCredit),
+              ],
+            ),
+          ),
+          const SizedBox(height: 16),
+          PermissionGate(
+            module: 'accounting',
+            action: 'create',
+            child: AppButton(
+              label: 'Post voucher',
+              loading: _saving,
+              fullWidth: true,
+              icon: LucideIcons.check,
+              onPressed: _balanced ? _submit : null,
+            ),
+          ),
+        ],
       ),
     );
   }
-
-  Widget _group(String label) => Padding(
-        padding: const EdgeInsets.only(bottom: AppSpacing.sm),
-        child: Text(label.toUpperCase(),
-            style: AppTypography.footnote.copyWith(
-                color: AppColors.textMuted, fontWeight: FontWeight.w600)),
-      );
 }
 
-class _TypeDropdown extends StatelessWidget {
-  const _TypeDropdown({required this.value, required this.onChanged});
-  final VoucherType value;
-  final ValueChanged<VoucherType> onChanged;
+class _LabeledField extends StatelessWidget {
+  const _LabeledField({required this.label, required this.child});
+  final String label;
+  final Widget child;
 
   @override
   Widget build(BuildContext context) {
-    return Container(
-      height: 44,
-      padding: const EdgeInsets.symmetric(horizontal: AppSpacing.md),
-      decoration: BoxDecoration(
-        color: AppColors.background,
-        borderRadius: BorderRadius.circular(AppRadius.field),
-        border: Border.all(color: AppColors.separator),
-      ),
-      child: DropdownButtonHideUnderline(
-        child: DropdownButton<VoucherType>(
-          value: value,
-          isExpanded: true,
-          icon: const Icon(Icons.keyboard_arrow_down,
-              size: 18, color: AppColors.textMuted),
-          style: AppTypography.subhead,
-          onChanged: (v) {
-            if (v != null) onChanged(v);
-          },
-          items: VoucherType.values
-              .map((t) => DropdownMenuItem(
-                  value: t, child: Text(_voucherLabels[t] ?? t.name)))
-              .toList(),
+    final lum = context.lum;
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        Padding(
+          padding: const EdgeInsets.only(bottom: 7),
+          child: Text(
+            label,
+            style: AppTypography.subhead.copyWith(
+              fontSize: 12.5,
+              fontWeight: FontWeight.w600,
+              color: lum.g700,
+            ),
+          ),
         ),
-      ),
+        child,
+      ],
     );
   }
 }
@@ -300,74 +318,8 @@ class _LineEditor extends StatelessWidget {
   final VoidCallback onRemove;
 
   Future<void> _pick(BuildContext context) async {
-    final account = await _showAccountPicker(context, accounts);
+    final account = await showAccountPicker(context, accounts);
     if (account != null) onPickAccount(account);
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    final label = line.accountCode == null
-        ? 'Select account'
-        : '${line.accountCode}  ${_nameFor(line.accountId)}';
-    return Container(
-      padding: const EdgeInsets.all(AppSpacing.md),
-      decoration: BoxDecoration(
-        color: AppColors.fieldFill,
-        borderRadius: BorderRadius.circular(AppRadius.field),
-        border: Border.all(color: AppColors.separator),
-      ),
-      child: Column(
-        children: [
-          Row(
-            children: [
-              Expanded(
-                child: InkWell(
-                  onTap: () => _pick(context),
-                  child: Row(
-                    children: [
-                      const Icon(Icons.account_tree,
-                          size: 18, color: AppColors.textMuted),
-                      const SizedBox(width: AppSpacing.sm),
-                      Expanded(
-                        child: Text(label,
-                            style: AppTypography.subhead,
-                            overflow: TextOverflow.ellipsis),
-                      ),
-                    ],
-                  ),
-                ),
-              ),
-              if (canRemove)
-                IconButton(
-                  icon: const Icon(Icons.close,
-                      size: 18, color: AppColors.destructive),
-                  onPressed: onRemove,
-                ),
-            ],
-          ),
-          const SizedBox(height: AppSpacing.sm),
-          Row(
-            children: [
-              Expanded(
-                child: _AmountField(
-                  controller: line.debit,
-                  hint: 'Debit',
-                  onChanged: onChanged,
-                ),
-              ),
-              const SizedBox(width: AppSpacing.md),
-              Expanded(
-                child: _AmountField(
-                  controller: line.credit,
-                  hint: 'Credit',
-                  onChanged: onChanged,
-                ),
-              ),
-            ],
-          ),
-        ],
-      ),
-    );
   }
 
   String _nameFor(String? id) {
@@ -375,6 +327,88 @@ class _LineEditor extends StatelessWidget {
       if (a.id == id) return a.name;
     }
     return '';
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final lum = context.lum;
+    final hasAccount = line.accountCode != null;
+    final label = hasAccount
+        ? '${line.accountCode} · ${_nameFor(line.accountId)}'
+        : 'Select account';
+    return Container(
+      padding: const EdgeInsets.all(12),
+      decoration: BoxDecoration(
+        color: lum.surface2,
+        borderRadius: BorderRadius.circular(AppRadius.md),
+        border: Border.all(color: lum.hairline),
+      ),
+      child: Column(
+        children: [
+          Row(
+            children: [
+              Expanded(
+                child: Semantics(
+                  button: true,
+                  label: label,
+                  child: GestureDetector(
+                    behavior: HitTestBehavior.opaque,
+                    onTap: () => _pick(context),
+                    child: Row(
+                      children: [
+                        Icon(LucideIcons.listTree, size: 17, color: lum.g500),
+                        const SizedBox(width: 9),
+                        Expanded(
+                          child: Text(
+                            label,
+                            style: AppTypography.subhead.copyWith(
+                              color:
+                                  hasAccount ? lum.textPrimary : lum.textTertiary,
+                            ),
+                            overflow: TextOverflow.ellipsis,
+                          ),
+                        ),
+                        Icon(LucideIcons.chevronDown, size: 15, color: lum.g400),
+                      ],
+                    ),
+                  ),
+                ),
+              ),
+              if (canRemove)
+                Semantics(
+                  button: true,
+                  label: 'Remove line',
+                  child: GestureDetector(
+                    behavior: HitTestBehavior.opaque,
+                    onTap: onRemove,
+                    child: const SizedBox(
+                      width: 44,
+                      height: 44,
+                      child: Icon(LucideIcons.x, size: 16),
+                    ),
+                  ),
+                ),
+            ],
+          ),
+          const SizedBox(height: 8),
+          Row(
+            children: [
+              Expanded(
+                child: _AmountField(
+                    controller: line.debit, hint: 'Debit', onChanged: onChanged),
+              ),
+              const SizedBox(width: 10),
+              Expanded(
+                child: _AmountField(
+                    controller: line.credit,
+                    hint: 'Credit',
+                    onChanged: onChanged),
+              ),
+            ],
+          ),
+        ],
+      ),
+    );
   }
 }
 
@@ -390,109 +424,79 @@ class _AmountField extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Container(
+    final lum = context.lum;
+    return ClayContainer(
+      variant: ClayVariant.inset,
+      color: lum.surface,
+      borderRadius: AppRadius.md,
+      isDark: lum.isDark,
       height: 44,
-      padding: const EdgeInsets.symmetric(horizontal: AppSpacing.md),
-      decoration: BoxDecoration(
-        color: AppColors.background,
-        borderRadius: BorderRadius.circular(AppRadius.field),
-        border: Border.all(color: AppColors.separator),
-      ),
-      child: TextField(
-        controller: controller,
-        keyboardType:
-            const TextInputType.numberWithOptions(decimal: true),
-        style: AppTypography.subhead,
-        cursorColor: AppColors.accent,
-        onChanged: (_) => onChanged(),
-        decoration: InputDecoration(
-          isCollapsed: true,
-          border: InputBorder.none,
-          hintText: hint,
-          hintStyle: AppTypography.subhead
-              .copyWith(color: AppColors.textHint),
+      padding: const EdgeInsets.symmetric(horizontal: 12),
+      child: Center(
+        child: TextField(
+          controller: controller,
+          keyboardType: const TextInputType.numberWithOptions(decimal: true),
+          textAlign: TextAlign.right,
+          style: TextStyle(
+            fontFamily: AppTypography.mono,
+            fontSize: 14,
+            color: lum.textPrimary,
+          ),
+          cursorColor: lum.accent,
+          onChanged: (_) => onChanged(),
+          decoration: InputDecoration(
+            isCollapsed: true,
+            filled: false,
+            border: InputBorder.none,
+            hintText: hint,
+            hintStyle: AppTypography.subhead.copyWith(color: lum.textTertiary),
+          ),
         ),
       ),
     );
   }
 }
 
-class _Totals extends StatelessWidget {
-  const _Totals({required this.debit, required this.credit});
+class _BalanceStrip extends StatelessWidget {
+  const _BalanceStrip({required this.debit, required this.credit});
   final double debit;
   final double credit;
 
   @override
   Widget build(BuildContext context) {
+    final lum = context.lum;
     final balanced = debit > 0 && (debit - credit).abs() < 0.005;
+    final diff = (debit - credit).abs();
+    final bg = balanced ? lum.successSoft : lum.dangerSoft;
+    final fg = balanced ? lum.successText : lum.dangerText;
     return Container(
-      padding: const EdgeInsets.all(AppSpacing.base),
+      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
       decoration: BoxDecoration(
-        color: AppColors.fieldFill,
-        borderRadius: BorderRadius.circular(AppRadius.field),
+        color: bg,
+        borderRadius: BorderRadius.circular(14),
       ),
-      child: Column(
+      child: Row(
         children: [
-          Row(
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
-            children: [
-              Text('Total Debit', style: AppTypography.footnote),
-              Text(formatPkr(debit), style: AppTypography.subhead),
-            ],
+          Icon(
+            balanced ? LucideIcons.circleCheckBig : LucideIcons.triangleAlert,
+            size: 17,
+            color: fg,
           ),
-          const SizedBox(height: AppSpacing.xs),
-          Row(
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
-            children: [
-              Text('Total Credit', style: AppTypography.footnote),
-              Text(formatPkr(credit), style: AppTypography.subhead),
-            ],
+          const SizedBox(width: 8),
+          Expanded(
+            child: Text(
+              balanced
+                  ? 'Balanced'
+                  : 'Unbalanced · off by ${formatAmount(diff, decimals: 0)}',
+              style: AppTypography.subhead
+                  .copyWith(fontWeight: FontWeight.w700, color: fg),
+            ),
           ),
-          const SizedBox(height: AppSpacing.sm),
-          Row(
-            children: [
-              Icon(balanced ? Icons.check_circle : Icons.error_outline,
-                  size: 16,
-                  color:
-                      balanced ? AppColors.success : AppColors.warning),
-              const SizedBox(width: AppSpacing.xs),
-              Text(balanced ? 'Balanced' : 'Debits must equal credits',
-                  style: AppTypography.caption.copyWith(
-                      color: balanced
-                          ? AppColors.success
-                          : AppColors.warning)),
-            ],
-          ),
+          AcctMono(formatAmount(debit, decimals: 0), color: fg, size: 13),
+          const SizedBox(width: 14),
+          AcctMono(formatAmount(credit, decimals: 0), color: fg, size: 13),
         ],
       ),
     );
   }
-}
-
-Future<Account?> _showAccountPicker(
-    BuildContext context, List<Account> accounts) {
-  final sorted = [...accounts]..sort((a, b) => a.code.compareTo(b.code));
-  return showModalBottomSheet<Account>(
-    context: context,
-    backgroundColor: AppColors.background,
-    isScrollControlled: true,
-    builder: (ctx) => SafeArea(
-      child: ConstrainedBox(
-        constraints: BoxConstraints(
-            maxHeight: MediaQuery.of(ctx).size.height * 0.7),
-        child: ListView.builder(
-          padding: const EdgeInsets.symmetric(vertical: AppSpacing.sm),
-          itemCount: sorted.length,
-          itemBuilder: (_, i) {
-            final a = sorted[i];
-            return ListTile(
-              title: Text('${a.code}  ${a.name}',
-                  style: AppTypography.subhead),
-              onTap: () => Navigator.of(ctx).pop(a),
-            );
-          },
-        ),
-      ),
-    ),
-  );
 }
