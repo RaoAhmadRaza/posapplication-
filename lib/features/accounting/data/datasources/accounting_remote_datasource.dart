@@ -130,12 +130,12 @@ class AccountingRemoteDataSource {
   }
 
   Future<List<Map<String, dynamic>>> loadJournalEntries({int? limit}) async {
-    var q = _client
-        .from('journal_entries')
-        .select(_journalCols)
-        .order('created_at', ascending: false);
-    if (limit != null) q = q.limit(limit);
-    return q;
+    // Via RPC (not a table read) so each row carries its posted `total`, summed
+    // from journal_lines server-side. Tenant-scoped inside the definer function.
+    final result = await _client.rpc('list_journal_entries', params: {
+      'p_limit': limit,
+    });
+    return (result as List<dynamic>).cast<Map<String, dynamic>>();
   }
 
   Future<Map<String, dynamic>> loadJournalEntry(String id) async {
@@ -462,6 +462,7 @@ class AccountingRemoteDataSource {
   Future<Map<String, dynamic>> completeBankReconciliation({
     required String reconciliationId,
     required double reconciledBalance,
+    String? adjustmentAccountCode,
     String? notes,
   }) async {
     final result = await _client.rpc(
@@ -469,6 +470,7 @@ class AccountingRemoteDataSource {
       params: {
         'p_reconciliation_id': reconciliationId,
         'p_reconciled_balance': reconciledBalance,
+        'p_adjustment_account_code': adjustmentAccountCode,
         'p_notes': notes,
       },
     );

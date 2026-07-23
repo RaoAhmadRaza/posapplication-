@@ -13,6 +13,10 @@ class JournalEntry {
   final String? correlationId;
   final DateTime createdAt;
 
+  /// Posted total (sum of debits = sum of credits). 0 when read from a source
+  /// that doesn't supply it (e.g. the single-entry detail read).
+  final double total;
+
   const JournalEntry({
     required this.id,
     required this.tenantId,
@@ -27,5 +31,6 @@ class JournalEntry {
     this.postedBy,
     this.correlationId,
     required this.createdAt,
+    this.total = 0,
   });
 }

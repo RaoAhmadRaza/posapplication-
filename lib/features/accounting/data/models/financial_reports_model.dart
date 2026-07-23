@@ -1,6 +1,19 @@
 import '../../domain/entities/financial_reports.dart';
+import '../../domain/entities/report_line.dart';
 
 double _d(Object? v) => double.tryParse(v.toString()) ?? 0;
+
+List<ReportLine> _lines(Object? raw) {
+  return (raw as List<dynamic>? ?? const [])
+      .whereType<Map<String, dynamic>>()
+      .map((r) => ReportLine(
+            code: r['code']?.toString(),
+            name: r['name']?.toString() ?? '',
+            type: r['type']?.toString() ?? '',
+            amount: _d(r['amount']),
+          ))
+      .toList();
+}
 
 class FinancialReportsModel {
   static TrialBalance trialBalance(Map<String, dynamic> j) {
@@ -28,6 +41,7 @@ class FinancialReportsModel {
       revenue: _d(j['revenue']),
       expenses: _d(j['expenses']),
       netProfit: _d(j['net_profit']),
+      lines: _lines(j['by_account']),
     );
   }
 
@@ -38,6 +52,7 @@ class FinancialReportsModel {
       equity: _d(j['equity_total'] ?? j['equity']),
       retainedEarnings: _d(j['retained_earnings']),
       balanced: j['balanced'] == true,
+      lines: _lines(j['by_account']),
     );
   }
 }

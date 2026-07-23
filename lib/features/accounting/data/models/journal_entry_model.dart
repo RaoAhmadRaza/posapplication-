@@ -16,6 +16,7 @@ class JournalEntryModel {
       postedBy: json['posted_by'] as String?,
       correlationId: json['correlation_id'] as String?,
       createdAt: DateTime.parse(json['created_at'] as String),
+      total: (json['total'] as num?)?.toDouble() ?? 0,
     );
   }
 }
