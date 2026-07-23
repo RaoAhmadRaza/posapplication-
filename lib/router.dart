@@ -592,23 +592,6 @@ final appRouter = GoRouter(
       builder: (context, state) => const SyncExceptionCentrePage(),
     ),
     GoRoute(
-      path: '/approvals',
-      builder: (context, state) => const PendingApprovalsPage(),
-    ),
-    GoRoute(
-      path: '/approvals/history',
-      builder: (context, state) => const ApprovalHistoryPage(),
-    ),
-    GoRoute(
-      path: '/approvals/workflows',
-      builder: (context, state) => const ApprovalWorkflowsPage(),
-    ),
-    GoRoute(
-      path: '/approvals/:id',
-      builder: (context, state) =>
-          ApprovalDetailPage(requestId: state.pathParameters['id']!),
-    ),
-    GoRoute(
       path: '/staff',
       builder: (context, state) => const StaffInvitesPage(),
     ),
@@ -1176,6 +1159,36 @@ final appRouter = GoRouter(
               path: '/accounting/reports/cash-bank-book',
               pageBuilder: (context, state) =>
                   _fadePage(state, const CashBankBookPage()),
+            ),
+          ],
+        ),
+
+        // ── Approvals (branch 9) ── promoted from top-level routes so the rail
+        // carries an Approvals tab. Pending hub is the branch root (no back);
+        // history/workflows/detail are pushed on top and pop back via their
+        // AppDetailScaffold back button. Same chrome, so they cross-fade.
+        StatefulShellBranch(
+          routes: [
+            GoRoute(
+              path: '/approvals',
+              pageBuilder: (context, state) =>
+                  _fadePage(state, const PendingApprovalsPage()),
+            ),
+            GoRoute(
+              path: '/approvals/history',
+              pageBuilder: (context, state) =>
+                  _fadePage(state, const ApprovalHistoryPage()),
+            ),
+            GoRoute(
+              path: '/approvals/workflows',
+              pageBuilder: (context, state) =>
+                  _fadePage(state, const ApprovalWorkflowsPage()),
+            ),
+            GoRoute(
+              path: '/approvals/:id',
+              pageBuilder: (context, state) => _fadePage(
+                  state,
+                  ApprovalDetailPage(requestId: state.pathParameters['id']!)),
             ),
           ],
         ),

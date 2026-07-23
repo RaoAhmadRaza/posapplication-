@@ -207,7 +207,7 @@ class InventoryHubPage extends ConsumerWidget {
                         subtitle: count > 0
                             ? '$count awaiting approval'
                             : 'Pending & escalated requests',
-                        onTap: () => context.push('/approvals'),
+                        onTap: () => context.go('/approvals'),
                       );
                     }),
                     const SizedBox(height: AppSpacing.xxl),
