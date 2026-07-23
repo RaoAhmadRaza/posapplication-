@@ -463,6 +463,43 @@ now zero static-colour refs, works in Counter mode. The whole app is now on LUMI
   attendance grid + mark sheet, leave approve/reject, clock in/out, payroll calculate/approve/disburse,
   the advance recovery bar, and a screenshot diff vs the export renders.
 
+## UI Redesign — purchasing module (DONE 2026-07-23; detail in DECISIONS)
+Fifteenth design export (`Purchasing.dc.html` prototype), SAME design-system UUID (5cd3f8f0-…) →
+tokens/theme/clay untouched; consumer-side reskin of all 14 purchasing pages. Purchasing was on
+light-only static `AppColors` (~250 refs, 0 `context.lum`) + raw Scaffold/AppBar per page — now **zero**
+static-colour refs across the module, works in Counter mode.
+- **Sub-routes promoted into the branch** (user-approved router edit, mirrors reporting/accounting/HR).
+  The 12 top-level `/purchasing/*` routes (orders/invoices-list/returns/reorder/payments + all
+  detail/form/receive/match) moved INTO the existing purchasing `StatefulShellBranch` (index 2, no
+  index shift; already held hub + suppliers) on `pageBuilder`+`_fadePage`, so the rail/bottom-bar now
+  persist on every purchasing screen. **One documented exception:** `/purchasing/invoices/:id` stays
+  TOP-LEVEL (like `/sales/invoice/:invoiceId`) because the top-level `/dashboard/drilldown` pushes it
+  from above the shell — pushing a shell descendant from above the shell trips go_router's
+  `!keyReservation.contains(key)` assertion. All `extra`/path-param contracts + inbound push/go links
+  byte-identical; `bottom_nav_shell.dart` untouched.
+- **Chrome**: hub = `ModuleScaffold` (branch root, no back) + width-derived clay tile grid (6 tiles,
+  Suppliers tile shipped WORKING, not the mock's "Soon"). All 13 other screens = `AppDetailScaffold`
+  (clay back). Lists = `AppFilterChips` (server-side status filter → **no count badges**, no unfiltered
+  set to count) + `AppPill` status + `AppMoneyText` + `app_states` empty/error. Detail/forms use
+  `AppSectionCard`/`AppDropdown`/`AppMoneyField`/`showAppSheet` (product + supplier pickers)/
+  `showAppToast`; PO cancel `AlertDialog` → a reason-carrying `showAppSheet`. Two-column detail/match
+  via `LayoutBuilder` (≥760). Decorative ⌘K header search omitted; real sync/bell/avatar via ModuleHeader.
+- **Honest data** — all mapped to real fields: supplier name·city (`suppliersProvider`), product
+  names (`productsProvider`/`getProduct`), invoice-match variance = REAL `matchVariance` (not mock
+  +4200), return-detail IMEI pills = REAL `imei_ids_json`, picker payable = `payablesAgingProvider`.
+  **Omissions** (no backing field): po-list "· N lines" (list payload is headers only), po-detail GRN
+  "N units" (GRN header has no items). Invoice rows use the vendor `supplierInvoiceNumber` (schema has
+  no internal invoice number). Payment methods + cash-only GL path (`p_bank_account_id: null`) unchanged.
+- New module widgets (`presentation/widgets/`): `purchasing_ui.dart` (status→AppPillTone/label maps +
+  `ymd`), `purchasing_imei_capture.dart` (shared IMEI block for GRN + return forms). Per-page list/detail
+  cards kept inline. No core/design edits, no new deps. Forms fanned to 5 parallel subagents.
+- GATE: `flutter analyze` **8 issues, 0 new** (baseline 8); macOS debug build succeeds (exit 0).
+- **VERIFY OWED (on-device eyeball)** — agent env can't foreground/screenshot: all 14 screens light +
+  dark, rail persists on every purchasing screen EXCEPT invoice-detail, the `/dashboard/drilldown` →
+  invoice-detail push still resolves, hub tiles, order lifecycle (submit/approve/receive/invoice/return/
+  cancel-with-reason), GRN + IMEI, invoice match + variance, payment, returns form/detail (IMEI pills),
+  reorder → create PO, and a screenshot diff vs the 13 reference renders.
+
 ## Auth UX pass — Phases 1–4 DONE (2026-07-20)
 Interaction/UX depth pass on top of the LUMINA reskin (plan: friction→feedback→flow→a11y; delight
 Phase 5 deferred). Frontend + minimal flow/routing (user-approved exception to UI-only guardrail).
