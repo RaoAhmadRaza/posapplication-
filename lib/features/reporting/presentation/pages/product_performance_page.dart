@@ -1,17 +1,21 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:fl_chart/fl_chart.dart';
+import 'package:lucide_icons_flutter/lucide_icons.dart';
 import '../../../../core/design/app_colors.dart';
-import '../../../../core/design/format.dart';
-import '../../../../core/design/app_radius.dart';
 import '../../../../core/design/app_spacing.dart';
 import '../../../../core/design/app_typography.dart';
+import '../../../../core/design/format.dart';
 import '../../../../core/design/widgets/app_card.dart';
-import '../../../../core/design/widgets/app_inline_banner.dart';
+import '../../../../core/design/widgets/app_detail_scaffold.dart';
+import '../../../../core/design/widgets/app_filter_chips.dart';
+import '../../../../core/design/widgets/app_section_card.dart';
+import '../../../../core/design/widgets/app_states.dart';
 import '../../../../core/widgets/permission_gate.dart';
 import '../controllers/reporting_controllers.dart';
 import '../../domain/entities/reporting.dart';
 import '../widgets/report_export_button.dart';
+import '../widgets/reporting_bar_chart.dart';
+import '../widgets/reporting_ui.dart';
 
 /// Metric used to sort/chart the product-performance rows.
 enum _SortMetric {
@@ -29,7 +33,6 @@ enum _SortMetric {
       };
 }
 
-/// How many products the top-section bar chart shows.
 const _kTopCount = 8;
 
 class ProductPerformancePage extends ConsumerStatefulWidget {
@@ -46,257 +49,156 @@ class _ProductPerformancePageState
 
   @override
   Widget build(BuildContext context) {
-    return PermissionGate(
-      module: 'reports',
-      action: 'read',
-      fallback: Scaffold(
-        backgroundColor: AppColors.background,
-        body: Center(
+    final lum = context.lum;
+    final async = ref.watch(productPerformanceProvider);
+    return AppDetailScaffold(
+      eyebrow: 'Reports',
+      title: 'Product performance',
+      description: 'Top movers by revenue, profit or units sold.',
+      actions: [
+        ReportExportButton(
+          title: 'Product Performance',
+          headers: const ['Product', 'SKU', 'Units', 'Revenue', 'Profit', 'Invoices'],
+          rowsBuilder: () {
+            final rows = ref.read(productPerformanceProvider).value ?? [];
+            final sorted = [...rows]
+              ..sort((a, b) => _metric.value(b).compareTo(_metric.value(a)));
+            return sorted
+                .map((r) => [
+                      r.productName,
+                      r.sku ?? '',
+                      r.unitsSold.toStringAsFixed(0),
+                      r.revenue.toStringAsFixed(2),
+                      r.profit.toStringAsFixed(2),
+                      r.invoiceCount.toString(),
+                    ])
+                .toList();
+          },
+        ),
+      ],
+      child: PermissionGate(
+        module: 'reports',
+        action: 'read',
+        fallback: Center(
           child: Text(
-            'No access to reports.',
-            style: AppTypography.subhead.copyWith(color: AppColors.textMuted),
+            'You don’t have access to reports.',
+            style: AppTypography.subhead.copyWith(color: lum.g500),
           ),
         ),
-      ),
-      child: _buildContent(context),
-    );
-  }
-
-  Widget _buildContent(BuildContext context) {
-    final rowsAsync = ref.watch(productPerformanceProvider);
-    return Scaffold(
-      backgroundColor: AppColors.background,
-      appBar: AppBar(
-        backgroundColor: AppColors.background,
-        surfaceTintColor: AppColors.background,
-        title: Text('Product Performance', style: AppTypography.largeTitle),
-        actions: [
-          ReportExportButton(
-            title: 'Product Performance',
-            headers: const [
-              'Product',
-              'SKU',
-              'Units',
-              'Revenue',
-              'Profit',
-              'Invoices',
-            ],
-            rowsBuilder: () {
-              final rows =
-                  ref.read(productPerformanceProvider).value ?? [];
-              final sorted = [...rows]
-                ..sort((a, b) => _metric.value(b).compareTo(_metric.value(a)));
-              return sorted
-                  .map((r) => [
-                        r.productName,
-                        r.sku ?? '',
-                        r.unitsSold.toStringAsFixed(0),
-                        r.revenue.toStringAsFixed(2),
-                        r.profit.toStringAsFixed(2),
-                        r.invoiceCount.toString(),
-                      ])
-                  .toList();
-            },
+        child: async.when(
+          loading: () => const Padding(
+            padding: EdgeInsets.only(top: AppSpacing.xxxl),
+            child: Center(child: CircularProgressIndicator()),
           ),
-        ],
-      ),
-      body: rowsAsync.when(
-        loading: () => const Center(child: CircularProgressIndicator()),
-        error: (_, _) => ListView(
-          padding:
-              const EdgeInsets.symmetric(horizontal: AppSpacing.screenPadding),
-          children: [
-            const SizedBox(height: AppSpacing.xxl),
-            AppInlineBanner(
-              message: 'Could not load report.',
-              type: BannerType.error,
-            ),
-          ],
+          error: (_, _) => const AppErrorState(
+            title: 'Couldn’t load the report',
+            body: 'We couldn’t reach the server. Please try again.',
+          ),
+          data: (rows) => rows.isEmpty
+              ? const AppEmptyState(
+                  icon: LucideIcons.trendingUp,
+                  title: 'Nothing to show',
+                  body: 'Product figures appear here once you’ve made sales.',
+                )
+              : _content(context, rows),
         ),
-        data: (rows) => _buildBody(context, rows),
       ),
     );
   }
 
-  Widget _buildBody(BuildContext context, List<ProductPerformanceRow> rows) {
-    if (rows.isEmpty) {
-      return Center(
-        child: Text(
-          'Nothing to show.',
-          style: AppTypography.subhead.copyWith(color: AppColors.textMuted),
-        ),
-      );
-    }
-
+  Widget _content(BuildContext context, List<ProductPerformanceRow> rows) {
+    final lum = context.lum;
     final sorted = [...rows]
       ..sort((a, b) => _metric.value(b).compareTo(_metric.value(a)));
     final top = sorted.take(_kTopCount).toList();
+    final muted = Color.lerp(lum.accent, lum.surface, 0.5)!;
 
-    return ListView(
-      padding: const EdgeInsets.symmetric(horizontal: AppSpacing.screenPadding),
+    final bars = [
+      for (var i = 0; i < top.length; i++)
+        ReportingBar(
+          label: top[i].sku ?? top[i].productName,
+          value: _metric.value(top[i]),
+          valueLabel: abbreviateNum(_metric.value(top[i])),
+          color: i == 0 ? lum.accent : muted,
+        ),
+    ];
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
-        const SizedBox(height: AppSpacing.md),
-        _SortSelector(
-          selected: _metric,
-          onChanged: (m) => setState(() => _metric = m),
+        Align(
+          alignment: Alignment.centerLeft,
+          child: AppFilterChips(
+            labels: [for (final m in _SortMetric.values) m.label],
+            selected: _SortMetric.values.indexOf(_metric),
+            onSelected: (i) =>
+                setState(() => _metric = _SortMetric.values[i]),
+          ),
         ),
         const SizedBox(height: AppSpacing.xl),
-        _TopProductsChart(rows: top, metric: _metric),
-        const SizedBox(height: AppSpacing.xxl),
-        Text('All Products', style: AppTypography.title2),
-        const SizedBox(height: AppSpacing.md),
-        ...sorted.map((r) => _ProductRow(row: r)),
-        const SizedBox(height: AppSpacing.xxxl),
-      ],
-    );
-  }
-}
-
-class _SortSelector extends StatelessWidget {
-  const _SortSelector({required this.selected, required this.onChanged});
-
-  final _SortMetric selected;
-  final ValueChanged<_SortMetric> onChanged;
-
-  @override
-  Widget build(BuildContext context) {
-    return Wrap(
-      spacing: AppSpacing.sm,
-      children: [
-        for (final m in _SortMetric.values)
-          ChoiceChip(
-            label: Text(m.label),
-            selected: m == selected,
-            onSelected: (_) => onChanged(m),
-            showCheckmark: false,
-            backgroundColor: AppColors.background,
-            selectedColor: AppColors.accent.withValues(alpha: 0.12),
-            side: BorderSide(
-              color: m == selected ? AppColors.accent : AppColors.separator,
-              width: 0.5,
-            ),
-            labelStyle: AppTypography.footnote.copyWith(
-              color: m == selected ? AppColors.accent : AppColors.textMuted,
-              fontWeight: m == selected ? FontWeight.w600 : FontWeight.w400,
-            ),
-          ),
-      ],
-    );
-  }
-}
-
-class _TopProductsChart extends StatelessWidget {
-  const _TopProductsChart({required this.rows, required this.metric});
-
-  final List<ProductPerformanceRow> rows;
-  final _SortMetric metric;
-
-  @override
-  Widget build(BuildContext context) {
-    final maxY = rows.isEmpty
-        ? 100.0
-        : rows.map(metric.value).reduce((a, b) => a > b ? a : b) * 1.2;
-    return AppCard(
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Text('Top Products · ${metric.label}',
-              style: AppTypography.headline),
-          const SizedBox(height: AppSpacing.xl),
-          SizedBox(
-            height: 220,
-            child: BarChart(
-              BarChartData(
-                alignment: BarChartAlignment.spaceAround,
-                maxY: maxY > 0 ? maxY : 100,
-                barTouchData: BarTouchData(
-                  touchTooltipData: BarTouchTooltipData(
-                    getTooltipItem: (group, _, rod, _) {
-                      return BarTooltipItem(
-                        metric == _SortMetric.units
-                            ? rod.toY.toStringAsFixed(0)
-                            : formatPkr(rod.toY),
-                        const TextStyle(
-                          color: Colors.white,
-                          fontSize: 12,
-                          fontWeight: FontWeight.w600,
-                        ),
-                      );
-                    },
-                  ),
-                ),
-                titlesData: FlTitlesData(
-                  show: true,
-                  bottomTitles: AxisTitles(
-                    sideTitles: SideTitles(
-                      showTitles: true,
-                      reservedSize: 32,
-                      getTitlesWidget: (val, _) {
-                        final idx = val.toInt();
-                        if (idx < 0 || idx >= rows.length) {
-                          return const SizedBox();
-                        }
-                        final r = rows[idx];
-                        final label = r.sku ?? r.productName;
-                        return Padding(
-                          padding: const EdgeInsets.only(top: 8),
-                          child: SizedBox(
-                            width: 48,
-                            child: Text(
-                              label,
-                              maxLines: 1,
-                              overflow: TextOverflow.ellipsis,
-                              textAlign: TextAlign.center,
-                              style: AppTypography.caption
-                                  .copyWith(color: AppColors.textHint),
-                            ),
-                          ),
-                        );
-                      },
-                    ),
-                  ),
-                  leftTitles: AxisTitles(
-                    sideTitles: SideTitles(
-                      showTitles: true,
-                      reservedSize: 40,
-                      getTitlesWidget: (val, _) {
-                        return Text(
-                          val.toStringAsFixed(0),
-                          style: AppTypography.caption
-                              .copyWith(color: AppColors.textHint),
-                        );
-                      },
-                    ),
-                  ),
-                  topTitles: const AxisTitles(
-                      sideTitles: SideTitles(showTitles: false)),
-                  rightTitles: const AxisTitles(
-                      sideTitles: SideTitles(showTitles: false)),
-                ),
-                gridData: FlGridData(
-                  show: true,
-                  drawVerticalLine: false,
-                  horizontalInterval:
-                      maxY > 0 ? (maxY / 4).ceilToDouble() : 25,
-                ),
-                borderData: FlBorderData(show: false),
-                barGroups: List.generate(rows.length, (i) {
-                  return BarChartGroupData(
-                    x: i,
-                    barRods: [
-                      BarChartRodData(
-                        toY: metric.value(rows[i]),
-                        color: AppColors.accent,
-                        width: 18,
-                        borderRadius: const BorderRadius.vertical(
-                            top: Radius.circular(4)),
-                      ),
+        AppSectionCard(
+          eyebrow: 'Top $_kTopCount by ${_metric.label.toLowerCase()}',
+          child: ReportingBarChart(bars: bars),
+        ),
+        const SizedBox(height: AppSpacing.xl),
+        AppCard(
+          padding: EdgeInsets.zero,
+          child: LayoutBuilder(
+            builder: (context, c) {
+              final width = c.maxWidth < 560 ? 560.0 : c.maxWidth;
+              return SingleChildScrollView(
+                scrollDirection: Axis.horizontal,
+                child: SizedBox(
+                  width: width,
+                  child: Column(
+                    children: [
+                      _HeaderRow(),
+                      for (final r in sorted) _ProductRow(row: r),
                     ],
-                  );
-                }),
-              ),
-            ),
+                  ),
+                ),
+              );
+            },
           ),
+        ),
+      ],
+    );
+  }
+}
+
+const _cols = [2.2, 1.0, 1.2, 1.2, 0.9];
+
+class _HeaderRow extends StatelessWidget {
+  @override
+  Widget build(BuildContext context) {
+    final lum = context.lum;
+    final style = AppTypography.caption.copyWith(
+      fontSize: 11,
+      letterSpacing: 0.5,
+      fontWeight: FontWeight.w700,
+      color: lum.g500,
+    );
+    Widget cell(int i, String label, {bool right = true}) => Expanded(
+          flex: (_cols[i] * 10).round(),
+          child: Text(
+            label.toUpperCase(),
+            textAlign: right && i > 0 ? TextAlign.right : TextAlign.left,
+            style: style,
+          ),
+        );
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
+      decoration: BoxDecoration(
+        color: lum.g100,
+        border: Border(bottom: BorderSide(color: lum.hairline)),
+      ),
+      child: Row(
+        children: [
+          cell(0, 'Product'),
+          cell(1, 'Units'),
+          cell(2, 'Revenue'),
+          cell(3, 'Profit'),
+          cell(4, 'Invoices'),
         ],
       ),
     );
@@ -309,54 +211,56 @@ class _ProductRow extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final lum = context.lum;
+    final mono = TextStyle(
+      fontFamily: AppTypography.mono,
+      fontSize: 13.5,
+      color: lum.textPrimary,
+    );
+    Widget num(int i, String text, {Color? color}) => Expanded(
+          flex: (_cols[i] * 10).round(),
+          child: Text(
+            text,
+            textAlign: TextAlign.right,
+            style: mono.copyWith(color: color ?? lum.textPrimary),
+          ),
+        );
     return Container(
-      margin: const EdgeInsets.only(bottom: AppSpacing.sm),
-      padding: const EdgeInsets.all(AppSpacing.base),
+      padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 13),
       decoration: BoxDecoration(
-        color: AppColors.background,
-        borderRadius: BorderRadius.circular(AppRadius.card),
-        border: Border.all(color: AppColors.separator, width: 0.5),
+        border: Border(top: BorderSide(color: lum.hairline)),
       ),
       child: Row(
         children: [
           Expanded(
+            flex: (_cols[0] * 10).round(),
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Text(
                   row.productName,
-                  style: AppTypography.headline,
                   maxLines: 1,
                   overflow: TextOverflow.ellipsis,
+                  style: AppTypography.body.copyWith(color: lum.textPrimary),
                 ),
                 if (row.sku != null) ...[
                   const SizedBox(height: 2),
                   Text(
                     row.sku!,
-                    style: AppTypography.caption
-                        .copyWith(color: AppColors.textMuted),
+                    style: TextStyle(
+                      fontFamily: AppTypography.mono,
+                      fontSize: 11.5,
+                      color: lum.g500,
+                    ),
                   ),
                 ],
               ],
             ),
           ),
-          const SizedBox(width: AppSpacing.md),
-          Column(
-            crossAxisAlignment: CrossAxisAlignment.end,
-            children: [
-              Text(
-                formatPkr(row.revenue),
-                style: AppTypography.headline
-                    .copyWith(color: AppColors.accent),
-              ),
-              const SizedBox(height: 2),
-              Text(
-                'profit ${formatPkr(row.profit)} · units ${row.unitsSold.toStringAsFixed(0)}',
-                style:
-                    AppTypography.caption.copyWith(color: AppColors.textMuted),
-              ),
-            ],
-          ),
+          num(1, row.unitsSold.toStringAsFixed(0)),
+          num(2, formatAmount(row.revenue, decimals: 0)),
+          num(3, formatAmount(row.profit, decimals: 0), color: lum.successText),
+          num(4, '${row.invoiceCount}', color: lum.g600),
         ],
       ),
     );
