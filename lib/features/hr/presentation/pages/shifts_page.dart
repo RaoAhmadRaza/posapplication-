@@ -1,12 +1,20 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:lucide_icons_flutter/lucide_icons.dart';
 import '../../../../core/design/app_colors.dart';
 import '../../../../core/design/app_radius.dart';
 import '../../../../core/design/app_spacing.dart';
 import '../../../../core/design/app_typography.dart';
+import '../../../../core/design/clay.dart';
 import '../../../../core/design/widgets/app_button.dart';
+import '../../../../core/design/widgets/app_detail_scaffold.dart';
 import '../../../../core/design/widgets/app_inline_banner.dart';
+import '../../../../core/design/widgets/app_pill.dart';
+import '../../../../core/design/widgets/app_sheet.dart';
+import '../../../../core/design/widgets/app_states.dart';
 import '../../../../core/design/widgets/app_text_field.dart';
+import '../../../../core/design/widgets/app_toast.dart';
+import '../../../../core/design/widgets/app_toggle.dart';
 import '../../../../core/widgets/permission_gate.dart';
 import '../../domain/entities/shift.dart';
 import '../controllers/shifts_controller.dart';
@@ -17,120 +25,148 @@ class ShiftsPage extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final async = ref.watch(shiftsProvider);
-    return Scaffold(
-      backgroundColor: AppColors.background,
-      appBar: AppBar(
-        backgroundColor: AppColors.background,
-        surfaceTintColor: AppColors.background,
-        leading: IconButton(
-          icon: const Icon(Icons.arrow_back_ios,
-              color: AppColors.accent, size: 20),
-          onPressed: () => Navigator.of(context).pop(),
-        ),
-        title: Text('Shifts', style: AppTypography.headline),
-      ),
-      floatingActionButton: PermissionGate(
-        module: 'hr',
-        action: 'update',
-        child: FloatingActionButton(
-          backgroundColor: AppColors.accent,
-          onPressed: () => _edit(context, ref, null),
-          child: const Icon(Icons.add, color: Colors.white),
-        ),
-      ),
-      body: SafeArea(
-        child: async.when(
-          loading: () => const Center(child: CircularProgressIndicator()),
-          error: (e, _) => Center(
-            child: Padding(
-              padding: const EdgeInsets.all(AppSpacing.screenPadding),
-              child: AppInlineBanner(
-                  message: 'Could not load shifts.', type: BannerType.error),
-            ),
+    return AppDetailScaffold(
+      eyebrow: 'HR',
+      title: 'Shifts',
+      description: 'Define the working windows staff are scheduled against.',
+      maxContentWidth: 820,
+      actions: [
+        PermissionGate(
+          module: 'hr',
+          action: 'update',
+          child: AppButton(
+            label: 'New shift',
+            icon: LucideIcons.plus,
+            size: AppButtonSize.sm,
+            onPressed: () => _edit(context, ref, null),
           ),
-          data: (shifts) {
-            if (shifts.isEmpty) {
-              return Center(
-                child: Text('No shifts yet.',
-                    style: AppTypography.footnote
-                        .copyWith(color: AppColors.textMuted)),
-              );
-            }
-            return ListView(
-              padding: const EdgeInsets.all(AppSpacing.screenPadding),
-              children: [
-                for (final s in shifts)
-                  Padding(
-                    padding: const EdgeInsets.only(bottom: AppSpacing.sm),
-                    child: _ShiftRow(
-                        shift: s, onTap: () => _edit(context, ref, s)),
-                  ),
-              ],
-            );
-          },
         ),
+      ],
+      child: async.when(
+        loading: () => const Padding(
+          padding: EdgeInsets.all(AppSpacing.xxl),
+          child: Center(child: CircularProgressIndicator()),
+        ),
+        error: (e, _) => const AppInlineBanner(
+          message: 'Could not load shifts.',
+          type: BannerType.error,
+        ),
+        data: (shifts) {
+          if (shifts.isEmpty) {
+            return const AppEmptyState(
+              icon: LucideIcons.clock,
+              title: 'No shifts yet',
+              body: 'Create a shift to define the windows staff work against.',
+            );
+          }
+          return LayoutBuilder(
+            builder: (context, constraints) {
+              const gap = 12.0;
+              const minTile = 240.0;
+              final cols =
+                  (constraints.maxWidth / (minTile + gap)).floor().clamp(1, 6);
+              final tileWidth =
+                  (constraints.maxWidth - gap * (cols - 1)) / cols;
+              return Wrap(
+                spacing: gap,
+                runSpacing: gap,
+                children: [
+                  for (final s in shifts)
+                    SizedBox(
+                      width: tileWidth,
+                      child: _ShiftCard(
+                        shift: s,
+                        onTap: () => _edit(context, ref, s),
+                      ),
+                    ),
+                ],
+              );
+            },
+          );
+        },
       ),
     );
   }
 
-  Future<void> _edit(
-      BuildContext context, WidgetRef ref, Shift? shift) async {
-    final data = await showModalBottomSheet<Map<String, dynamic>>(
+  Future<void> _edit(BuildContext context, WidgetRef ref, Shift? shift) async {
+    final data = await showAppSheet<Map<String, dynamic>>(
       context: context,
-      isScrollControlled: true,
-      backgroundColor: AppColors.background,
       builder: (_) => _ShiftSheet(shift: shift),
     );
     if (data == null || !context.mounted) return;
     final failure = await ref.read(shiftsProvider.notifier).upsert(data);
     if (!context.mounted) return;
     if (failure != null) {
-      ScaffoldMessenger.of(context)
-          .showSnackBar(SnackBar(content: Text(failure.message)));
+      showAppToast(context, failure.message, type: BannerType.error);
     }
   }
 }
 
-class _ShiftRow extends StatelessWidget {
-  const _ShiftRow({required this.shift, required this.onTap});
+class _ShiftCard extends StatelessWidget {
+  const _ShiftCard({required this.shift, required this.onTap});
   final Shift shift;
   final VoidCallback onTap;
 
   @override
   Widget build(BuildContext context) {
-    return Container(
-      decoration: BoxDecoration(
-        color: AppColors.background,
-        borderRadius: BorderRadius.circular(AppRadius.card),
-        border: Border.all(color: AppColors.separator, width: 0.5),
-      ),
+    final lum = context.lum;
+    return Semantics(
+      button: true,
+      label: '${shift.name}, ${shift.isActive ? 'active' : 'inactive'}',
       child: InkWell(
         onTap: onTap,
-        borderRadius: BorderRadius.circular(AppRadius.card),
-        child: Padding(
-          padding: const EdgeInsets.all(AppSpacing.md),
-          child: Row(
+        borderRadius: BorderRadius.circular(AppRadius.lg),
+        child: ClayContainer(
+          variant: ClayVariant.soft,
+          color: lum.surface,
+          borderRadius: AppRadius.lg,
+          isDark: lum.isDark,
+          padding: const EdgeInsets.all(16),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            mainAxisSize: MainAxisSize.min,
             children: [
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(shift.name,
-                        style: AppTypography.subhead
-                            .copyWith(fontWeight: FontWeight.w600)),
-                    const SizedBox(height: 2),
-                    Text(
-                        '${shift.startTime}–${shift.endTime} · grace ${shift.graceMinutes}m · break ${shift.breakMinutes}m',
-                        style: AppTypography.caption
-                            .copyWith(color: AppColors.textMuted)),
-                  ],
-                ),
+              Row(
+                children: [
+                  Expanded(
+                    child: Text(
+                      shift.name,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: AppTypography.headline.copyWith(
+                        fontSize: 15,
+                        color: lum.textPrimary,
+                      ),
+                    ),
+                  ),
+                  const SizedBox(width: 10),
+                  AppPill(
+                    label: shift.isActive ? 'Active' : 'Inactive',
+                    tone: shift.isActive
+                        ? AppPillTone.success
+                        : AppPillTone.neutral,
+                  ),
+                ],
               ),
-              if (!shift.isActive)
-                Text('Inactive',
-                    style: AppTypography.caption
-                        .copyWith(color: AppColors.textMuted)),
-              const Icon(Icons.chevron_right, color: AppColors.textMuted),
+              const SizedBox(height: 12),
+              Row(
+                children: [
+                  Icon(LucideIcons.clock, size: 16, color: lum.g400),
+                  const SizedBox(width: 8),
+                  Text(
+                    '${shift.startTime} – ${shift.endTime}',
+                    style: AppTypography.monoValue.copyWith(
+                      fontSize: 15,
+                      color: lum.textPrimary,
+                    ),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 8),
+              Text(
+                '${shift.graceMinutes} min grace · ${shift.breakMinutes} min break',
+                style: AppTypography.caption.copyWith(color: lum.g500),
+              ),
             ],
           ),
         ),
@@ -199,74 +235,95 @@ class _ShiftSheetState extends State<_ShiftSheet> {
 
   @override
   Widget build(BuildContext context) {
-    return Padding(
-      padding: EdgeInsets.only(
-        left: AppSpacing.screenPadding,
-        right: AppSpacing.screenPadding,
-        top: AppSpacing.lg,
-        bottom: MediaQuery.of(context).viewInsets.bottom + AppSpacing.lg,
-      ),
-      child: Column(
-        mainAxisSize: MainAxisSize.min,
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Text(widget.shift == null ? 'New Shift' : 'Edit Shift',
-              style: AppTypography.headline),
-          const SizedBox(height: AppSpacing.md),
-          AppTextField(
-              controller: _nameCtrl,
-              label: 'Name',
-              prefixIcon: Icons.schedule),
-          const SizedBox(height: AppSpacing.md),
-          Row(
-            children: [
-              Expanded(
-                  child: _TimeField(
-                      label: 'Start',
-                      value: _start,
-                      onTap: () => _pickTime(true))),
-              const SizedBox(width: AppSpacing.md),
-              Expanded(
-                  child: _TimeField(
-                      label: 'End',
-                      value: _end,
-                      onTap: () => _pickTime(false))),
-            ],
-          ),
-          const SizedBox(height: AppSpacing.md),
-          Row(
-            children: [
-              Expanded(
-                  child: AppTextField(
-                      controller: _graceCtrl,
-                      label: 'Grace (min)',
-                      prefixIcon: Icons.timer_outlined,
-                      keyboardType: TextInputType.number)),
-              const SizedBox(width: AppSpacing.md),
-              Expanded(
-                  child: AppTextField(
-                      controller: _breakCtrl,
-                      label: 'Break (min)',
-                      prefixIcon: Icons.free_breakfast_outlined,
-                      keyboardType: TextInputType.number)),
-            ],
-          ),
-          const SizedBox(height: AppSpacing.sm),
-          SwitchListTile(
-            contentPadding: EdgeInsets.zero,
-            activeThumbColor: AppColors.accent,
-            title: Text('Active', style: AppTypography.body),
-            value: _active,
-            onChanged: (v) => setState(() => _active = v),
-          ),
-          if (_error != null) ...[
-            const SizedBox(height: AppSpacing.sm),
-            AppInlineBanner(message: _error!, type: BannerType.error),
+    final lum = context.lum;
+    return Column(
+      mainAxisSize: MainAxisSize.min,
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        AppSheetHeader(title: widget.shift == null ? 'New shift' : 'Edit shift'),
+        AppTextField(
+          controller: _nameCtrl,
+          label: 'Name',
+          prefixIcon: LucideIcons.tag,
+        ),
+        const SizedBox(height: AppSpacing.base),
+        Row(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Expanded(
+              child: _TimeField(
+                label: 'Start',
+                value: _start,
+                onTap: () => _pickTime(true),
+              ),
+            ),
+            const SizedBox(width: AppSpacing.md),
+            Expanded(
+              child: _TimeField(
+                label: 'End',
+                value: _end,
+                onTap: () => _pickTime(false),
+              ),
+            ),
           ],
-          const SizedBox(height: AppSpacing.md),
-          AppButton(label: 'Save', fullWidth: true, onPressed: _save),
+        ),
+        const SizedBox(height: AppSpacing.base),
+        Row(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Expanded(
+              child: AppTextField(
+                controller: _graceCtrl,
+                label: 'Grace (min)',
+                prefixIcon: LucideIcons.timer,
+                keyboardType: TextInputType.number,
+              ),
+            ),
+            const SizedBox(width: AppSpacing.md),
+            Expanded(
+              child: AppTextField(
+                controller: _breakCtrl,
+                label: 'Break (min)',
+                prefixIcon: LucideIcons.coffee,
+                keyboardType: TextInputType.number,
+              ),
+            ),
+          ],
+        ),
+        const SizedBox(height: AppSpacing.base),
+        Container(
+          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+          decoration: BoxDecoration(
+            color: lum.surface2,
+            borderRadius: BorderRadius.circular(AppRadius.md),
+          ),
+          child: Row(
+            children: [
+              Expanded(
+                child: Text(
+                  'Active',
+                  style: AppTypography.body.copyWith(
+                    fontWeight: FontWeight.w600,
+                    color: lum.textPrimary,
+                  ),
+                ),
+              ),
+              const SizedBox(width: 12),
+              AppToggle(
+                value: _active,
+                semanticLabel: 'Active',
+                onChanged: (v) => setState(() => _active = v),
+              ),
+            ],
+          ),
+        ),
+        if (_error != null) ...[
+          const SizedBox(height: AppSpacing.base),
+          AppInlineBanner(message: _error!, type: BannerType.error),
         ],
-      ),
+        const SizedBox(height: AppSpacing.xl),
+        AppButton(label: 'Save shift', fullWidth: true, onPressed: _save),
+      ],
     );
   }
 }
@@ -280,29 +337,45 @@ class _TimeField extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final lum = context.lum;
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
+      mainAxisSize: MainAxisSize.min,
       children: [
         Padding(
-          padding: const EdgeInsets.only(left: 4, bottom: 8),
-          child: Text(label, style: AppTypography.fieldLabel),
+          padding: const EdgeInsets.only(left: 2, bottom: 8),
+          child: Text(
+            label,
+            style: AppTypography.fieldLabel.copyWith(color: lum.g700),
+          ),
         ),
-        InkWell(
-          onTap: onTap,
-          borderRadius: BorderRadius.circular(12),
-          child: Container(
-            height: 52,
-            padding: const EdgeInsets.symmetric(horizontal: 12),
-            decoration: BoxDecoration(
-              color: AppColors.fieldFill,
-              borderRadius: BorderRadius.circular(12),
+        Semantics(
+          button: true,
+          label: '$label time, $value',
+          child: GestureDetector(
+            behavior: HitTestBehavior.opaque,
+            onTap: onTap,
+            child: ClayContainer(
+              variant: ClayVariant.inset,
+              color: lum.surface2,
+              borderRadius: AppRadius.md,
+              isDark: lum.isDark,
+              height: 48,
+              padding: const EdgeInsets.symmetric(horizontal: 14),
+              child: Row(
+                children: [
+                  Icon(LucideIcons.clock, size: 17, color: lum.g400),
+                  const SizedBox(width: 10),
+                  Text(
+                    value,
+                    style: AppTypography.monoValue.copyWith(
+                      fontSize: 15,
+                      color: lum.textPrimary,
+                    ),
+                  ),
+                ],
+              ),
             ),
-            child: Row(children: [
-              const Icon(Icons.access_time,
-                  color: AppColors.textMuted, size: 20),
-              const SizedBox(width: 10),
-              Text(value, style: AppTypography.fieldText),
-            ]),
           ),
         ),
       ],
