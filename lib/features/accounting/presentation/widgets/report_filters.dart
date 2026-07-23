@@ -1,12 +1,15 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:lucide_icons_flutter/lucide_icons.dart';
 import '../../../../core/design/app_colors.dart';
 import '../../../../core/design/app_radius.dart';
-import '../../../../core/design/app_spacing.dart';
 import '../../../../core/design/app_typography.dart';
+import '../../../../core/design/clay.dart';
 import '../../../auth/presentation/controllers/branch_controller.dart';
+import 'acct_date_field.dart';
 
-/// Branch filter shared by the report pages. null value = all branches.
+/// Branch filter shared by the report pages. null value = all branches. Rendered
+/// as the design's compact clay filter chip.
 class ReportBranchDropdown extends ConsumerWidget {
   const ReportBranchDropdown({
     super.key,
@@ -18,15 +21,17 @@ class ReportBranchDropdown extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
+    final lum = context.lum;
     final branches = ref.watch(userBranchesProvider).asData?.value ?? const [];
-    return _FieldShell(
+    return _Chip(
       child: DropdownButtonHideUnderline(
         child: DropdownButton<String?>(
           value: value,
-          isExpanded: true,
-          icon: const Icon(Icons.keyboard_arrow_down,
-              size: 18, color: AppColors.textMuted),
-          style: AppTypography.subhead,
+          isDense: true,
+          borderRadius: BorderRadius.circular(AppRadius.md),
+          dropdownColor: lum.surface,
+          icon: Icon(LucideIcons.chevronDown, size: 15, color: lum.g500),
+          style: AppTypography.subhead.copyWith(color: lum.textPrimary),
           onChanged: onChanged,
           items: [
             const DropdownMenuItem<String?>(
@@ -64,42 +69,47 @@ class ReportDateChip extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final text = '${value.year}-${value.month.toString().padLeft(2, '0')}'
-        '-${value.day.toString().padLeft(2, '0')}';
-    return _FieldShell(
+    final lum = context.lum;
+    return _Chip(
       onTap: () => _pick(context),
       child: Row(
+        mainAxisSize: MainAxisSize.min,
         children: [
-          const Icon(Icons.calendar_today, size: 15, color: AppColors.textMuted),
-          const SizedBox(width: AppSpacing.sm),
-          Expanded(
-            child: Text('$label: $text', style: AppTypography.subhead),
-          ),
+          Icon(LucideIcons.calendar, size: 15, color: lum.g500),
+          const SizedBox(width: 7),
+          Text('$label ${acctFormatDate(value)}',
+              style: AppTypography.subhead.copyWith(color: lum.textPrimary)),
         ],
       ),
     );
   }
 }
 
-class _FieldShell extends StatelessWidget {
-  const _FieldShell({required this.child, this.onTap});
+/// The design's clay filter chip shell.
+class _Chip extends StatelessWidget {
+  const _Chip({required this.child, this.onTap});
   final Widget child;
   final VoidCallback? onTap;
 
   @override
   Widget build(BuildContext context) {
-    return InkWell(
-      onTap: onTap,
-      borderRadius: BorderRadius.circular(AppRadius.field),
-      child: Container(
-        height: 44,
-        padding: const EdgeInsets.symmetric(horizontal: AppSpacing.md),
-        decoration: BoxDecoration(
-          color: AppColors.background,
-          borderRadius: BorderRadius.circular(AppRadius.field),
-          border: Border.all(color: AppColors.separator),
-        ),
-        child: Align(alignment: Alignment.centerLeft, child: child),
+    final lum = context.lum;
+    final chip = ClayContainer(
+      variant: ClayVariant.soft,
+      color: lum.surface,
+      borderRadius: AppRadius.pill,
+      isDark: lum.isDark,
+      height: 36,
+      padding: const EdgeInsets.symmetric(horizontal: 13),
+      child: Align(alignment: Alignment.centerLeft, child: child),
+    );
+    if (onTap == null) return chip;
+    return Semantics(
+      button: true,
+      child: GestureDetector(
+        behavior: HitTestBehavior.opaque,
+        onTap: onTap,
+        child: chip,
       ),
     );
   }
