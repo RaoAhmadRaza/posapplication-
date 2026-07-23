@@ -1,15 +1,19 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
+import 'package:lucide_icons_flutter/lucide_icons.dart';
 import '../../../../core/design/app_colors.dart';
-import '../../../../core/design/app_radius.dart';
-import '../../../../core/design/app_spacing.dart';
 import '../../../../core/design/app_typography.dart';
 import '../../../../core/design/widgets/app_button.dart';
 import '../../../../core/design/widgets/app_card.dart';
-import '../../../../core/design/widgets/app_inline_banner.dart';
+import '../../../../core/design/widgets/app_money_text.dart';
+import '../../../../core/design/widgets/app_pill.dart';
+import '../../../../core/design/widgets/app_states.dart';
+import '../../../../core/design/widgets/app_detail_scaffold.dart';
 import '../../domain/entities/journal_entry.dart';
 import '../controllers/journal_controller.dart';
+import '../widgets/acct_date_field.dart';
+import '../widgets/accounting_ui.dart';
 
 class JournalEntriesPage extends ConsumerWidget {
   const JournalEntriesPage({super.key});
@@ -18,44 +22,48 @@ class JournalEntriesPage extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final state = ref.watch(journalEntriesProvider);
 
-    return Scaffold(
-      backgroundColor: AppColors.background,
-      appBar: AppBar(
-        backgroundColor: AppColors.background,
-        surfaceTintColor: AppColors.background,
-        leading: IconButton(
-          icon: const Icon(Icons.arrow_back_ios,
-              color: AppColors.accent, size: 20),
-          onPressed: () => Navigator.of(context).pop(),
+    return AppDetailScaffold(
+      eyebrow: 'Accounting',
+      title: 'Journal entries',
+      actions: [
+        AppButton(
+          label: 'New voucher',
+          icon: LucideIcons.plus,
+          size: AppButtonSize.sm,
+          onPressed: () => context.push('/accounting/vouchers/create'),
         ),
-        title: Text('Journal', style: AppTypography.headline),
-      ),
-      floatingActionButton: FloatingActionButton(
-        backgroundColor: AppColors.accent,
-        onPressed: () => context.push('/accounting/vouchers/create'),
-        child: const Icon(Icons.add, color: Colors.white),
-      ),
-      body: SafeArea(
-        child: state.when(
-          loading: () => const Center(child: CircularProgressIndicator()),
-          error: (e, _) => _ErrorState(
-            onRetry: () =>
-                ref.read(journalEntriesProvider.notifier).refresh(),
+      ],
+      child: state.when(
+        loading: () => const Padding(
+          padding: EdgeInsets.only(top: 60),
+          child: Center(child: CircularProgressIndicator()),
+        ),
+        error: (e, _) => Padding(
+          padding: const EdgeInsets.only(top: 30),
+          child: AppErrorState(
+            title: 'Couldn\'t load entries',
+            body: 'Your data is safe. Check the connection and try again.',
+            onRetry: () => ref.read(journalEntriesProvider.notifier).refresh(),
           ),
-          data: (entries) => entries.isEmpty
-              ? const _EmptyState()
-              : ListView.builder(
-                  padding: const EdgeInsets.symmetric(
-                      horizontal: AppSpacing.screenPadding,
-                      vertical: AppSpacing.md),
-                  itemCount: entries.length,
-                  itemBuilder: (_, i) => Padding(
-                    padding: EdgeInsets.only(
-                        bottom: i < entries.length - 1 ? AppSpacing.md : 0),
-                    child: _EntryCard(entry: entries[i]),
-                  ),
-                ),
         ),
+        data: (entries) => entries.isEmpty
+            ? const Padding(
+                padding: EdgeInsets.only(top: 20),
+                child: AppEmptyState(
+                  icon: LucideIcons.notebookPen,
+                  title: 'No journal entries yet',
+                  body: 'Post your first voucher and it\'ll show up here.',
+                ),
+              )
+            : Column(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  for (final e in entries) ...[
+                    _EntryCard(entry: e),
+                    const SizedBox(height: 12),
+                  ],
+                ],
+              ),
       ),
     );
   }
@@ -65,102 +73,63 @@ class _EntryCard extends StatelessWidget {
   const _EntryCard({required this.entry});
   final JournalEntry entry;
 
-  String _date(DateTime d) => '${d.year}-${d.month.toString().padLeft(2, '0')}'
-      '-${d.day.toString().padLeft(2, '0')}';
-
   @override
   Widget build(BuildContext context) {
+    final lum = context.lum;
     return AppCard(
-      child: InkWell(
-        onTap: () => context.push('/accounting/journal/${entry.id}'),
-        borderRadius: BorderRadius.circular(AppRadius.card),
-        child: Padding(
-          padding: const EdgeInsets.all(AppSpacing.base),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
+      onTap: () => context.push('/accounting/journal/${entry.id}'),
+      padding: const EdgeInsets.fromLTRB(16, 14, 16, 14),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
             children: [
-              Row(
-                children: [
-                  Expanded(
-                    child: Text(entry.entryNumber,
-                        style: AppTypography.headline),
-                  ),
-                  if (entry.isReversing)
-                    Container(
-                      padding: const EdgeInsets.symmetric(
-                          horizontal: AppSpacing.sm, vertical: 4),
-                      decoration: BoxDecoration(
-                        color:
-                            AppColors.warning.withValues(alpha: 0.12),
-                        borderRadius:
-                            BorderRadius.circular(AppRadius.chip),
-                      ),
-                      child: Text('Reversing',
-                          style: AppTypography.caption.copyWith(
-                              color: AppColors.warning,
-                              fontWeight: FontWeight.w600)),
-                    ),
-                  const SizedBox(width: AppSpacing.sm),
-                  Text(_date(entry.createdAt),
-                      style: AppTypography.caption
-                          .copyWith(color: AppColors.textMuted)),
-                ],
+              Text(
+                entry.entryNumber,
+                style: TextStyle(
+                  fontFamily: AppTypography.mono,
+                  fontSize: 13,
+                  fontWeight: FontWeight.w600,
+                  color: lum.textPrimary,
+                ),
               ),
-              if (entry.description != null &&
-                  entry.description!.isNotEmpty) ...[
-                const SizedBox(height: AppSpacing.xs),
-                Text(entry.description!,
-                    style: AppTypography.footnote
-                        .copyWith(color: AppColors.textMuted)),
+              const SizedBox(width: 9),
+              AppPill(
+                label: acctRefLabel(entry.referenceType),
+                tone: acctRefTone(entry.referenceType),
+                showDot: false,
+              ),
+              if (entry.isReversing) ...[
+                const SizedBox(width: 6),
+                const AppPill(
+                  label: 'Reversing',
+                  tone: AppPillTone.warning,
+                  showDot: false,
+                ),
               ],
+              const Spacer(),
+              AcctMono(
+                acctFormatDate(entry.createdAt),
+                align: TextAlign.right,
+                size: 12,
+                color: lum.g500,
+                weight: FontWeight.w500,
+              ),
             ],
           ),
-        ),
-      ),
-    );
-  }
-}
-
-class _EmptyState extends StatelessWidget {
-  const _EmptyState();
-
-  @override
-  Widget build(BuildContext context) {
-    return Center(
-      child: Column(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          const Icon(Icons.menu_book, size: 48, color: AppColors.textHint),
-          const SizedBox(height: AppSpacing.md),
-          Text('No journal entries',
-              style:
-                  AppTypography.subhead.copyWith(color: AppColors.textMuted)),
-        ],
-      ),
-    );
-  }
-}
-
-class _ErrorState extends StatelessWidget {
-  const _ErrorState({required this.onRetry});
-  final VoidCallback onRetry;
-
-  @override
-  Widget build(BuildContext context) {
-    return Center(
-      child: Padding(
-        padding:
-            const EdgeInsets.symmetric(horizontal: AppSpacing.screenPadding),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            AppInlineBanner(
-                message: 'Could not load journal entries.',
-                type: BannerType.error),
-            const SizedBox(height: AppSpacing.md),
-            AppButton(label: 'Retry', onPressed: onRetry),
+          if (entry.description != null && entry.description!.isNotEmpty) ...[
+            const SizedBox(height: 8),
+            Text(
+              entry.description!,
+              style: AppTypography.body.copyWith(fontSize: 14, color: lum.g700),
+            ),
           ],
-        ),
+          const SizedBox(height: 10),
+          Row(
+            mainAxisAlignment: MainAxisAlignment.end,
+            children: [AppMoneyText(entry.total, size: 14)],
+          ),
+        ],
       ),
     );
   }
