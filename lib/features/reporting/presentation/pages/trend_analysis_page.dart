@@ -1,19 +1,31 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:fl_chart/fl_chart.dart';
+import 'package:lucide_icons_flutter/lucide_icons.dart';
 import '../../../../core/design/app_colors.dart';
-import '../../../../core/design/format.dart';
 import '../../../../core/design/app_spacing.dart';
 import '../../../../core/design/app_typography.dart';
-import '../../../../core/design/widgets/app_card.dart';
-import '../../../../core/design/widgets/app_inline_banner.dart';
+import '../../../../core/design/widgets/app_detail_scaffold.dart';
+import '../../../../core/design/widgets/app_filter_chips.dart';
+import '../../../../core/design/widgets/app_money_text.dart';
+import '../../../../core/design/widgets/app_section_card.dart';
+import '../../../../core/design/widgets/app_states.dart';
 import '../../../../core/widgets/permission_gate.dart';
 import '../../domain/entities/reporting.dart';
 import '../controllers/reporting_controllers.dart';
 import '../widgets/report_export_button.dart';
+import '../widgets/reporting_line_chart.dart';
+import '../widgets/reporting_stat_card.dart';
 
-/// yyyy-MM-dd for the daily-sales range params.
 String _isoDay(DateTime d) => d.toIso8601String().substring(0, 10);
+
+const _months = [
+  'Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun',
+  'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec',
+];
+String _shortDate(DateTime d) => '${d.day} ${_months[d.month - 1]}';
+
+const _rangeDays = [7, 30, 90];
 
 class TrendAnalysisPage extends ConsumerStatefulWidget {
   const TrendAnalysisPage({super.key});
@@ -33,298 +45,175 @@ class _TrendAnalysisPageState extends ConsumerState<TrendAnalysisPage> {
 
   @override
   Widget build(BuildContext context) {
-    return PermissionGate(
-      module: 'reports',
-      action: 'read',
-      fallback: Scaffold(
-        backgroundColor: AppColors.background,
-        body: Center(
+    final lum = context.lum;
+    final async = ref.watch(dailySalesProvider(_range));
+    return AppDetailScaffold(
+      eyebrow: 'Reports',
+      title: 'Trend analysis',
+      description: 'Revenue and profit over your selected range.',
+      actions: [
+        ReportExportButton(
+          title: 'Sales Trend',
+          headers: const ['Date', 'Revenue', 'Profit', 'Invoices'],
+          rowsBuilder: () {
+            final rows = ref.read(dailySalesProvider(_range)).value ?? [];
+            return rows
+                .map((r) => [
+                      r.saleDate.toIso8601String().substring(0, 10),
+                      r.totalRevenue.toStringAsFixed(2),
+                      r.totalProfit.toStringAsFixed(2),
+                      r.invoiceCount.toString(),
+                    ])
+                .toList();
+          },
+        ),
+      ],
+      child: PermissionGate(
+        module: 'reports',
+        action: 'read',
+        fallback: Center(
           child: Text(
-            'No access to reports.',
-            style: AppTypography.subhead.copyWith(color: AppColors.textMuted),
+            'You don’t have access to reports.',
+            style: AppTypography.subhead.copyWith(color: lum.g500),
           ),
         ),
-      ),
-      child: Scaffold(
-        backgroundColor: AppColors.background,
-        appBar: AppBar(
-          backgroundColor: AppColors.background,
-          surfaceTintColor: AppColors.background,
-          title: Text('Trends', style: AppTypography.largeTitle),
-          actions: [
-            ReportExportButton(
-              title: 'Sales Trend',
-              headers: const ['Date', 'Revenue', 'Profit', 'Invoices'],
-              rowsBuilder: () {
-                final rows = ref.read(dailySalesProvider(_range)).value ?? [];
-                return rows
-                    .map((r) => [
-                          r.saleDate.toIso8601String().substring(0, 10),
-                          r.totalRevenue.toStringAsFixed(2),
-                          r.totalProfit.toStringAsFixed(2),
-                          r.invoiceCount.toString(),
-                        ])
-                    .toList();
-              },
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            Align(
+              alignment: Alignment.centerLeft,
+              child: AppFilterChips(
+                labels: [for (final d in _rangeDays) '$d days'],
+                selected: _rangeDays.indexOf(_days),
+                onSelected: (i) => setState(() => _days = _rangeDays[i]),
+              ),
+            ),
+            const SizedBox(height: AppSpacing.xl),
+            async.when(
+              loading: () => const Padding(
+                padding: EdgeInsets.only(top: AppSpacing.xxl),
+                child: Center(child: CircularProgressIndicator()),
+              ),
+              error: (_, _) => const AppErrorState(
+                title: 'Couldn’t load the report',
+                body: 'We couldn’t reach the server. Please try again.',
+              ),
+              data: (rows) => rows.isEmpty
+                  ? const AppEmptyState(
+                      icon: LucideIcons.activity,
+                      title: 'No sales in range',
+                      body: 'Pick a wider range or make a sale to see trends.',
+                    )
+                  : _content(context, rows),
             ),
           ],
         ),
-        body: _buildBody(),
       ),
     );
   }
 
-  Widget _buildBody() {
-    final rows = ref.watch(dailySalesProvider(_range));
-    return ListView(
-      padding: const EdgeInsets.symmetric(horizontal: AppSpacing.screenPadding),
-      children: [
-        const SizedBox(height: AppSpacing.xs),
-        _RangeSelector(days: _days, onSelect: (d) => setState(() => _days = d)),
-        const SizedBox(height: AppSpacing.xl),
-        rows.when(
-          loading: () => const Padding(
-            padding: EdgeInsets.only(top: AppSpacing.xxl),
-            child: Center(child: CircularProgressIndicator()),
-          ),
-          error: (_, _) => AppInlineBanner(
-            message: 'Could not load report.',
-            type: BannerType.error,
-          ),
-          data: (data) => _buildData(data),
-        ),
-        const SizedBox(height: AppSpacing.xxxl),
-      ],
-    );
-  }
-
-  Widget _buildData(List<DailySalesRow> rows) {
-    if (rows.isEmpty) {
-      return Padding(
-        padding: const EdgeInsets.only(top: AppSpacing.xxl),
-        child: Center(
-          child: Text(
-            'No sales in range.',
-            style: AppTypography.subhead.copyWith(color: AppColors.textMuted),
-          ),
-        ),
-      );
-    }
-
-    final totalRevenue = rows.fold<double>(0, (a, r) => a + r.totalRevenue);
+  Widget _content(BuildContext context, List<DailySalesRow> rows) {
+    final lum = context.lum;
+    final totalRev = rows.fold<double>(0, (a, r) => a + r.totalRevenue);
     final totalProfit = rows.fold<double>(0, (a, r) => a + r.totalProfit);
 
+    final revenue = [
+      for (var i = 0; i < rows.length; i++)
+        FlSpot(i.toDouble(), rows[i].totalRevenue),
+    ];
+    final profit = [
+      for (var i = 0; i < rows.length; i++)
+        FlSpot(i.toDouble(), rows[i].totalProfit),
+    ];
+
+    final labelIdx = <int>{
+      0,
+      (rows.length * 0.25).round(),
+      (rows.length * 0.5).round(),
+      (rows.length * 0.75).round(),
+      rows.length - 1,
+    }.where((i) => i >= 0 && i < rows.length).toList()
+      ..sort();
+
     return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
+      crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
-        AppCard(
-          child: Row(
-            children: [
-              Expanded(
-                child: _Headline(
-                  label: 'Total Revenue',
-                  value: formatPkr(totalRevenue),
-                  color: AppColors.accent,
-                ),
-              ),
-              const SizedBox(width: AppSpacing.md),
-              Expanded(
-                child: _Headline(
-                  label: 'Total Profit',
-                  value: formatPkr(totalProfit),
-                  color: AppColors.success,
-                ),
-              ),
-            ],
-          ),
+        ReportingStatGrid(
+          minTileWidth: 200,
+          cards: [
+            ReportingStatCard(
+              label: 'Total revenue · ${_days}d',
+              icon: LucideIcons.trendingUp,
+              iconColor: lum.accent,
+              value: AppMoneyText(totalRev, size: 25),
+            ),
+            ReportingStatCard(
+              label: 'Total profit · ${_days}d',
+              icon: LucideIcons.coins,
+              iconColor: lum.success,
+              value: AppMoneyText(totalProfit, size: 25, color: lum.successText),
+            ),
+          ],
         ),
         const SizedBox(height: AppSpacing.xl),
-        _RevenueProfitChart(rows: rows),
-      ],
-    );
-  }
-}
-
-class _RangeSelector extends StatelessWidget {
-  const _RangeSelector({required this.days, required this.onSelect});
-  final int days;
-  final ValueChanged<int> onSelect;
-
-  static const _options = [7, 30, 90];
-
-  @override
-  Widget build(BuildContext context) {
-    return Wrap(
-      spacing: AppSpacing.sm,
-      children: [
-        for (final d in _options)
-          ChoiceChip(
-            label: Text('${d}d'),
-            selected: days == d,
-            onSelected: (_) => onSelect(d),
-          ),
-      ],
-    );
-  }
-}
-
-class _Headline extends StatelessWidget {
-  const _Headline({
-    required this.label,
-    required this.value,
-    required this.color,
-  });
-  final String label;
-  final String value;
-  final Color color;
-
-  @override
-  Widget build(BuildContext context) {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Text(
-          label,
-          style: AppTypography.footnote.copyWith(color: AppColors.textMuted),
-        ),
-        const SizedBox(height: AppSpacing.sm),
-        Text(value, style: AppTypography.title2.copyWith(color: color)),
-      ],
-    );
-  }
-}
-
-class _RevenueProfitChart extends StatelessWidget {
-  const _RevenueProfitChart({required this.rows});
-  final List<DailySalesRow> rows;
-
-  @override
-  Widget build(BuildContext context) {
-    final maxY = rows
-            .map((r) => r.totalRevenue > r.totalProfit ? r.totalRevenue : r.totalProfit)
-            .fold<double>(0, (a, b) => a > b ? a : b) *
-        1.2;
-    final labelStep = (rows.length / 6).ceil().clamp(1, rows.length);
-
-    return AppCard(
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Text('Revenue & Profit', style: AppTypography.headline),
-          const SizedBox(height: AppSpacing.xl),
-          SizedBox(
-            height: 220,
-            child: LineChart(
-              LineChartData(
-                minX: 0,
-                maxX: (rows.length - 1).toDouble(),
-                minY: 0,
-                maxY: maxY > 0 ? maxY : 100,
-                lineTouchData: const LineTouchData(enabled: false),
-                titlesData: FlTitlesData(
-                  show: true,
-                  bottomTitles: AxisTitles(
-                    sideTitles: SideTitles(
-                      showTitles: true,
-                      interval: labelStep.toDouble(),
-                      getTitlesWidget: (val, _) {
-                        final idx = val.toInt();
-                        if (idx < 0 || idx >= rows.length) {
-                          return const SizedBox();
-                        }
-                        final d = rows[idx].saleDate;
-                        return Padding(
-                          padding: const EdgeInsets.only(top: 8),
-                          child: Text(
-                            '${d.day}/${d.month}',
-                            style: AppTypography.caption
-                                .copyWith(color: AppColors.textHint),
-                          ),
-                        );
-                      },
-                    ),
-                  ),
-                  leftTitles: AxisTitles(
-                    sideTitles: SideTitles(
-                      showTitles: true,
-                      reservedSize: 44,
-                      getTitlesWidget: (val, _) => Text(
-                        val.toStringAsFixed(0),
-                        style: AppTypography.caption
-                            .copyWith(color: AppColors.textHint),
-                      ),
-                    ),
-                  ),
-                  topTitles: const AxisTitles(
-                    sideTitles: SideTitles(showTitles: false),
-                  ),
-                  rightTitles: const AxisTitles(
-                    sideTitles: SideTitles(showTitles: false),
-                  ),
-                ),
-                gridData: FlGridData(
-                  show: true,
-                  drawVerticalLine: false,
-                  horizontalInterval: maxY > 0 ? (maxY / 4).ceilToDouble() : 25,
-                ),
-                borderData: FlBorderData(show: false),
-                lineBarsData: [
-                  _series((r) => r.totalRevenue, AppColors.accent),
-                  _series((r) => r.totalProfit, AppColors.success),
+        AppSectionCard(
+          eyebrow: 'Revenue & profit',
+          trailing: _Legend(),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              ReportingLineChart(
+                series: [
+                  ReportingLineSeries(
+                      spots: revenue, color: lum.accent, fill: true),
+                  ReportingLineSeries(spots: profit, color: lum.success),
                 ],
               ),
-            ),
-          ),
-          const SizedBox(height: AppSpacing.md),
-          Row(
-            children: [
-              _Legend(color: AppColors.accent, label: 'Revenue'),
-              const SizedBox(width: AppSpacing.base),
-              _Legend(color: AppColors.success, label: 'Profit'),
+              const SizedBox(height: AppSpacing.sm),
+              Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                children: [
+                  for (final i in labelIdx)
+                    Text(
+                      _shortDate(rows[i].saleDate),
+                      style: AppTypography.caption.copyWith(color: lum.g500),
+                    ),
+                ],
+              ),
             ],
           ),
-        ],
-      ),
-    );
-  }
-
-  LineChartBarData _series(double Function(DailySalesRow) pick, Color color) {
-    return LineChartBarData(
-      spots: [
-        for (var i = 0; i < rows.length; i++)
-          FlSpot(i.toDouble(), pick(rows[i])),
+        ),
       ],
-      color: color,
-      barWidth: 2,
-      isCurved: false,
-      dotData: const FlDotData(show: false),
     );
   }
 }
 
 class _Legend extends StatelessWidget {
-  const _Legend({required this.color, required this.label});
-  final Color color;
-  final String label;
-
   @override
   Widget build(BuildContext context) {
+    final lum = context.lum;
+    Widget item(Color c, String label) => Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Container(
+              width: 16,
+              height: 3,
+              decoration: BoxDecoration(
+                color: c,
+                borderRadius: BorderRadius.circular(2),
+              ),
+            ),
+            const SizedBox(width: 7),
+            Text(label,
+                style: AppTypography.caption.copyWith(color: lum.g600)),
+          ],
+        );
     return Row(
       mainAxisSize: MainAxisSize.min,
       children: [
-        Container(
-          width: 10,
-          height: 10,
-          decoration: BoxDecoration(
-            color: color,
-            borderRadius: BorderRadius.circular(2),
-          ),
-        ),
-        const SizedBox(width: AppSpacing.xs),
-        Text(
-          label,
-          style: AppTypography.caption.copyWith(color: AppColors.textMuted),
-        ),
+        item(lum.accent, 'Revenue'),
+        const SizedBox(width: 16),
+        item(lum.success, 'Profit'),
       ],
     );
   }
