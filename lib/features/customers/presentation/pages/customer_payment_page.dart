@@ -1,28 +1,32 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:lucide_icons_flutter/lucide_icons.dart';
 import '../../../../core/design/app_colors.dart';
 import '../../../../core/design/app_radius.dart';
-import '../../../../core/design/app_spacing.dart';
 import '../../../../core/design/app_typography.dart';
+import '../../../../core/design/clay.dart';
 import '../../../../core/design/format.dart';
 import '../../../../core/design/widgets/app_button.dart';
+import '../../../../core/design/widgets/app_card.dart';
+import '../../../../core/design/widgets/app_filter_chips.dart';
 import '../../../../core/design/widgets/app_inline_banner.dart';
+import '../../../../core/design/widgets/app_money_text.dart';
 import '../../../../core/design/widgets/app_text_field.dart';
+import '../../../../core/design/widgets/app_toast.dart';
+import '../../../../core/widgets/module_scaffold.dart';
 import '../../../../core/widgets/permission_gate.dart';
 import '../../domain/entities/customer_invoice.dart';
 import '../../domain/failures/customer_failure.dart';
 import '../controllers/customer_payments_controller.dart';
+import '../widgets/customer_card.dart';
 
-/// payment_method_enum DB values → display labels.
-const _methods = <String, String>{
-  'CASH': 'Cash',
-  'BANK_TRANSFER': 'Bank Transfer',
-  'CARD': 'Card',
-  'MOBILE_WALLET': 'Mobile Wallet',
-  'CHEQUE': 'Cheque',
-};
+/// payment_method_enum DB values, in the design's chip order.
+const _methodKeys = ['CASH', 'BANK_TRANSFER', 'CARD', 'MOBILE_WALLET', 'CHEQUE'];
+const _methodLabels = ['Cash', 'Bank transfer', 'Card', 'Mobile wallet',
+  'Cheque'];
 
-/// Collect a payment against a customer's credit invoice (record_customer_payment).
+/// Collect a payment against a customer's credit invoice
+/// (record_customer_payment).
 class CustomerPaymentPage extends ConsumerStatefulWidget {
   const CustomerPaymentPage({
     super.key,
@@ -80,12 +84,12 @@ class _CustomerPaymentPageState extends ConsumerState<CustomerPaymentPage> {
 
   Future<void> _submit() async {
     if (_invoiceId == null) {
-      setState(() => _error = 'Select an invoice to collect against.');
+      setState(() => _error = 'Choose an invoice to apply this payment to.');
       return;
     }
     final amount = double.tryParse(_amount.text.trim());
     if (amount == null || amount <= 0) {
-      setState(() => _error = 'Enter a valid amount.');
+      setState(() => _error = 'Enter an amount greater than zero.');
       return;
     }
 
@@ -111,150 +115,180 @@ class _CustomerPaymentPageState extends ConsumerState<CustomerPaymentPage> {
         if (failure is CustomerOverpaymentFailure) {
           _error = failure.message;
         } else {
-          ScaffoldMessenger.of(context)
-              .showSnackBar(SnackBar(content: Text(failure.message)));
+          showAppToast(context, failure.message, type: BannerType.error);
         }
       });
       return;
     }
     final balance = result?.balance ?? 0;
     final status = result?.status ?? '';
-    ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-        content: Text('Payment recorded — balance ${formatPkr(balance)}'
-            '${status.isEmpty ? '' : ' ($status)'}')));
+    showAppToast(
+      context,
+      'Payment recorded — balance ${formatPkr(balance)}'
+      '${status.isEmpty ? '' : ' ($status)'}',
+      type: BannerType.success,
+    );
     Navigator.of(context).pop();
   }
 
   @override
   Widget build(BuildContext context) {
+    final isWide = ModuleScaffold.isWideOf(context);
     final fixedInvoice = widget.invoiceId != null;
-    return Scaffold(
-      backgroundColor: AppColors.background,
-      appBar: AppBar(
-        backgroundColor: AppColors.background,
-        surfaceTintColor: AppColors.background,
-        leading: IconButton(
-          icon: const Icon(Icons.arrow_back_ios,
-              color: AppColors.accent, size: 20),
-          onPressed: () => Navigator.of(context).pop(),
-        ),
-        title: Text('Collect Payment', style: AppTypography.headline),
-      ),
-      body: SafeArea(
-        child: LayoutBuilder(
-          builder: (context, c) => SingleChildScrollView(
-            padding: const EdgeInsets.symmetric(
-                horizontal: AppSpacing.screenPadding),
-            child: Center(
-              child: ConstrainedBox(
-                constraints: const BoxConstraints(maxWidth: 560),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.stretch,
+
+    return ModuleScaffold(
+      title: 'Collect payment',
+      maxContentWidth: 640,
+      leading: _FormBackButton(),
+      child: ListView(
+        padding:
+            EdgeInsets.fromLTRB(isWide ? 32 : 16, 12, isWide ? 32 : 16, 40),
+        children: [
+          if (widget.customerName != null) ...[
+            _CustomerHeader(name: widget.customerName!),
+            const SizedBox(height: 16),
+          ],
+          _Section(
+            title: 'Apply to invoice',
+            child: fixedInvoice
+                ? _FixedInvoiceTile(balance: _invoiceBalance)
+                : _InvoicePicker(
+                    customerId: widget.customerId,
+                    selectedId: _invoiceId,
+                    onSelect: _selectInvoice,
+                  ),
+          ),
+          const SizedBox(height: 16),
+          _Section(
+            title: 'Payment',
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                _Label('Method'),
+                const SizedBox(height: 8),
+                AppFilterChips(
+                  labels: _methodLabels,
+                  selected: _methodKeys.indexOf(_method),
+                  onSelected: (i) =>
+                      setState(() => _method = _methodKeys[i]),
+                ),
+                const SizedBox(height: 16),
+                Row(
+                  crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    const SizedBox(height: AppSpacing.lg),
-                    if (_error != null) ...[
-                      AppInlineBanner(
-                          message: _error!, type: BannerType.error),
-                      const SizedBox(height: AppSpacing.lg),
-                    ],
-                    if (widget.customerName != null) ...[
-                      _group('Customer'),
-                      _InfoTile(
-                          icon: Icons.person,
-                          label: widget.customerName!),
-                      _sectionGap(),
-                    ],
-                    _group('Invoice'),
-                    if (fixedInvoice)
-                      _InfoTile(
-                        icon: Icons.receipt_long,
-                        label: _invoiceBalance != null
-                            ? 'Balance ${formatPkr(_invoiceBalance!)}'
-                            : 'Selected invoice',
-                      )
-                    else
-                      _InvoicePicker(
-                        customerId: widget.customerId,
-                        selectedId: _invoiceId,
-                        onSelect: _selectInvoice,
-                      ),
-                    _sectionGap(),
-                    _group('Method'),
-                    _MethodDropdown(
-                      value: _method,
-                      onChanged: (m) => setState(() => _method = m),
-                    ),
-                    _sectionGap(),
-                    _group('Amount'),
-                    AppTextField(
-                      controller: _amount,
-                      label: 'Amount',
-                      prefixIcon: Icons.attach_money,
-                      hint: '0',
-                      keyboardType: const TextInputType.numberWithOptions(
-                          decimal: true),
-                    ),
-                    _gap(),
-                    AppTextField(
-                      controller: _reference,
-                      label: 'Reference',
-                      prefixIcon: Icons.receipt_long,
-                      hint: 'Optional',
-                    ),
-                    const SizedBox(height: AppSpacing.xxl),
-                    PermissionGate(
-                      module: 'sales',
-                      action: 'create',
-                      child: AppButton(
-                        label: 'Record Payment',
-                        loading: _saving,
-                        fullWidth: true,
-                        icon: Icons.check,
-                        onPressed: _submit,
+                    Expanded(
+                      child: AppTextField(
+                        controller: _amount,
+                        label: 'Amount',
+                        prefixIcon: LucideIcons.banknote,
+                        hint: '0.00',
+                        keyboardType: const TextInputType.numberWithOptions(
+                            decimal: true),
                       ),
                     ),
-                    const SizedBox(height: AppSpacing.xxl),
+                    const SizedBox(width: 16),
+                    Expanded(
+                      child: AppTextField(
+                        controller: _reference,
+                        label: 'Reference',
+                        prefixIcon: LucideIcons.hash,
+                        hint: 'Optional',
+                      ),
+                    ),
                   ],
                 ),
-              ),
+                if (_error != null) ...[
+                  const SizedBox(height: 14),
+                  AppInlineBanner(message: _error!, type: BannerType.error),
+                ],
+              ],
             ),
           ),
-        ),
+          const SizedBox(height: 20),
+          PermissionGate(
+            module: 'sales',
+            action: 'create',
+            child: AppButton(
+              label: 'Record payment',
+              icon: LucideIcons.checkCheck,
+              loading: _saving,
+              fullWidth: true,
+              onPressed: _submit,
+            ),
+          ),
+        ],
       ),
     );
   }
-
-  Widget _gap() => const SizedBox(height: AppSpacing.fieldGap);
-  Widget _sectionGap() => const SizedBox(height: AppSpacing.xl);
-
-  Widget _group(String label) => Padding(
-        padding: const EdgeInsets.only(bottom: AppSpacing.sm),
-        child: Text(label.toUpperCase(),
-            style: AppTypography.footnote.copyWith(
-                color: AppColors.textMuted, fontWeight: FontWeight.w600)),
-      );
 }
 
-class _InfoTile extends StatelessWidget {
-  const _InfoTile({required this.icon, required this.label});
-  final IconData icon;
-  final String label;
+/// Customer header — avatar + name. Outstanding/phone are not passed to this
+/// route, so nothing is invented for them.
+class _CustomerHeader extends StatelessWidget {
+  const _CustomerHeader({required this.name});
+  final String name;
 
   @override
   Widget build(BuildContext context) {
+    final lum = context.lum;
+    return AppCard(
+      child: Row(
+        children: [
+          ClayContainer(
+            variant: ClayVariant.soft,
+            color: lum.accentSoft,
+            borderRadius: AppRadius.md,
+            isDark: lum.isDark,
+            width: 48,
+            height: 48,
+            child: Center(
+              child: Text(
+                customerInitials(name),
+                style: AppTypography.title2
+                    .copyWith(fontSize: 16, color: lum.accentPress),
+              ),
+            ),
+          ),
+          const SizedBox(width: 14),
+          Expanded(
+            child: Text(
+              name,
+              style: AppTypography.headline
+                  .copyWith(fontSize: 16, color: lum.textPrimary),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _FixedInvoiceTile extends StatelessWidget {
+  const _FixedInvoiceTile({required this.balance});
+  final double? balance;
+
+  @override
+  Widget build(BuildContext context) {
+    final lum = context.lum;
     return Container(
-      padding: const EdgeInsets.symmetric(
-          horizontal: AppSpacing.base, vertical: AppSpacing.md),
+      padding: const EdgeInsets.all(14),
       decoration: BoxDecoration(
-        color: AppColors.fieldFill,
-        borderRadius: BorderRadius.circular(AppRadius.field),
-        border: Border.all(color: AppColors.separator),
+        color: lum.surface2,
+        borderRadius: BorderRadius.circular(AppRadius.md),
       ),
       child: Row(
         children: [
-          Icon(icon, size: 18, color: AppColors.textMuted),
-          const SizedBox(width: AppSpacing.md),
-          Expanded(child: Text(label, style: AppTypography.subhead)),
+          Icon(LucideIcons.receiptText, size: 18, color: lum.g500),
+          const SizedBox(width: 12),
+          Expanded(
+            child: Text(
+              'Selected invoice',
+              style: AppTypography.body.copyWith(color: lum.textPrimary),
+            ),
+          ),
+          if (balance != null)
+            AppMoneyText(balance!,
+                size: 14, decimals: 2, color: lum.textPrimary),
         ],
       ),
     );
@@ -273,66 +307,37 @@ class _InvoicePicker extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
+    final lum = context.lum;
     final invoicesAsync = ref.watch(unpaidInvoicesProvider(customerId));
     return invoicesAsync.when(
       loading: () => const Padding(
-        padding: EdgeInsets.all(AppSpacing.md),
+        padding: EdgeInsets.all(16),
         child: Center(child: CircularProgressIndicator()),
       ),
       error: (e, _) => AppInlineBanner(
-          message: e is CustomerFailure ? e.message : 'Failed to load invoices.',
+          message:
+              e is CustomerFailure ? e.message : 'Failed to load invoices.',
           type: BannerType.error),
       data: (invoices) {
         if (invoices.isEmpty) {
-          return const _InfoTile(
-              icon: Icons.check_circle_outline,
-              label: 'No unpaid invoices.');
+          return Padding(
+            padding: const EdgeInsets.symmetric(vertical: 18),
+            child: Center(
+              child: Text('No unpaid invoices.',
+                  style: AppTypography.body.copyWith(color: lum.g500)),
+            ),
+          );
         }
         return Column(
           children: [
-            for (final inv in invoices)
-              Padding(
-                padding: const EdgeInsets.only(bottom: AppSpacing.sm),
-                child: InkWell(
-                  onTap: () => onSelect(inv),
-                  borderRadius: BorderRadius.circular(AppRadius.field),
-                  child: Container(
-                    padding: const EdgeInsets.symmetric(
-                        horizontal: AppSpacing.base, vertical: AppSpacing.md),
-                    decoration: BoxDecoration(
-                      color: AppColors.fieldFill,
-                      borderRadius: BorderRadius.circular(AppRadius.field),
-                      border: Border.all(
-                        color: inv.id == selectedId
-                            ? AppColors.accent
-                            : AppColors.separator,
-                        width: inv.id == selectedId ? 2 : 1,
-                      ),
-                    ),
-                    child: Row(
-                      children: [
-                        Icon(
-                          inv.id == selectedId
-                              ? Icons.radio_button_checked
-                              : Icons.radio_button_off,
-                          size: 18,
-                          color: inv.id == selectedId
-                              ? AppColors.accent
-                              : AppColors.textMuted,
-                        ),
-                        const SizedBox(width: AppSpacing.md),
-                        Expanded(
-                          child: Text(inv.invoiceNumber,
-                              style: AppTypography.subhead),
-                        ),
-                        Text(formatPkr(inv.balance),
-                            style: AppTypography.subhead.copyWith(
-                                fontWeight: FontWeight.w600)),
-                      ],
-                    ),
-                  ),
-                ),
+            for (var i = 0; i < invoices.length; i++) ...[
+              if (i > 0) const SizedBox(height: 10),
+              _InvoiceRow(
+                invoice: invoices[i],
+                selected: invoices[i].id == selectedId,
+                onTap: () => onSelect(invoices[i]),
               ),
+            ],
           ],
         );
       },
@@ -340,35 +345,135 @@ class _InvoicePicker extends ConsumerWidget {
   }
 }
 
-class _MethodDropdown extends StatelessWidget {
-  const _MethodDropdown({required this.value, required this.onChanged});
-  final String value;
-  final ValueChanged<String> onChanged;
+class _InvoiceRow extends StatelessWidget {
+  const _InvoiceRow({
+    required this.invoice,
+    required this.selected,
+    required this.onTap,
+  });
+  final CustomerInvoice invoice;
+  final bool selected;
+  final VoidCallback onTap;
 
   @override
   Widget build(BuildContext context) {
-    return Container(
-      height: 44,
-      padding: const EdgeInsets.symmetric(horizontal: AppSpacing.md),
-      decoration: BoxDecoration(
-        color: AppColors.background,
-        borderRadius: BorderRadius.circular(AppRadius.field),
-        border: Border.all(color: AppColors.separator),
+    final lum = context.lum;
+    return Semantics(
+      button: true,
+      selected: selected,
+      label: invoice.invoiceNumber,
+      child: InkWell(
+        onTap: onTap,
+        borderRadius: BorderRadius.circular(AppRadius.md),
+        child: Container(
+          padding: const EdgeInsets.all(14),
+          decoration: BoxDecoration(
+            color: selected ? lum.accentSoft : lum.surface2,
+            borderRadius: BorderRadius.circular(AppRadius.md),
+            border: Border.all(
+              color: selected ? lum.accent : Colors.transparent,
+              width: 1.5,
+            ),
+          ),
+          child: Row(
+            children: [
+              Icon(
+                selected
+                    ? LucideIcons.circleCheck
+                    : LucideIcons.circle,
+                size: 20,
+                color: selected ? lum.accent : lum.g400,
+              ),
+              const SizedBox(width: 12),
+              Expanded(
+                child: Text(
+                  invoice.invoiceNumber,
+                  style: AppTypography.monoValue.copyWith(
+                    fontSize: 13.5,
+                    fontWeight: FontWeight.w600,
+                    color: lum.textPrimary,
+                  ),
+                ),
+              ),
+              AppMoneyText(invoice.balance,
+                  size: 14, decimals: 2, color: lum.textPrimary),
+            ],
+          ),
+        ),
       ),
-      child: DropdownButtonHideUnderline(
-        child: DropdownButton<String>(
-          value: value,
-          isExpanded: true,
-          icon: const Icon(Icons.keyboard_arrow_down,
-              size: 18, color: AppColors.textMuted),
-          style: AppTypography.subhead,
-          onChanged: (v) {
-            if (v != null) onChanged(v);
-          },
-          items: _methods.entries
-              .map((e) =>
-                  DropdownMenuItem(value: e.key, child: Text(e.value)))
-              .toList(),
+    );
+  }
+}
+
+class _Section extends StatelessWidget {
+  const _Section({required this.title, required this.child});
+  final String title;
+  final Widget child;
+
+  @override
+  Widget build(BuildContext context) {
+    final lum = context.lum;
+    return AppCard(
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          Text(
+            title,
+            style: AppTypography.title2
+                .copyWith(fontSize: 16, color: lum.textPrimary),
+          ),
+          const SizedBox(height: 16),
+          child,
+        ],
+      ),
+    );
+  }
+}
+
+class _Label extends StatelessWidget {
+  const _Label(this.text);
+  final String text;
+
+  @override
+  Widget build(BuildContext context) {
+    final lum = context.lum;
+    return Text(
+      text,
+      style: AppTypography.fieldLabel.copyWith(fontSize: 13, color: lum.g700),
+    );
+  }
+}
+
+class _FormBackButton extends StatelessWidget {
+  @override
+  Widget build(BuildContext context) {
+    final lum = context.lum;
+    return Padding(
+      padding: const EdgeInsets.only(right: 12),
+      child: Semantics(
+        button: true,
+        label: 'Back',
+        child: InkWell(
+          onTap: () => Navigator.of(context).maybePop(),
+          borderRadius: BorderRadius.circular(AppRadius.sm),
+          child: SizedBox(
+            width: 44,
+            height: 44,
+            child: Center(
+              child: ClayContainer(
+                variant: ClayVariant.soft,
+                color: lum.surface,
+                borderRadius: AppRadius.sm,
+                isDark: lum.isDark,
+                width: 40,
+                height: 40,
+                child: Center(
+                  child: Icon(LucideIcons.arrowLeft,
+                      size: 20, color: lum.textPrimary),
+                ),
+              ),
+            ),
+          ),
         ),
       ),
     );
