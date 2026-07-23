@@ -1,16 +1,17 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
+import 'package:lucide_icons_flutter/lucide_icons.dart';
 import '../../../../core/design/app_colors.dart';
-import '../../../../core/design/app_radius.dart';
-import '../../../../core/design/app_spacing.dart';
-import '../../../../core/design/app_typography.dart';
-import '../../../../core/design/format.dart';
-import '../../../../core/design/widgets/app_inline_banner.dart';
+import '../../../../core/design/widgets/app_filter_chips.dart';
+import '../../../../core/design/widgets/app_list_skeleton.dart';
+import '../../../../core/design/widgets/app_states.dart';
+import '../../../../core/widgets/module_scaffold.dart';
 import '../../../../core/widgets/permission_gate.dart';
 import '../../domain/entities/approval.dart';
 import '../controllers/approvals_controller.dart';
-import '../widgets/approval_status_ui.dart';
+import '../widgets/approval_request_card.dart';
+import '../widgets/approvals_ui.dart';
 
 class PendingApprovalsPage extends ConsumerStatefulWidget {
   const PendingApprovalsPage({super.key});
@@ -25,226 +26,136 @@ class _PendingApprovalsPageState extends ConsumerState<PendingApprovalsPage> {
 
   @override
   Widget build(BuildContext context) {
+    final lum = context.lum;
     final async = ref.watch(pendingApprovalsControllerProvider);
 
-    return Scaffold(
-      backgroundColor: AppColors.background,
-      appBar: AppBar(
-        backgroundColor: AppColors.background,
-        surfaceTintColor: AppColors.background,
-        leading: IconButton(
-          icon: const Icon(Icons.arrow_back_ios,
-              color: AppColors.accent, size: 20),
-          onPressed: () => Navigator.of(context).pop(),
+    final labels = ['All', for (final t in ApprovalWorkflowType.values) approvalTypeLabels[t]!];
+    final selected = _type == null
+        ? 0
+        : ApprovalWorkflowType.values.indexOf(_type!) + 1;
+
+    return ModuleScaffold(
+      title: 'Approvals',
+      maxContentWidth: 720,
+      actions: [
+        _HeaderAction(
+          icon: LucideIcons.history,
+          tooltip: 'History',
+          onTap: () => context.push('/approvals/history'),
         ),
-        title: Text('Approvals', style: AppTypography.headline),
-        actions: [
-          PermissionGate(
-            module: 'approvals',
-            action: 'update',
-            child: IconButton(
-              icon: const Icon(Icons.settings_outlined,
-                  color: AppColors.accent),
-              onPressed: () => context.push('/approvals/workflows'),
+        PermissionGate(
+          module: 'approvals',
+          action: 'update',
+          child: _HeaderAction(
+            icon: LucideIcons.settings,
+            tooltip: 'Configure workflows',
+            onTap: () => context.push('/approvals/workflows'),
+          ),
+        ),
+      ],
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          Padding(
+            padding: const EdgeInsets.fromLTRB(0, 14, 0, 6),
+            child: AppFilterChips(
+              labels: labels,
+              selected: selected,
+              padding: const EdgeInsets.symmetric(horizontal: 16),
+              onSelected: (i) => setState(
+                () => _type =
+                    i == 0 ? null : ApprovalWorkflowType.values[i - 1],
+              ),
             ),
           ),
-          IconButton(
-            icon: const Icon(Icons.history, color: AppColors.accent),
-            onPressed: () => context.push('/approvals/history'),
+          Expanded(
+            child: RefreshIndicator(
+              color: lum.accent,
+              onRefresh: () => ref
+                  .read(pendingApprovalsControllerProvider.notifier)
+                  .refresh(),
+              child: async.when(
+                loading: () => const Padding(
+                  padding: EdgeInsets.fromLTRB(16, 12, 16, 28),
+                  child: AppListSkeleton(rows: 4, rowHeight: 118),
+                ),
+                error: (e, _) => _scrollable(
+                  AppErrorState(
+                    title: "We couldn't load approvals",
+                    body:
+                        "We couldn't reach the server. Nothing is lost — pull to refresh once you're back online.",
+                    onRetry: () => ref
+                        .read(pendingApprovalsControllerProvider.notifier)
+                        .refresh(),
+                  ),
+                ),
+                data: (rows) {
+                  final list = _type == null
+                      ? rows
+                      : rows.where((r) => r.workflowType == _type).toList();
+                  if (list.isEmpty) {
+                    return _scrollable(
+                      AppEmptyState(
+                        icon: LucideIcons.checkCheck,
+                        title: _type == null
+                            ? "You're all caught up"
+                            : 'Nothing of this type',
+                        body: _type == null
+                            ? 'No approvals are waiting right now. New requests show up here.'
+                            : 'No pending approvals match this filter.',
+                      ),
+                    );
+                  }
+                  return ListView.separated(
+                    padding: const EdgeInsets.fromLTRB(16, 12, 16, 28),
+                    itemCount: list.length,
+                    separatorBuilder: (_, _) => const SizedBox(height: 12),
+                    itemBuilder: (context, i) =>
+                        ApprovalRequestCard(request: list[i]),
+                  );
+                },
+              ),
+            ),
           ),
         ],
       ),
-      body: SafeArea(
-        child: Column(
+    );
+  }
+
+  /// Wraps a centred state so pull-to-refresh still works when the list is empty
+  /// or errored (a bare Center is not scrollable).
+  Widget _scrollable(Widget child) => LayoutBuilder(
+        builder: (context, constraints) => ListView(
+          padding: const EdgeInsets.symmetric(horizontal: 16),
           children: [
-            SizedBox(
-              height: 40,
-              child: ListView(
-                scrollDirection: Axis.horizontal,
-                padding: const EdgeInsets.symmetric(
-                    horizontal: AppSpacing.screenPadding),
-                children: [
-                  _chip('All', _type == null, () => setState(() => _type = null)),
-                  for (final t in ApprovalWorkflowType.values)
-                    _chip(approvalTypeLabels[t]!, _type == t,
-                        () => setState(() => _type = t)),
-                ],
-              ),
-            ),
-            Expanded(
-              child: RefreshIndicator(
-                onRefresh: () =>
-                    ref.read(pendingApprovalsControllerProvider.notifier).refresh(),
-                child: async.when(
-                  loading: () =>
-                      const Center(child: CircularProgressIndicator()),
-                  error: (e, _) => ListView(
-                    children: [
-                      Padding(
-                        padding:
-                            const EdgeInsets.all(AppSpacing.screenPadding),
-                        child: AppInlineBanner(
-                            message: 'Could not load approvals.',
-                            type: BannerType.error),
-                      ),
-                    ],
-                  ),
-                  data: (rows) {
-                    final list = _type == null
-                        ? rows
-                        : rows.where((r) => r.workflowType == _type).toList();
-                    if (list.isEmpty) {
-                      return ListView(
-                        children: [
-                          Padding(
-                            padding: const EdgeInsets.only(top: 80),
-                            child: Center(
-                              child: Text('Nothing awaiting approval.',
-                                  style: AppTypography.footnote
-                                      .copyWith(color: AppColors.textMuted)),
-                            ),
-                          ),
-                        ],
-                      );
-                    }
-                    return ListView(
-                      padding: const EdgeInsets.symmetric(
-                          horizontal: AppSpacing.screenPadding),
-                      children: [
-                        for (final r in list)
-                          Padding(
-                            padding:
-                                const EdgeInsets.only(bottom: AppSpacing.sm),
-                            child: ApprovalRequestCard(request: r),
-                          ),
-                      ],
-                    );
-                  },
-                ),
-              ),
+            ConstrainedBox(
+              constraints: BoxConstraints(minHeight: constraints.maxHeight - 40),
+              child: Center(child: child),
             ),
           ],
         ),
-      ),
-    );
-  }
-
-  Widget _chip(String label, bool selected, VoidCallback onTap) {
-    return Padding(
-      padding: const EdgeInsets.only(right: AppSpacing.sm),
-      child: GestureDetector(
-        onTap: onTap,
-        child: Container(
-          alignment: Alignment.center,
-          padding: const EdgeInsets.symmetric(
-              horizontal: AppSpacing.base, vertical: AppSpacing.xs),
-          decoration: BoxDecoration(
-            color: selected
-                ? AppColors.accent
-                : AppColors.accent.withValues(alpha: 0.08),
-            borderRadius: BorderRadius.circular(999),
-          ),
-          child: Text(label,
-              style: AppTypography.footnote.copyWith(
-                  color: selected ? Colors.white : AppColors.accent,
-                  fontWeight: FontWeight.w600)),
-        ),
-      ),
-    );
-  }
+      );
 }
 
-/// One request card, used by both the pending list and history list.
-class ApprovalRequestCard extends StatelessWidget {
-  const ApprovalRequestCard({super.key, required this.request});
-  final ApprovalRequest request;
+/// A 40x40 clear icon button for the module header.
+class _HeaderAction extends StatelessWidget {
+  const _HeaderAction({
+    required this.icon,
+    required this.tooltip,
+    required this.onTap,
+  });
+
+  final IconData icon;
+  final String tooltip;
+  final VoidCallback onTap;
 
   @override
   Widget build(BuildContext context) {
-    final typeLabel = request.workflowType == null
-        ? request.entityType
-        : approvalTypeLabels[request.workflowType]!;
-    return InkWell(
-      borderRadius: BorderRadius.circular(AppRadius.card),
-      onTap: () => context.push('/approvals/${request.id}'),
-      child: Container(
-        padding: const EdgeInsets.all(AppSpacing.md),
-        decoration: BoxDecoration(
-          color: AppColors.background,
-          borderRadius: BorderRadius.circular(AppRadius.card),
-          border: Border.all(color: AppColors.separator, width: 0.5),
-        ),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Row(
-              children: [
-                Expanded(
-                  child: Text(typeLabel,
-                      style: AppTypography.subhead
-                          .copyWith(fontWeight: FontWeight.w600)),
-                ),
-                ApprovalStatusBadge(status: request.status),
-              ],
-            ),
-            const SizedBox(height: 4),
-            Row(
-              children: [
-                Text(request.entityType,
-                    style: AppTypography.caption
-                        .copyWith(color: AppColors.textMuted)),
-                if (request.amount != null) ...[
-                  Text('  ·  ',
-                      style: AppTypography.caption
-                          .copyWith(color: AppColors.textMuted)),
-                  Text(formatPkr(request.amount!),
-                      style: AppTypography.caption.copyWith(
-                          color: AppColors.textPrimary,
-                          fontWeight: FontWeight.w600)),
-                ],
-              ],
-            ),
-            const SizedBox(height: 2),
-            Row(
-              children: [
-                Expanded(
-                  child: Text(
-                    'By ${request.requestorName ?? '—'} · Level ${request.currentLevel}',
-                    style: AppTypography.caption
-                        .copyWith(color: AppColors.textMuted),
-                  ),
-                ),
-                Text(_ageLabel(request),
-                    style: AppTypography.caption.copyWith(
-                        color: _ageColor(request),
-                        fontWeight: FontWeight.w600)),
-              ],
-            ),
-          ],
-        ),
-      ),
+    final lum = context.lum;
+    return IconButton(
+      icon: Icon(icon, size: 20, color: lum.g600),
+      tooltip: tooltip,
+      onPressed: onTap,
     );
   }
-}
-
-String _ageLabel(ApprovalRequest r) {
-  if (r.status == ApprovalStatus.escalated) return 'Escalated';
-  final expires = r.expiresAt;
-  if (expires != null && r.isOpen) {
-    final left = expires.difference(DateTime.now());
-    if (left.isNegative) return 'Overdue';
-    if (left.inHours < 6) return 'Due soon';
-  }
-  final age = DateTime.now().difference(r.createdAt);
-  if (age.inDays >= 1) return '${age.inDays}d ago';
-  if (age.inHours >= 1) return '${age.inHours}h ago';
-  return '${age.inMinutes}m ago';
-}
-
-Color _ageColor(ApprovalRequest r) {
-  final label = _ageLabel(r);
-  if (label == 'Escalated' || label == 'Overdue' || label == 'Due soon') {
-    return AppColors.destructive;
-  }
-  return AppColors.textMuted;
 }
