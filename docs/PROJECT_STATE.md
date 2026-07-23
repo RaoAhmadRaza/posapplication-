@@ -306,6 +306,51 @@ in Counter mode.
   light + dark, invites empty/error, the permission matrix, QR copy-flip + shown-once path, the
   branch/role selection cards, and a screenshot diff vs the export renders.
 
+## UI Redesign — reporting module (DONE 2026-07-23; detail in DECISIONS)
+Ninth design export ("Reporting screens desktop mobile design"), SAME design-system UUID
+(5cd3f8f0-…) → tokens untouched; consumer-side reskin of all 9 reporting screens. Reporting was
+the last feature entirely on light-only static `AppColors` (135 refs, 0 `context.lum`) + raw
+Material Scaffold/AppBar — now zero static-colour refs, zero raw chrome, works in Counter mode.
+- **Promoted to a nav-shell branch (index 7)** (user-requested follow-up, 2026-07-23). The 9
+  `/reports*` routes moved from top-level GoRoutes into a new `StatefulShellBranch` (after
+  customers=6) on pageBuilder + `_fadePage`; `bottom_nav_shell.dart` gained a Reports item
+  (barChart3, gated `reports:read`, slotted before Settings) — reporting has no in-branch
+  sub-destinations so it uses the normal module rail, no sub-rail. Hub = `ModuleScaffold` (branch
+  root, no back — nav is the exit); all 8 sub-pages = `AppDetailScaffold` (clay back → hub). The two
+  outliers that were missing a back (smart_insights, scheduled_reports were on ModuleScaffold) moved
+  to AppDetailScaffold. Inbound push→go: dashboard quick-launch `/reports`; the stock-value KPI now
+  deep-links to `/reports` (hub) via go (a go'd sub-page has no route beneath it, so its back would be
+  dead). PermissionGate keys (`reports:read` ×7, `reports:export` ×2) + the `/purchasing/orders/create`
+  seed contract unchanged.
+- **Charts: fl_chart restyled, not hand-rolled** (user choice). New module widgets wrap fl_chart
+  theme-aware: `ReportingBarChart` (rounded rods, value labels via always-on tooltips so they track
+  the rod not the container, hairline baseline, no gridbox) and `ReportingLineChart` (2.5px strokes,
+  10% area fill, dashed projection + `beamSoft` shaded future region + dashed split rule). Also
+  `ReportingStatCard`/`ReportingStatGrid` (clay-raised KPI tiles, width-derived columns — never a
+  hand-picked aspect ratio) and `reporting_ui.dart` (abbreviate, insight badge/tone, aging pill).
+- **Honest data** — every mock value maps to a real field: inventory KPIs = Σ totalValue / Σ
+  retailValue / belowReorder count / SKU count; products table+bars = units/revenue/profit/invoices;
+  aging = totalBalance/b90plus/buckets/maxDaysOverdue (Overdue pill >60d); trends = Σ revenue/profit;
+  forecast = 7-day moving-average (honest info banner, flat projection, projTotal = avg×7); insights =
+  recommendationType/confidenceScore/reasoning. Only real recommendation types render (no fabricated
+  4-type spread); hub "Financial · opens in Accounting" rows KEEP real navigation to
+  `/accounting/reports/*` (arrow-up-right cue). Nothing invented.
+- Pages onto DS widgets: hub sections as AppCard row groups; scheduled_reports form → `showAppSheet`
+  + `AppDropdown`/`AppToggle`/`AppTextField` (raw DropdownButton/Switch/showModalBottomSheet retired);
+  metric/range selectors → `AppFilterChips` (was ChoiceChip); insights → `AppPill`/`AppButton`; empty/
+  error states → `AppEmptyState`/`AppErrorState`; SnackBars → `showAppToast`. Export button restyled to
+  the design's clay Export + PDF/CSV menu (API unchanged — 4 pages + aging view import it). No new deps,
+  no core/design edits, no domain/data/controller edits.
+- Side effect: pull-to-refresh dropped on report lists (AppDetailScaffold/ModuleScaffold have no
+  RefreshIndicator slot); autoDispose providers refetch on revisit. Hardcoded aging `Color(0xFFFF6B30)`
+  → `lum.beam`.
+- GATE: `flutter analyze` **8 issues, 0 new** (baseline 8); macOS debug build succeeds; `flutter test`
+  = the same 2 pre-existing failures as clean HEAD (widget_test smoke + kpi_layout), none new.
+- **VERIFY OWED (on-device eyeball)** — agent env can't foreground/screenshot: all 9 screens in
+  light + dark, bar value-label placement, line area-fill + dashed projection + forecast split shade,
+  stat-card grid at each breakpoint, the schedule sheet (dropdowns/toggle), empty/error states, and a
+  screenshot diff vs the export renders.
+
 ## Auth UX pass — Phases 1–4 DONE (2026-07-20)
 Interaction/UX depth pass on top of the LUMINA reskin (plan: friction→feedback→flow→a11y; delight
 Phase 5 deferred). Frontend + minimal flow/routing (user-approved exception to UI-only guardrail).
