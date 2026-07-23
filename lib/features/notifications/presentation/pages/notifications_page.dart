@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
+import 'package:lucide_icons_flutter/lucide_icons.dart';
 
 import '../../../../core/design/app_colors.dart';
 import '../../../../core/design/app_radius.dart';
@@ -8,9 +9,16 @@ import '../../../../core/design/app_spacing.dart';
 import '../../../../core/design/app_typography.dart';
 import '../../../../core/design/widgets/app_button.dart';
 import '../../../../core/design/widgets/app_card.dart';
-import '../../../../core/design/widgets/app_inline_banner.dart';
+import '../../../../core/design/widgets/app_detail_scaffold.dart';
+import '../../../../core/design/widgets/app_filter_chips.dart';
+import '../../../../core/design/widgets/app_pill.dart';
+import '../../../../core/design/widgets/app_states.dart';
 import '../../domain/entities/notification.dart';
 import '../controllers/notifications_controller.dart';
+
+/// Inbox filter chips (single-select). Index 0 = unread, 1 = all, 2..5 map to
+/// the four priorities. Matches the design's merged filter row.
+const _filterLabels = ['Unread', 'All', 'Low', 'Normal', 'High', 'Urgent'];
 
 class NotificationsPage extends ConsumerStatefulWidget {
   const NotificationsPage({super.key});
@@ -20,131 +28,114 @@ class NotificationsPage extends ConsumerStatefulWidget {
 }
 
 class _NotificationsPageState extends ConsumerState<NotificationsPage> {
-  NotificationPriority? _priority;
-  bool _unreadOnly = false;
+  int _filter = 0; // default: unread
+
+  bool _matches(AppNotification n) => switch (_filter) {
+        0 => n.isUnread,
+        1 => true,
+        2 => n.priority == NotificationPriority.low,
+        3 => n.priority == NotificationPriority.normal,
+        4 => n.priority == NotificationPriority.high,
+        _ => n.priority == NotificationPriority.urgent,
+      };
 
   @override
   Widget build(BuildContext context) {
     final state = ref.watch(notificationsControllerProvider);
     final unread = ref.watch(unreadCountProvider).value ?? 0;
-    final priorityFilter = _priority;
-    final unreadOnly = _unreadOnly;
 
-    return Scaffold(
-      backgroundColor: AppColors.background,
-      appBar: AppBar(
-        backgroundColor: AppColors.background,
-        surfaceTintColor: AppColors.background,
-        leading: IconButton(
-          icon: const Icon(Icons.arrow_back_ios, color: AppColors.accent, size: 20),
-          onPressed: () => Navigator.of(context).pop(),
-        ),
-        title: Text('Notifications', style: AppTypography.headline),
-        actions: [
-          IconButton(
-            icon: const Icon(Icons.settings_outlined, color: AppColors.accent, size: 22),
-            tooltip: 'Settings',
-            onPressed: () => context.push('/notifications/settings'),
+    return AppDetailScaffold(
+      eyebrow: 'Notifications',
+      title: 'Notifications',
+      description: 'Alerts across sales, stock, repairs and more.',
+      actions: [
+        if (unread > 0)
+          AppButton(
+            label: 'Mark all read',
+            variant: AppButtonVariant.plain,
+            icon: LucideIcons.checkCheck,
+            onPressed: () =>
+                ref.read(notificationsControllerProvider.notifier).markAllRead(),
           ),
-          if (unread > 0)
-            AppButton(
-              label: 'Mark All Read',
-              variant: AppButtonVariant.plain,
-              onPressed: () =>
-                  ref.read(notificationsControllerProvider.notifier).markAllRead(),
+        _GearButton(onTap: () => context.push('/notifications/settings')),
+      ],
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          AppFilterChips(
+            labels: _filterLabels,
+            selected: _filter,
+            onSelected: (i) => setState(() => _filter = i),
+          ),
+          const SizedBox(height: AppSpacing.lg),
+          state.when(
+            loading: () => const Padding(
+              padding: EdgeInsets.only(top: 64),
+              child: Center(child: CircularProgressIndicator()),
             ),
+            error: (e, _) => AppErrorState(
+              title: 'Could not load notifications',
+              body: 'Something went wrong while loading your alerts. '
+                  'Your data is safe — try again.',
+              onRetry: () =>
+                  ref.read(notificationsControllerProvider.notifier).refresh(),
+            ),
+            data: (all) {
+              final items = all.where(_matches).toList();
+              if (items.isEmpty) {
+                return const Padding(
+                  padding: EdgeInsets.only(top: 48),
+                  child: AppEmptyState(
+                    icon: LucideIcons.bell,
+                    title: 'No notifications',
+                    body: "You're all caught up — new alerts will show up here.",
+                  ),
+                );
+              }
+              return Column(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  for (var i = 0; i < items.length; i++) ...[
+                    if (i > 0) const SizedBox(height: AppSpacing.md),
+                    _NotificationCard(
+                      notification: items[i],
+                      onTap: () {
+                        final n = items[i];
+                        if (n.isUnread) {
+                          ref
+                              .read(notificationsControllerProvider.notifier)
+                              .markRead(n.id);
+                        }
+                        _deepLink(context, n);
+                      },
+                    ),
+                  ],
+                ],
+              );
+            },
+          ),
         ],
       ),
-      body: Column(
-        children: [
-          _FilterBar(
-            priority: priorityFilter,
-            unreadOnly: unreadOnly,
-            onUnreadToggle: () => setState(() => _unreadOnly = !_unreadOnly),
-            onPriority: (p) => setState(() => _priority = p),
-          ),
-          Expanded(
-            child: state.when(
-              loading: () => const Center(child: CircularProgressIndicator()),
-              error: (e, _) => Center(
-                child: Padding(
-                  padding: const EdgeInsets.symmetric(horizontal: AppSpacing.screenPadding),
-                  child: Column(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      AppInlineBanner(
-                        message: 'Could not load notifications.',
-                        type: BannerType.error,
-                      ),
-                      const SizedBox(height: AppSpacing.md),
-                      AppButton(
-                        label: 'Retry',
-                        onPressed: () => ref
-                            .read(notificationsControllerProvider.notifier)
-                            .refresh(),
-                      ),
-                    ],
-                  ),
-                ),
-              ),
-              data: (all) {
-                final items = all.where((n) {
-                  if (priorityFilter != null && n.priority != priorityFilter) {
-                    return false;
-                  }
-                  if (unreadOnly && !n.isUnread) return false;
-                  return true;
-                }).toList();
+    );
+  }
+}
 
-                return RefreshIndicator(
-                  onRefresh: () =>
-                      ref.read(notificationsControllerProvider.notifier).refresh(),
-                  child: items.isEmpty
-                      ? ListView(
-                          children: [
-                            const SizedBox(height: 120),
-                            Column(
-                              mainAxisSize: MainAxisSize.min,
-                              children: [
-                                Icon(Icons.notifications_none,
-                                    size: 48, color: AppColors.textHint),
-                                const SizedBox(height: AppSpacing.md),
-                                Text('No notifications',
-                                    style: AppTypography.subhead
-                                        .copyWith(color: AppColors.textMuted)),
-                              ],
-                            ),
-                          ],
-                        )
-                      : ListView.builder(
-                          padding: const EdgeInsets.symmetric(
-                            horizontal: AppSpacing.screenPadding,
-                            vertical: AppSpacing.md,
-                          ),
-                          itemCount: items.length,
-                          itemBuilder: (_, i) => Padding(
-                            padding: EdgeInsets.only(
-                              bottom: i < items.length - 1 ? AppSpacing.md : 0,
-                            ),
-                            child: _NotificationCard(
-                              notification: items[i],
-                              onTap: () {
-                                final n = items[i];
-                                if (n.isUnread) {
-                                  ref
-                                      .read(notificationsControllerProvider.notifier)
-                                      .markRead(n.id);
-                                }
-                                _deepLink(context, n);
-                              },
-                            ),
-                          ),
-                        ),
-                );
-              },
-            ),
-          ),
-        ],
+/// Ghost icon button used for the inbox → settings shortcut. 44dp target.
+class _GearButton extends StatelessWidget {
+  const _GearButton({required this.onTap});
+
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    final lum = context.lum;
+    return Semantics(
+      button: true,
+      label: 'Notification settings',
+      child: IconButton(
+        onPressed: onTap,
+        tooltip: 'Settings',
+        icon: Icon(LucideIcons.settings, size: 20, color: lum.g600),
       ),
     );
   }
@@ -176,56 +167,30 @@ void _deepLink(BuildContext context, AppNotification n) {
   if (url != null && url.startsWith('/')) context.push(url);
 }
 
-class _FilterBar extends StatelessWidget {
-  const _FilterBar({
-    required this.priority,
-    required this.unreadOnly,
-    required this.onUnreadToggle,
-    required this.onPriority,
-  });
-
-  final NotificationPriority? priority;
-  final bool unreadOnly;
-  final VoidCallback onUnreadToggle;
-  final ValueChanged<NotificationPriority?> onPriority;
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      padding: const EdgeInsets.symmetric(
-        horizontal: AppSpacing.screenPadding,
-        vertical: AppSpacing.sm,
-      ),
-      decoration: const BoxDecoration(
-        border: Border(bottom: BorderSide(color: AppColors.separator, width: 0.5)),
-      ),
-      child: SingleChildScrollView(
-        scrollDirection: Axis.horizontal,
-        child: Row(
-          children: [
-            _Chip(label: 'Unread', selected: unreadOnly, onTap: onUnreadToggle),
-            const SizedBox(width: AppSpacing.sm),
-            Container(width: 0.5, height: 20, color: AppColors.separator),
-            const SizedBox(width: AppSpacing.sm),
-            _Chip(
-              label: 'All',
-              selected: priority == null,
-              onTap: () => onPriority(null),
-            ),
-            for (final p in NotificationPriority.values) ...[
-              const SizedBox(width: AppSpacing.sm),
-              _Chip(
-                label: _priorityLabel(p),
-                selected: priority == p,
-                onTap: () => onPriority(p),
-              ),
-            ],
-          ],
-        ),
-      ),
-    );
+/// Glyph for a notification, keyed off action_type. Unknown types fall back to
+/// the bell rather than guessing.
+IconData _typeIcon(String? type) {
+  switch (type?.toLowerCase()) {
+    case 'repair':
+      return LucideIcons.wrench;
+    case 'customer':
+      return LucideIcons.userRound;
+    case 'product':
+    case 'low_stock':
+      return LucideIcons.package;
+    case 'payroll_run':
+      return LucideIcons.wallet;
+    default:
+      return LucideIcons.bell;
   }
 }
+
+AppPillTone _priorityTone(NotificationPriority p) => switch (p) {
+      NotificationPriority.low => AppPillTone.neutral,
+      NotificationPriority.normal => AppPillTone.lumen,
+      NotificationPriority.high => AppPillTone.warning,
+      NotificationPriority.urgent => AppPillTone.danger,
+    };
 
 String _priorityLabel(NotificationPriority p) => switch (p) {
       NotificationPriority.low => 'Low',
@@ -233,41 +198,6 @@ String _priorityLabel(NotificationPriority p) => switch (p) {
       NotificationPriority.high => 'High',
       NotificationPriority.urgent => 'Urgent',
     };
-
-class _Chip extends StatelessWidget {
-  const _Chip({required this.label, required this.selected, required this.onTap});
-
-  final String label;
-  final bool selected;
-  final VoidCallback onTap;
-
-  @override
-  Widget build(BuildContext context) {
-    return GestureDetector(
-      onTap: onTap,
-      child: Container(
-        padding: const EdgeInsets.symmetric(horizontal: AppSpacing.md, vertical: 6),
-        decoration: BoxDecoration(
-          color: selected
-              ? AppColors.accent.withValues(alpha: 0.12)
-              : AppColors.fieldFill,
-          borderRadius: BorderRadius.circular(AppRadius.chip),
-          border: Border.all(
-            color: selected ? AppColors.accent : AppColors.separator,
-            width: 0.5,
-          ),
-        ),
-        child: Text(
-          label,
-          style: AppTypography.footnote.copyWith(
-            color: selected ? AppColors.accent : AppColors.textMuted,
-            fontWeight: selected ? FontWeight.w600 : FontWeight.w400,
-          ),
-        ),
-      ),
-    );
-  }
-}
 
 class _NotificationCard extends StatelessWidget {
   const _NotificationCard({required this.notification, required this.onTap});
@@ -277,125 +207,112 @@ class _NotificationCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final lum = context.lum;
+    final n = notification;
+
     return AppCard(
-      child: InkWell(
-        onTap: onTap,
-        borderRadius: BorderRadius.circular(AppRadius.card),
-        child: Padding(
-          padding: const EdgeInsets.all(AppSpacing.lg),
-          child: Row(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              if (notification.isUnread)
-                Padding(
-                  padding: const EdgeInsets.only(top: 6, right: AppSpacing.sm),
-                  child: Container(
-                    width: 8,
-                    height: 8,
-                    decoration: const BoxDecoration(
-                      color: AppColors.accent,
-                      shape: BoxShape.circle,
-                    ),
-                  ),
-                )
-              else
-                const SizedBox(width: AppSpacing.md + 8),
-              Expanded(
-                child: Column(
+      padding: const EdgeInsets.all(AppSpacing.lg),
+      onTap: onTap,
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Container(
+            width: 42,
+            height: 42,
+            decoration: BoxDecoration(
+              color: lum.accentSoft,
+              borderRadius: BorderRadius.circular(AppRadius.md),
+            ),
+            child: Icon(_typeIcon(n.actionType), size: 20, color: lum.accent),
+          ),
+          const SizedBox(width: 14),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Row(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Row(
-                      children: [
-                        Expanded(
-                          child: Text(
-                            notification.title,
-                            style: notification.isUnread
-                                ? AppTypography.callout
-                                    .copyWith(fontWeight: FontWeight.w600)
-                                : AppTypography.callout,
+                    Expanded(
+                      child: Row(
+                        children: [
+                          if (n.isUnread) ...[
+                            Container(
+                              width: 8,
+                              height: 8,
+                              decoration: BoxDecoration(
+                                color: lum.accent,
+                                shape: BoxShape.circle,
+                              ),
+                            ),
+                            const SizedBox(width: 8),
+                          ],
+                          Flexible(
+                            child: Text(
+                              n.title,
+                              style: AppTypography.callout.copyWith(
+                                fontWeight: FontWeight.w600,
+                                color: lum.textPrimary,
+                              ),
+                            ),
                           ),
-                        ),
-                        _PriorityChip(priority: notification.priority),
-                      ],
+                        ],
+                      ),
                     ),
-                    const SizedBox(height: 4),
-                    Text(
-                      notification.body,
-                      style: AppTypography.footnote.copyWith(color: AppColors.textMuted),
-                      maxLines: 2,
-                      overflow: TextOverflow.ellipsis,
-                    ),
-                    const SizedBox(height: 6),
-                    Text(
-                      _formatTime(notification.createdAt),
-                      style: AppTypography.caption.copyWith(color: AppColors.textHint),
+                    const SizedBox(width: 8),
+                    AppPill(
+                      label: _priorityLabel(n.priority),
+                      tone: _priorityTone(n.priority),
+                      showDot: false,
                     ),
                   ],
                 ),
-              ),
-              if (notification.actionType != null)
-                Padding(
-                  padding: const EdgeInsets.only(left: AppSpacing.sm),
-                  child: Icon(Icons.chevron_right, size: 18, color: AppColors.separator),
+                const SizedBox(height: 4),
+                Text(
+                  n.body,
+                  style: AppTypography.footnote.copyWith(color: lum.g600),
+                  maxLines: 2,
+                  overflow: TextOverflow.ellipsis,
                 ),
-            ],
+                const SizedBox(height: 8),
+                Row(
+                  children: [
+                    if (n.actionId != null) ...[
+                      Flexible(
+                        child: Text(
+                          n.actionId!,
+                          style: AppTypography.monoValue.copyWith(
+                            fontSize: 12,
+                            color: lum.g500,
+                          ),
+                          overflow: TextOverflow.ellipsis,
+                        ),
+                      ),
+                      Text('  ·  ',
+                          style: AppTypography.caption.copyWith(color: lum.g400)),
+                    ],
+                    Text(
+                      _formatTime(n.createdAt),
+                      style: AppTypography.caption.copyWith(color: lum.g500),
+                    ),
+                  ],
+                ),
+              ],
+            ),
           ),
-        ),
+        ],
       ),
     );
-  }
-
-  String _formatTime(DateTime dt) {
-    final now = DateTime.now();
-    final diff = now.difference(dt);
-    if (diff.inMinutes < 1) return 'Just now';
-    if (diff.inMinutes < 60) return '${diff.inMinutes}m ago';
-    if (diff.inHours < 24) return '${diff.inHours}h ago';
-    if (diff.inDays < 7) return '${diff.inDays}d ago';
-    return '${dt.day}/${dt.month}/${dt.year}';
   }
 }
 
-class _PriorityChip extends StatelessWidget {
-  const _PriorityChip({required this.priority});
-
-  final NotificationPriority priority;
-
-  @override
-  Widget build(BuildContext context) {
-    Color color;
-    String label;
-    switch (priority) {
-      case NotificationPriority.low:
-        color = AppColors.textMuted;
-        label = 'LOW';
-        break;
-      case NotificationPriority.high:
-        color = AppColors.warning;
-        label = 'HIGH';
-        break;
-      case NotificationPriority.urgent:
-        color = AppColors.destructive;
-        label = 'URGENT';
-        break;
-      default:
-        color = AppColors.accent;
-        label = 'NORMAL';
-    }
-
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: AppSpacing.sm, vertical: 2),
-      decoration: BoxDecoration(
-        color: color.withValues(alpha: 0.12),
-        borderRadius: BorderRadius.circular(AppRadius.chip),
-      ),
-      child: Text(
-        label,
-        style: AppTypography.caption.copyWith(
-          color: color,
-          fontWeight: FontWeight.w600,
-        ),
-      ),
-    );
-  }
+String _formatTime(DateTime dt) {
+  final now = DateTime.now();
+  final diff = now.difference(dt);
+  if (diff.inMinutes < 1) return 'Just now';
+  if (diff.inMinutes < 60) return '${diff.inMinutes}m ago';
+  if (diff.inHours < 24) return '${diff.inHours}h ago';
+  if (diff.inDays < 7) return '${diff.inDays}d ago';
+  return '${dt.day}/${dt.month}/${dt.year}';
 }
