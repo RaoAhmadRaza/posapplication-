@@ -1,16 +1,17 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
+import 'package:lucide_icons_flutter/lucide_icons.dart';
 import '../../../../core/design/app_colors.dart';
-import '../../../../core/design/app_radius.dart';
-import '../../../../core/design/app_spacing.dart';
 import '../../../../core/design/app_typography.dart';
-import '../../../../core/design/format.dart';
-import '../../../../core/design/widgets/app_button.dart';
-import '../../../../core/design/widgets/app_inline_banner.dart';
-import '../../../../core/design/widgets/app_text_field.dart';
+import '../../../../core/design/widgets/app_card.dart';
+import '../../../../core/design/widgets/app_money_text.dart';
+import '../../../../core/design/widgets/app_search_field.dart';
+import '../../../../core/design/widgets/app_states.dart';
+import '../../../../core/design/widgets/app_detail_scaffold.dart';
 import '../../domain/entities/account.dart';
 import '../controllers/chart_of_accounts_controller.dart';
+import '../widgets/accounting_ui.dart';
 
 const _typeLabels = <AccountType, String>{
   AccountType.asset: 'Assets',
@@ -33,6 +34,14 @@ class _ChartOfAccountsPageState extends ConsumerState<ChartOfAccountsPage> {
   String _query = '';
 
   @override
+  void initState() {
+    super.initState();
+    _search.addListener(
+      () => setState(() => _query = _search.text.trim()),
+    );
+  }
+
+  @override
   void dispose() {
     _search.dispose();
     super.dispose();
@@ -49,66 +58,63 @@ class _ChartOfAccountsPageState extends ConsumerState<ChartOfAccountsPage> {
   Widget build(BuildContext context) {
     final state = ref.watch(chartOfAccountsProvider);
 
-    return Scaffold(
-      backgroundColor: AppColors.background,
-      appBar: AppBar(
-        backgroundColor: AppColors.background,
-        surfaceTintColor: AppColors.background,
-        leading: IconButton(
-          icon: const Icon(Icons.arrow_back_ios,
-              color: AppColors.accent, size: 20),
-          onPressed: () => Navigator.of(context).pop(),
-        ),
-        title: Text('Chart of Accounts', style: AppTypography.headline),
-      ),
-      body: SafeArea(
-        child: Column(
-          children: [
-            Padding(
-              padding: const EdgeInsets.fromLTRB(AppSpacing.screenPadding,
-                  AppSpacing.md, AppSpacing.screenPadding, AppSpacing.sm),
-              child: AppTextField(
-                controller: _search,
-                label: 'Search',
-                prefixIcon: Icons.search,
-                hint: 'Code or name',
-                onSubmitted: (v) => setState(() => _query = v.trim()),
+    return AppDetailScaffold(
+      eyebrow: 'Accounting',
+      title: 'Chart of accounts',
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          AppSearchField(
+            controller: _search,
+            hint: 'Search by code or name',
+            onClear: () => setState(() => _query = ''),
+          ),
+          const SizedBox(height: 14),
+          state.when(
+            loading: () => const Padding(
+              padding: EdgeInsets.only(top: 60),
+              child: Center(child: CircularProgressIndicator()),
+            ),
+            error: (e, _) => Padding(
+              padding: const EdgeInsets.only(top: 40),
+              child: AppErrorState(
+                title: 'Couldn\'t load accounts',
+                body: 'Your data is safe. Check the connection and try again.',
+                onRetry: () =>
+                    ref.read(chartOfAccountsProvider.notifier).refresh(),
               ),
             ),
-            Expanded(
-              child: state.when(
-                loading: () =>
-                    const Center(child: CircularProgressIndicator()),
-                error: (e, _) => _ErrorState(
-                  onRetry: () =>
-                      ref.read(chartOfAccountsProvider.notifier).refresh(),
-                ),
-                data: (accounts) {
-                  final visible = accounts.where(_matches).toList();
-                  return ListView(
-                    padding: const EdgeInsets.only(bottom: AppSpacing.xxl),
-                    children: [
-                      for (final type in AccountType.values)
-                        _TypeSection(
-                          type: type,
-                          all: accounts,
-                          visible: visible,
-                          expanded: _query.isNotEmpty,
-                        ),
-                    ],
-                  );
-                },
-              ),
-            ),
-          ],
-        ),
+            data: (accounts) {
+              final visible = accounts.where(_matches).toList();
+              final cards = <Widget>[];
+              for (final type in AccountType.values) {
+                final card = _TypeCard(
+                  type: type,
+                  all: accounts,
+                  visible: visible,
+                  expanded: _query.isNotEmpty,
+                );
+                cards.add(card);
+              }
+              return Column(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  for (final c in cards) ...[
+                    c,
+                    const SizedBox(height: 12),
+                  ],
+                ],
+              );
+            },
+          ),
+        ],
       ),
     );
   }
 }
 
-class _TypeSection extends StatelessWidget {
-  const _TypeSection({
+class _TypeCard extends StatefulWidget {
+  const _TypeCard({
     required this.type,
     required this.all,
     required this.visible,
@@ -121,113 +127,158 @@ class _TypeSection extends StatelessWidget {
   final bool expanded;
 
   @override
-  Widget build(BuildContext context) {
-    final roots = visible
-        .where((a) => a.type == type && a.parentId == null)
+  State<_TypeCard> createState() => _TypeCardState();
+}
+
+class _TypeCardState extends State<_TypeCard> {
+  late bool _open = widget.expanded;
+
+  @override
+  void didUpdateWidget(_TypeCard old) {
+    super.didUpdateWidget(old);
+    // A live search should force the matched groups open.
+    if (widget.expanded && !old.expanded) _open = true;
+  }
+
+  List<Account> get _topLevel {
+    final roots = widget.visible
+        .where((a) => a.type == widget.type && a.parentId == null)
         .toList()
       ..sort((a, b) => a.code.compareTo(b.code));
-    // Orphans: matched children whose parent is not in the same type/visible.
     final rootIds = roots.map((a) => a.id).toSet();
-    final orphans = visible
+    final orphans = widget.visible
         .where((a) =>
-            a.type == type &&
+            a.type == widget.type &&
             a.parentId != null &&
             !rootIds.contains(a.parentId))
         .toList()
       ..sort((a, b) => a.code.compareTo(b.code));
-    final topLevel = [...roots, ...orphans];
+    return [...roots, ...orphans];
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final lum = context.lum;
+    final topLevel = _topLevel;
     if (topLevel.isEmpty) return const SizedBox.shrink();
 
-    return Padding(
-      padding: const EdgeInsets.symmetric(horizontal: AppSpacing.md),
-      child: Theme(
-        data: Theme.of(context).copyWith(dividerColor: Colors.transparent),
-        child: ExpansionTile(
-          initiallyExpanded: expanded,
-          tilePadding:
-              const EdgeInsets.symmetric(horizontal: AppSpacing.md),
-          title: Text(_typeLabels[type] ?? type.name,
-              style: AppTypography.headline),
-          childrenPadding: const EdgeInsets.only(bottom: AppSpacing.sm),
-          children: [
-            for (final account in topLevel) ...[
-              _AccountRow(account: account, depth: 0),
-              for (final child in all
-                  .where((c) => c.parentId == account.id)
-                  .toList()
-                ..sort((a, b) => a.code.compareTo(b.code)))
-                _AccountRow(account: child, depth: 1),
-            ],
-          ],
-        ),
+    final rows = <Account>[];
+    for (final account in topLevel) {
+      rows.add(account);
+      rows.addAll(widget.all
+          .where((c) => c.parentId == account.id)
+          .toList()
+        ..sort((a, b) => a.code.compareTo(b.code)));
+    }
+    final total = rows.fold<double>(0, (s, a) => s + a.currentBalance);
+
+    return AppCard(
+      padding: EdgeInsets.zero,
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          Semantics(
+            button: true,
+            label: _typeLabels[widget.type] ?? widget.type.name,
+            child: GestureDetector(
+              behavior: HitTestBehavior.opaque,
+              onTap: () => setState(() => _open = !_open),
+              child: Container(
+                decoration: BoxDecoration(
+                  color: lum.surface2,
+                  border: Border(bottom: BorderSide(color: lum.hairline)),
+                ),
+                padding:
+                    const EdgeInsets.symmetric(horizontal: 16, vertical: 13),
+                child: Row(
+                  children: [
+                    Icon(
+                      _open ? LucideIcons.chevronDown : LucideIcons.chevronRight,
+                      size: 18,
+                      color: lum.g500,
+                    ),
+                    const SizedBox(width: 8),
+                    Text(
+                      _typeLabels[widget.type] ?? widget.type.name,
+                      style: AppTypography.subhead.copyWith(
+                        fontWeight: FontWeight.w700,
+                        color: lum.textPrimary,
+                      ),
+                    ),
+                    const SizedBox(width: 8),
+                    Container(
+                      padding: const EdgeInsets.symmetric(
+                          horizontal: 8, vertical: 2),
+                      decoration: BoxDecoration(
+                        color: lum.g100,
+                        borderRadius: BorderRadius.circular(999),
+                      ),
+                      child: Text(
+                        '${rows.length}',
+                        style: AppTypography.caption.copyWith(
+                          fontWeight: FontWeight.w600,
+                          color: lum.g600,
+                        ),
+                      ),
+                    ),
+                    const Spacer(),
+                    AppMoneyText(total, size: 14),
+                  ],
+                ),
+              ),
+            ),
+          ),
+          if (_open)
+            for (final account in rows) _AccountRow(account: account),
+        ],
       ),
     );
   }
 }
 
 class _AccountRow extends StatelessWidget {
-  const _AccountRow({required this.account, required this.depth});
+  const _AccountRow({required this.account});
 
   final Account account;
-  final int depth;
 
   @override
   Widget build(BuildContext context) {
-    return InkWell(
-      onTap: () =>
-          context.push('/accounting/accounts/${account.id}/ledger'),
-      borderRadius: BorderRadius.circular(AppRadius.field),
-      child: Padding(
-        padding: EdgeInsets.only(
-          left: AppSpacing.base + depth * AppSpacing.lg,
-          right: AppSpacing.md,
-          top: AppSpacing.sm,
-          bottom: AppSpacing.sm,
-        ),
-        child: Row(
-          children: [
-            SizedBox(
-              width: 56,
-              child: Text(account.code,
-                  style: AppTypography.footnote
-                      .copyWith(color: AppColors.textMuted)),
-            ),
-            Expanded(
-              child: Text(account.name,
-                  style: AppTypography.subhead,
-                  overflow: TextOverflow.ellipsis),
-            ),
-            const SizedBox(width: AppSpacing.sm),
-            Text(formatPkr(account.currentBalance),
-                style: AppTypography.footnote.copyWith(
-                    color: AppColors.textPrimary,
-                    fontWeight: FontWeight.w600)),
-          ],
-        ),
-      ),
-    );
-  }
-}
-
-class _ErrorState extends StatelessWidget {
-  const _ErrorState({required this.onRetry});
-  final VoidCallback onRetry;
-
-  @override
-  Widget build(BuildContext context) {
-    return Center(
-      child: Padding(
-        padding:
-            const EdgeInsets.symmetric(horizontal: AppSpacing.screenPadding),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            AppInlineBanner(
-                message: 'Could not load accounts.',
-                type: BannerType.error),
-            const SizedBox(height: AppSpacing.md),
-            AppButton(label: 'Retry', onPressed: onRetry),
-          ],
+    final lum = context.lum;
+    final isChild = account.parentId != null;
+    return Semantics(
+      button: true,
+      label: '${account.code} ${account.name}',
+      child: GestureDetector(
+        behavior: HitTestBehavior.opaque,
+        onTap: () => context.push('/accounting/accounts/${account.id}/ledger'),
+        child: Container(
+          decoration: BoxDecoration(
+            border: Border(bottom: BorderSide(color: lum.hairline)),
+          ),
+          padding: EdgeInsets.only(
+            left: isChild ? 30 : 16,
+            right: 16,
+            top: 13,
+            bottom: 13,
+          ),
+          child: Row(
+            children: [
+              AcctCodeChip(account.code),
+              const SizedBox(width: 12),
+              Expanded(
+                child: Text(
+                  account.name,
+                  style: AppTypography.subhead
+                      .copyWith(fontSize: 14, color: lum.textPrimary),
+                  overflow: TextOverflow.ellipsis,
+                ),
+              ),
+              const SizedBox(width: 10),
+              AppMoneyText(account.currentBalance, size: 13.5),
+              const SizedBox(width: 6),
+              Icon(LucideIcons.chevronRight, size: 16, color: lum.g400),
+            ],
+          ),
         ),
       ),
     );

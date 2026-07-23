@@ -1,162 +1,128 @@
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
+import 'package:lucide_icons_flutter/lucide_icons.dart';
 import '../../../../core/design/app_colors.dart';
-import '../../../../core/design/app_spacing.dart';
-import '../../../../core/design/app_typography.dart';
+import '../../../../core/widgets/module_scaffold.dart';
+import '../widgets/acct_hub_grid.dart';
 
+/// Accounting hub — the module's branch root. Grouped destination tiles over the
+/// shared module chrome. Descriptions are static design copy; no fabricated
+/// counts (the mock's "34 accounts" has no source on this page).
 class AccountingHubPage extends StatelessWidget {
   const AccountingHubPage({super.key});
 
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
-      backgroundColor: AppColors.background,
-      appBar: AppBar(
-        backgroundColor: AppColors.background,
-        surfaceTintColor: AppColors.background,
-        title: Text('Accounting', style: AppTypography.largeTitle),
-      ),
-      body: SafeArea(
-        child: SingleChildScrollView(
-          padding:
-              const EdgeInsets.symmetric(horizontal: AppSpacing.screenPadding),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              const SizedBox(height: AppSpacing.xl),
-              _HubRow(
-                icon: Icons.account_tree,
-                title: 'Chart of Accounts',
-                subtitle: 'Ledger accounts and balances',
-                onTap: () => context.push('/accounting/accounts'),
-              ),
-              const SizedBox(height: AppSpacing.md),
-              _HubRow(
-                icon: Icons.menu_book,
-                title: 'Journal',
-                subtitle: 'Posted journal entries',
-                onTap: () => context.push('/accounting/journal'),
-              ),
-              const SizedBox(height: AppSpacing.md),
-              _HubRow(
-                icon: Icons.receipt,
-                title: 'Vouchers',
-                subtitle: 'Payment, receipt, contra, journal',
-                onTap: () => context.push('/accounting/vouchers'),
-              ),
-              const SizedBox(height: AppSpacing.md),
-              _HubRow(
-                icon: Icons.money_off,
-                title: 'Expenses',
-                subtitle: 'Record and track expenses',
-                onTap: () => context.push('/accounting/expenses'),
-              ),
-              const SizedBox(height: AppSpacing.md),
-              _HubRow(
-                icon: Icons.account_balance,
-                title: 'Bank Accounts',
-                subtitle: 'Bank and cash accounts',
-                onTap: () => context.push('/accounting/banks'),
-              ),
-              const SizedBox(height: AppSpacing.md),
-              _HubRow(
-                icon: Icons.percent,
-                title: 'Tax Rules',
-                subtitle: 'Tax rates and defaults',
-                onTap: () => context.push('/accounting/tax-rules'),
-              ),
-              const SizedBox(height: AppSpacing.md),
-              _HubRow(
-                icon: Icons.balance,
-                title: 'Trial Balance',
-                subtitle: 'Debits vs credits, as of a date',
-                onTap: () => context.push('/accounting/reports/trial-balance'),
-              ),
-              const SizedBox(height: AppSpacing.md),
-              _HubRow(
-                icon: Icons.trending_up,
-                title: 'Profit & Loss',
-                subtitle: 'Revenue, expenses, net profit',
-                onTap: () => context.push('/accounting/reports/profit-loss'),
-              ),
-              const SizedBox(height: AppSpacing.md),
-              _HubRow(
-                icon: Icons.account_balance,
-                title: 'Balance Sheet',
-                subtitle: 'Assets vs liabilities and equity',
-                onTap: () => context.push('/accounting/reports/balance-sheet'),
-              ),
-              const SizedBox(height: AppSpacing.md),
-              _HubRow(
-                icon: Icons.menu_book,
-                title: 'Cash / Bank Book',
-                subtitle: 'Running balance for cash or a bank',
-                onTap: () =>
-                    context.push('/accounting/reports/cash-bank-book'),
-              ),
-              const SizedBox(height: AppSpacing.md),
-              _HubRow(
-                icon: Icons.event_available,
-                title: 'Fiscal Periods',
-                subtitle: 'Close or reopen accounting periods',
-                onTap: () => context.push('/accounting/periods'),
-              ),
-              const SizedBox(height: AppSpacing.md),
-              _HubRow(
-                icon: Icons.rule,
-                title: 'Bank Reconciliation',
-                subtitle: 'Reconcile a bank statement to the books',
-                onTap: () => context.push('/accounting/banks'),
-              ),
-              const SizedBox(height: AppSpacing.xxl),
-            ],
+    final lum = context.lum;
+
+    List<AcctHubItem> items() => [
+          AcctHubItem(
+            icon: LucideIcons.listTree,
+            label: 'Chart of accounts',
+            description: 'Ledger accounts & balances',
+            iconBackground: lum.accentSoft,
+            iconForeground: lum.accent,
+            onTap: () => context.push('/accounting/accounts'),
           ),
-        ),
-      ),
-    );
-  }
-}
-
-class _HubRow extends StatelessWidget {
-  const _HubRow({
-    required this.icon,
-    required this.title,
-    required this.subtitle,
-    this.onTap,
-  });
-
-  final IconData icon;
-  final String title;
-  final String subtitle;
-  final VoidCallback? onTap;
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      decoration: BoxDecoration(
-        color: AppColors.background,
-        borderRadius: BorderRadius.circular(14),
-        border: Border.all(color: AppColors.separator, width: 0.5),
-      ),
-      child: ListTile(
-        contentPadding: const EdgeInsets.symmetric(
-            horizontal: AppSpacing.base, vertical: AppSpacing.sm),
-        leading: Container(
-          width: 40,
-          height: 40,
-          decoration: BoxDecoration(
-            color: AppColors.accent.withValues(alpha: 0.1),
-            borderRadius: BorderRadius.circular(10),
+          AcctHubItem(
+            icon: LucideIcons.notebookPen,
+            label: 'Journal entries',
+            description: 'Double-entry postings',
+            iconBackground: lum.accentSoft,
+            iconForeground: lum.accent,
+            onTap: () => context.push('/accounting/journal'),
           ),
-          child: Icon(icon, color: AppColors.accent, size: 20),
-        ),
-        title: Text(title,
-            style:
-                AppTypography.headline.copyWith(color: AppColors.textPrimary)),
-        subtitle: Text(subtitle,
-            style: AppTypography.footnote.copyWith(color: AppColors.textHint)),
-        trailing: const Icon(Icons.chevron_right, color: AppColors.separator),
-        onTap: onTap,
+          AcctHubItem(
+            icon: LucideIcons.receiptText,
+            label: 'Manual vouchers',
+            description: 'Payment · receipt · journal',
+            iconBackground: lum.accentSoft,
+            iconForeground: lum.accent,
+            onTap: () => context.push('/accounting/vouchers'),
+          ),
+          AcctHubItem(
+            icon: LucideIcons.wallet,
+            label: 'Expenses',
+            description: 'Day-to-day spending',
+            iconBackground: lum.warningSoft,
+            iconForeground: lum.warningText,
+            onTap: () => context.push('/accounting/expenses'),
+          ),
+          AcctHubItem(
+            icon: LucideIcons.landmark,
+            label: 'Bank accounts',
+            description: 'Bank & cash accounts',
+            iconBackground: lum.accentSoft,
+            iconForeground: lum.accent,
+            onTap: () => context.push('/accounting/banks'),
+          ),
+          AcctHubItem(
+            icon: LucideIcons.percent,
+            label: 'Tax rules',
+            description: 'GST & withholding',
+            iconBackground: lum.transitSoft,
+            iconForeground: lum.transitText,
+            onTap: () => context.push('/accounting/tax-rules'),
+          ),
+          AcctHubItem(
+            icon: LucideIcons.scale,
+            label: 'Trial balance',
+            description: 'As of a date',
+            iconBackground: lum.successSoft,
+            iconForeground: lum.successText,
+            onTap: () => context.push('/accounting/reports/trial-balance'),
+          ),
+          AcctHubItem(
+            icon: LucideIcons.trendingUp,
+            label: 'Profit & loss',
+            description: 'For a period',
+            iconBackground: lum.successSoft,
+            iconForeground: lum.successText,
+            onTap: () => context.push('/accounting/reports/profit-loss'),
+          ),
+          AcctHubItem(
+            icon: LucideIcons.layoutPanelLeft,
+            label: 'Balance sheet',
+            description: 'Financial position',
+            iconBackground: lum.successSoft,
+            iconForeground: lum.successText,
+            onTap: () => context.push('/accounting/reports/balance-sheet'),
+          ),
+          AcctHubItem(
+            icon: LucideIcons.bookOpen,
+            label: 'Cash & bank book',
+            description: 'Running balances',
+            iconBackground: lum.successSoft,
+            iconForeground: lum.successText,
+            onTap: () => context.push('/accounting/reports/cash-bank-book'),
+          ),
+          AcctHubItem(
+            icon: LucideIcons.calendarRange,
+            label: 'Fiscal periods',
+            description: 'Open · closed · locked',
+            iconBackground: lum.surface2,
+            iconForeground: lum.g600,
+            onTap: () => context.push('/accounting/periods'),
+          ),
+          AcctHubItem(
+            icon: LucideIcons.gitCompareArrows,
+            label: 'Bank reconciliation',
+            description: 'Match statements',
+            iconBackground: lum.surface2,
+            iconForeground: lum.g600,
+            onTap: () => context.push('/accounting/banks'),
+          ),
+        ];
+
+    return ModuleScaffold(
+      title: 'Accounting',
+      // Wider on desktop so the two-column grid fills the space instead of
+      // stranding the cards in a narrow centred column.
+      maxContentWidth: 1180,
+      padding: EdgeInsets.zero,
+      child: SingleChildScrollView(
+        padding: const EdgeInsets.fromLTRB(24, 24, 24, 48),
+        child: AcctHubGrid(items: items()),
       ),
     );
   }
