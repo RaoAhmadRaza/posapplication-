@@ -243,6 +243,38 @@ works in Counter mode.
 - **VERIFY OWED (on-device eyeball)**: 900px rail/bottom-bar boundary, all 4 list states, dark mode on
   all 3 screens, ledger with and without entries, screenshot diff vs renders.
 
+## UI Redesign — customers module (DONE 2026-07-23; detail in DECISIONS)
+Seventh design export, SAME design-system UUID (5cd3f8f0-…) → tokens untouched; consumer-side reskin
+of all 5 customers screens. Customers was the last module on light-only static `AppColors` (~79 refs,
+0 `context.lum`) — now zero, works in Counter mode. Direct precedent: the suppliers reskin.
+- **Moved INSIDE the nav shell** (user-approved router edit): the 6 `/customers*` + `/receivables`
+  routes left the top-level list and became a NEW `StatefulShellBranch` appended as **branch index 6**
+  (after repair=5, so no earlier index shifts), on `pageBuilder` + the shared `_fadePage`. Paths/
+  builders/`extra:{'customerName'}` byte-identical. `bottom_nav_shell.dart` gained `_customersDests`
+  (Customers + Receivables), an `_allItems[6]` entry, a `branchMap` slot gated `customers:read`, and a
+  switch case — wired into the same machinery that serves sales/purchasing/repair. The 3 inbound deep
+  links switched `push→go` so the shell switches branch (inventory hub ×2, notifications customer
+  case, global-search customer hits — others still `push`); intra-module drill-downs keep `push`.
+- **Honest data**: the design's "Business account / Individual" label + building/person icon have no
+  backing field (Customer has only `groupId`, deferred) → OMITTED everywhere, status pill shown alone.
+  Status-chip counts require the unfiltered set → chips ship WITHOUT count badges (AppFilterChips), no
+  fabricated number. Ledger running-balance card synthesises the opening-balance row from the RPC
+  scalar (em-dash date), always renders with an in-card empty state. A **Details card** (address · tax
+  number · tags) surfaces fields the form writes but no screen showed — a deliberate add, mirroring
+  suppliers. Receivables bucket customer-counts derived from `byCustomer` (no extra query); all 5
+  buckets always render. Payment header shows avatar+name only (outstanding/phone not on the route).
+  Delete → `showAppConfirm` + `showAppToast`; payment result SnackBars → `showAppToast`.
+- New module widgets: `customer_card.dart` (list row + shared status/initials helpers),
+  `customer_ledger_card.dart`. List is a width-derived 2-up/1-up `Wrap` (never a hand-picked ratio).
+  Reused ModuleScaffold/ModuleHeader, AppSearchField, AppFilterChips, AppEmptyState/AppErrorState,
+  AppPill, AppMoneyText, AppDropdown-free segmented status. No new deps.
+- GATE: `flutter analyze` **8 issues, 0 new** (baseline 8); macOS debug builds + boots clean
+  (WORKSPACE-STATE completed=true, no render/overflow/exception in log); `flutter test` = the same 2
+  pre-existing failures (widget_test smoke + kpi_layout).
+- **VERIFY OWED (on-device eyeball)**: agent env can't foreground/screenshot — 900px rail/bottom-bar
+  boundary, all 5 screens in light + dark, list empty/error/no-results, delete confirm, overpayment
+  guard, and a screenshot diff vs the 3 reference renders (list, detail).
+
 ## Auth UX pass — Phases 1–4 DONE (2026-07-20)
 Interaction/UX depth pass on top of the LUMINA reskin (plan: friction→feedback→flow→a11y; delight
 Phase 5 deferred). Frontend + minimal flow/routing (user-approved exception to UI-only guardrail).
@@ -471,8 +503,10 @@ suppliers reskin section). Verified vs live RLS.
 CustomerLedger/ReceivablesAging entities; CustomerFailure; usecases + datasource (customer_ledger/receivables_aging) +
 controllers. Pages: list, form, detail (credit + ledger + Collect Payment), ReceivablesAging. Collect-payment:
 record_customer_payment + unpaid-invoice picker → CustomerPaymentPage (/customers/:id/collect, sales:create, overpayment
-blocked). Receivables KPI; POS chip shows remaining credit; CreditLimitExceededFailure from create_sale. DEFERRED: groups,
-loyalty, comms, bulk import, statements.
+blocked). Receivables KPI; POS chip shows remaining credit; CreditLimitExceededFailure from create_sale. Routes
+/customers[/create|/:id|/:id/edit|/:id/collect] + /receivables now live inside the customers shell
+branch (index 6) — see the customers reskin section. DEFERRED: groups, loyalty, comms, bulk import,
+statements.
 
 ### Purchase Returns (Flutter) — COMPLETE
 `lib/features/purchasing/` extended. Debit-note-style return of received goods. Domain: PurchaseReturn(+Item/Status/
