@@ -51,3 +51,10 @@ android/build/
 # Playwright MCP session artifacts
 .playwright-mcp/
 login-initial.png
+
+# Voxa STT: source zip + build artifacts (built on Windows, not committed)
+VOXA-main.zip
+tools/voxa/.buildvenv/
+tools/voxa/build/
+tools/voxa/dist/
+tools/voxa/VOXA-main/
