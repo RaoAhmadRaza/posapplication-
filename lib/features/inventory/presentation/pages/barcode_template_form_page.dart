@@ -1,4 +1,3 @@
-import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:lucide_icons_flutter/lucide_icons.dart';
@@ -27,8 +26,10 @@ class _BarcodeTemplateFormPageState
   final _nameCtrl = TextEditingController();
   final _widthCtrl = TextEditingController(text: '50');
   final _heightCtrl = TextEditingController(text: '25');
-  final _layoutCtrl = TextEditingController(text: '{}');
   String _format = 'CODE128';
+  bool _showName = true;
+  bool _showBarcode = true;
+  bool _showPrice = true;
   bool _isDefault = false;
   String? _error;
   bool _saving = false;
@@ -47,7 +48,6 @@ class _BarcodeTemplateFormPageState
     _nameCtrl.dispose();
     _widthCtrl.dispose();
     _heightCtrl.dispose();
-    _layoutCtrl.dispose();
     super.dispose();
   }
 
@@ -62,7 +62,9 @@ class _BarcodeTemplateFormPageState
         _format = t.format;
         _widthCtrl.text = t.widthMm.toString();
         _heightCtrl.text = t.heightMm.toString();
-        _layoutCtrl.text = jsonEncode(t.layout);
+        _showName = t.layout['showName'] as bool? ?? true;
+        _showBarcode = t.layout['showBarcode'] as bool? ?? true;
+        _showPrice = t.layout['showPrice'] as bool? ?? true;
         _isDefault = t.isDefault;
       }
     }
@@ -76,14 +78,6 @@ class _BarcodeTemplateFormPageState
       return;
     }
 
-    Map<String, dynamic> layout;
-    try {
-      layout = jsonDecode(_layoutCtrl.text.trim()) as Map<String, dynamic>;
-    } catch (_) {
-      setState(() => _error = 'Layout must be valid JSON.');
-      return;
-    }
-
     setState(() {
       _saving = true;
       _error = null;
@@ -94,7 +88,11 @@ class _BarcodeTemplateFormPageState
       'format': _format,
       'width_mm': int.tryParse(_widthCtrl.text.trim()) ?? 50,
       'height_mm': int.tryParse(_heightCtrl.text.trim()) ?? 25,
-      'layout_json': layout,
+      'layout_json': <String, dynamic>{
+        'showName': _showName,
+        'showBarcode': _showBarcode,
+        'showPrice': _showPrice,
+      },
       'is_default': _isDefault,
     };
 
@@ -180,43 +178,43 @@ class _BarcodeTemplateFormPageState
                           ),
                         ],
                       ),
-                      const SizedBox(height: 16),
-                      AppTextField(
-                        controller: _layoutCtrl,
-                        label: 'Layout (JSON)',
-                        prefixIcon: LucideIcons.braces,
-                        hint: '{"showPrice": true}',
-                        maxLines: 5,
-                      ),
                       const SizedBox(height: 22),
-                      Row(
-                        children: [
-                          Expanded(
-                            child: Column(
-                              crossAxisAlignment: CrossAxisAlignment.start,
-                              children: [
-                                Text(
-                                  'Default template',
-                                  style: AppTypography.headline.copyWith(
-                                      fontSize: 14.5,
-                                      color: lum.textPrimary),
-                                ),
-                                const SizedBox(height: 2),
-                                Text(
-                                  'Use for new barcode prints',
-                                  style: AppTypography.subhead
-                                      .copyWith(color: lum.g500),
-                                ),
-                              ],
-                            ),
-                          ),
-                          const SizedBox(width: 16),
-                          AppToggle(
-                            value: _isDefault,
-                            onChanged: (v) => setState(() => _isDefault = v),
-                            semanticLabel: 'Default template',
-                          ),
-                        ],
+                      Padding(
+                        padding: const EdgeInsets.only(left: 2, bottom: 4),
+                        child: Text(
+                          'What shows on the label',
+                          style: AppTypography.fieldLabel
+                              .copyWith(color: lum.g700),
+                        ),
+                      ),
+                      _toggleRow(
+                        lum,
+                        'Product name',
+                        'Print the product name on each label',
+                        _showName,
+                        (v) => setState(() => _showName = v),
+                      ),
+                      _toggleRow(
+                        lum,
+                        'Barcode / QR',
+                        'Print the scannable code',
+                        _showBarcode,
+                        (v) => setState(() => _showBarcode = v),
+                      ),
+                      _toggleRow(
+                        lum,
+                        'Price',
+                        'Print the selling price',
+                        _showPrice,
+                        (v) => setState(() => _showPrice = v),
+                      ),
+                      const SizedBox(height: 10),
+                      _toggleRow(
+                        lum,
+                        'Default template',
+                        'Use for new barcode prints',
+                        _isDefault,
+                        (v) => setState(() => _isDefault = v),
                       ),
                     ],
                   ),
@@ -240,6 +238,44 @@ class _BarcodeTemplateFormPageState
             ),
     );
   }
+
+  Widget _toggleRow(
+    LumColors lum,
+    String title,
+    String subtitle,
+    bool value,
+    ValueChanged<bool> onChanged,
+  ) =>
+      Padding(
+        padding: const EdgeInsets.symmetric(vertical: 6),
+        child: Row(
+          children: [
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    title,
+                    style: AppTypography.headline
+                        .copyWith(fontSize: 14.5, color: lum.textPrimary),
+                  ),
+                  const SizedBox(height: 2),
+                  Text(
+                    subtitle,
+                    style: AppTypography.subhead.copyWith(color: lum.g500),
+                  ),
+                ],
+              ),
+            ),
+            const SizedBox(width: 16),
+            AppToggle(
+              value: value,
+              onChanged: onChanged,
+              semanticLabel: title,
+            ),
+          ],
+        ),
+      );
 
   Widget _labeled(LumColors lum, String label, Widget control) => Column(
         crossAxisAlignment: CrossAxisAlignment.start,
