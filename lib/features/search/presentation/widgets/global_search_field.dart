@@ -58,6 +58,12 @@ class GlobalSearchFieldState extends ConsumerState<GlobalSearchField> {
         TextSelection(baseOffset: 0, extentOffset: _controller.text.length);
   }
 
+  /// Sets the query text (e.g. from voice search) and opens the results.
+  void setQuery(String text) {
+    _controller.text = text;
+    _focusNode.requestFocus();
+  }
+
   void _onChanged() {
     _debounce?.cancel();
     _debounce = Timer(_kDebounce, () {
