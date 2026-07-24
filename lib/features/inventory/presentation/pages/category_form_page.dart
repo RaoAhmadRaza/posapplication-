@@ -1,11 +1,15 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:lucide_icons_flutter/lucide_icons.dart';
 import '../../../../core/design/app_colors.dart';
-import '../../../../core/design/app_spacing.dart';
 import '../../../../core/design/app_typography.dart';
 import '../../../../core/design/widgets/app_button.dart';
+import '../../../../core/design/widgets/app_detail_scaffold.dart';
+import '../../../../core/design/widgets/app_dropdown.dart';
 import '../../../../core/design/widgets/app_inline_banner.dart';
+import '../../../../core/design/widgets/app_section_card.dart';
 import '../../../../core/design/widgets/app_text_field.dart';
+import '../../../../core/design/widgets/app_toggle.dart';
 import '../../domain/entities/category.dart';
 import '../../domain/failures/inventory_failure.dart';
 import '../controllers/categories_controller.dart';
@@ -111,141 +115,148 @@ class _CategoryFormPageState extends ConsumerState<CategoryFormPage> {
 
   @override
   Widget build(BuildContext context) {
+    final lum = context.lum;
     final categories = ref.watch(categoriesProvider).value ?? <Category>[];
 
-    final parentOptions = categories
-        .where((c) => c.id != widget.categoryId)
-        .toList();
+    final parentOptions =
+        categories.where((c) => c.id != widget.categoryId).toList();
 
-    return Scaffold(
-      backgroundColor: AppColors.background,
-      appBar: AppBar(
-        backgroundColor: AppColors.background,
-        surfaceTintColor: AppColors.background,
-        leading: IconButton(
-          icon: const Icon(Icons.arrow_back_ios, color: AppColors.accent, size: 20),
-          onPressed: () => Navigator.of(context).pop(),
-        ),
-        title: Text(
-          _isEditing ? 'Edit Category' : 'New Category',
-          style: AppTypography.headline,
-        ),
-      ),
-      body: _loadingExisting
-          ? const Center(child: CircularProgressIndicator())
-          : SafeArea(
-              child: SingleChildScrollView(
-                padding: const EdgeInsets.symmetric(
-                  horizontal: AppSpacing.screenPadding,
-                ),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.stretch,
-                  children: [
-                    const SizedBox(height: AppSpacing.lg),
-                    if (_error != null) ...[
-                      AppInlineBanner(message: _error!, type: BannerType.error),
-                      const SizedBox(height: AppSpacing.lg),
+    return AppDetailScaffold(
+      eyebrow: 'Inventory',
+      title: _isEditing ? 'Edit category' : 'New category',
+      maxContentWidth: 720,
+      child: _loadingExisting
+          ? const Padding(
+              padding: EdgeInsets.symmetric(vertical: 64),
+              child: Center(child: CircularProgressIndicator()),
+            )
+          : Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                if (_error != null) ...[
+                  AppInlineBanner(message: _error!, type: BannerType.error),
+                  const SizedBox(height: 16),
+                ],
+                AppSectionCard(
+                  eyebrow: 'Details',
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.stretch,
+                    children: [
+                      AppTextField(
+                        controller: _nameController,
+                        label: 'Name',
+                        prefixIcon: LucideIcons.tag,
+                        hint: 'e.g. Beverages',
+                      ),
+                      const SizedBox(height: 16),
+                      _LabeledField(
+                        label: 'Parent category',
+                        child: AppDropdown<String?>(
+                          value: _parentId,
+                          placeholder: 'None (top-level)',
+                          options: [
+                            const AppDropdownOption<String?>(
+                              value: null,
+                              label: 'None (top-level)',
+                            ),
+                            for (final c in parentOptions)
+                              AppDropdownOption<String?>(
+                                value: c.id,
+                                label: c.name,
+                              ),
+                          ],
+                          onSelected: (v) => setState(() => _parentId = v),
+                        ),
+                      ),
+                      const SizedBox(height: 16),
+                      AppTextField(
+                        controller: _descriptionController,
+                        label: 'Description',
+                        prefixIcon: LucideIcons.text,
+                        hint: 'Optional',
+                        maxLines: 3,
+                      ),
+                      const SizedBox(height: 16),
+                      AppTextField(
+                        controller: _sortOrderController,
+                        label: 'Sort order',
+                        prefixIcon: LucideIcons.arrowUpDown,
+                        keyboardType: TextInputType.number,
+                      ),
+                      const SizedBox(height: 20),
+                      Row(
+                        children: [
+                          Expanded(
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Text(
+                                  'Active',
+                                  style: AppTypography.headline.copyWith(
+                                      fontSize: 14.5, color: lum.textPrimary),
+                                ),
+                                const SizedBox(height: 2),
+                                Text(
+                                  'Show this category in pickers and reports',
+                                  style: AppTypography.subhead
+                                      .copyWith(color: lum.g500),
+                                ),
+                              ],
+                            ),
+                          ),
+                          const SizedBox(width: 16),
+                          AppToggle(
+                            value: _isActive,
+                            semanticLabel: 'Active',
+                            onChanged: (v) => setState(() => _isActive = v),
+                          ),
+                        ],
+                      ),
                     ],
-                    AppTextField(
-                      controller: _nameController,
-                      label: 'Name',
-                      prefixIcon: Icons.category,
-                      hint: 'e.g. Beverages',
-                    ),
-                    const SizedBox(height: AppSpacing.fieldGap),
-                    _ParentPicker(
-                      parentId: _parentId,
-                      categories: parentOptions,
-                      onChanged: (v) => setState(() => _parentId = v),
-                    ),
-                    const SizedBox(height: AppSpacing.fieldGap),
-                    AppTextField(
-                      controller: _descriptionController,
-                      label: 'Description',
-                      prefixIcon: Icons.description,
-                      hint: 'Optional',
-                    ),
-                    const SizedBox(height: AppSpacing.fieldGap),
-                    AppTextField(
-                      controller: _sortOrderController,
-                      label: 'Sort Order',
-                      prefixIcon: Icons.sort,
-                      keyboardType: TextInputType.number,
-                    ),
-                    const SizedBox(height: AppSpacing.fieldGap),
-                    SwitchListTile(
-                      contentPadding: EdgeInsets.zero,
-                      title: Text('Active', style: AppTypography.body),
-                      value: _isActive,
-                      activeThumbColor: AppColors.accent,
-                      onChanged: (v) => setState(() => _isActive = v),
-                    ),
-                    const SizedBox(height: AppSpacing.xxl),
-                    AppButton(
-                      label: _isEditing ? 'Update' : 'Create',
-                      loading: _saving,
-                      onPressed: _save,
-                      fullWidth: true,
-                    ),
-                    const SizedBox(height: AppSpacing.xxl),
-                  ],
+                  ),
                 ),
-              ),
+                const SizedBox(height: 20),
+                AppButton(
+                  label: 'Save',
+                  icon: LucideIcons.check,
+                  loading: _saving,
+                  fullWidth: true,
+                  onPressed: _save,
+                ),
+                const SizedBox(height: 12),
+                AppButton(
+                  label: 'Cancel',
+                  variant: AppButtonVariant.plain,
+                  fullWidth: true,
+                  onPressed: () => Navigator.of(context).maybePop(),
+                ),
+              ],
             ),
     );
   }
 }
 
-class _ParentPicker extends StatelessWidget {
-  const _ParentPicker({
-    required this.parentId,
-    required this.categories,
-    required this.onChanged,
-  });
+/// A field label rendered in the AppTextField label style, stacked over a
+/// non-text control (the parent-category dropdown) so it aligns with the text
+/// fields above and below it.
+class _LabeledField extends StatelessWidget {
+  const _LabeledField({required this.label, required this.child});
 
-  final String? parentId;
-  final List<Category> categories;
-  final ValueChanged<String?> onChanged;
+  final String label;
+  final Widget child;
 
   @override
   Widget build(BuildContext context) {
+    final lum = context.lum;
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         Padding(
-          padding: const EdgeInsets.only(left: 4, bottom: 8),
-          child: Text('Parent Category', style: AppTypography.fieldLabel),
+          padding: const EdgeInsets.only(left: 2, bottom: 8),
+          child: Text(label,
+              style: AppTypography.fieldLabel.copyWith(color: lum.g700)),
         ),
-        Container(
-          height: 52,
-          padding: const EdgeInsets.symmetric(horizontal: 16),
-          decoration: BoxDecoration(
-            color: AppColors.fieldFill,
-            borderRadius: BorderRadius.circular(12),
-          ),
-          child: DropdownButtonHideUnderline(
-            child: DropdownButton<String?>(
-              value: parentId,
-              isExpanded: true,
-              icon: const Icon(Icons.keyboard_arrow_down, color: AppColors.textMuted),
-              hint: Text(
-                'None (top-level)',
-                style: AppTypography.fieldHint,
-              ),
-              items: [
-                const DropdownMenuItem<String?>(
-                  value: null,
-                  child: Text('None (top-level)'),
-                ),
-                ...categories.map((c) => DropdownMenuItem<String?>(
-                      value: c.id,
-                      child: Text(c.name),
-                    )),
-              ],
-              onChanged: onChanged,
-            ),
-          ),
-        ),
+        child,
       ],
     );
   }
