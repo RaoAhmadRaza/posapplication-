@@ -1,10 +1,16 @@
 import 'dart:async';
+import 'dart:io' show File;
+import 'dart:typed_data';
 
 import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart' show PlatformException;
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:image/image.dart' as img;
 import 'package:mobile_scanner/mobile_scanner.dart';
+import 'package:zxing2/qrcode.dart';
+
+import 'package:lucide_icons_flutter/lucide_icons.dart';
 
 import '../design/app_colors.dart';
 import '../design/app_radius.dart';
@@ -12,6 +18,7 @@ import '../design/app_spacing.dart';
 import '../design/app_typography.dart';
 import '../design/widgets/app_button.dart';
 import '../design/widgets/app_inline_banner.dart';
+import '../design/widgets/app_sheet.dart';
 import '../services/scanner_support.dart';
 
 const _manualEntrySentinel = '__BARCODE_SCAN_MANUAL__';
@@ -36,18 +43,84 @@ Future<String?> scanBarcodeFromImage() async {
   final path = result.files.first.path;
   if (path == null) return null;
 
+  // mobile_scanner (full formats) where it has a plugin; pure-Dart zxing2
+  // QR decode on Windows/Linux where it does not.
+  final code = mobileScannerAnalyzeImageSupported
+      ? await _decodeViaMobileScanner(path)
+      : await _decodeQrPureDart(path);
+  return (code == null || code.isEmpty) ? _noCodeFoundSentinel : code;
+}
+
+Future<String?> _decodeViaMobileScanner(String path) async {
   final controller = MobileScannerController();
   try {
     final capture = await controller.analyzeImage(path);
     final barcode = capture?.barcodes.firstOrNull;
-    final code = barcode?.rawValue ?? barcode?.displayValue;
-    if (code == null || code.isEmpty) return _noCodeFoundSentinel;
-    return code;
+    return barcode?.rawValue ?? barcode?.displayValue;
   } on Exception {
-    return _noCodeFoundSentinel;
+    return null;
   } finally {
     await controller.dispose();
   }
+}
+
+/// Pure-Dart QR decode for platforms without a mobile_scanner plugin
+/// (Windows/Linux). Reads QR/DataMatrix only, not 1D barcodes.
+Future<String?> _decodeQrPureDart(String path) async {
+  try {
+    final bytes = await File(path).readAsBytes();
+    final image = img.decodeImage(bytes);
+    if (image == null) return null;
+    final pixels = Int32List(image.width * image.height);
+    for (var y = 0; y < image.height; y++) {
+      for (var x = 0; x < image.width; x++) {
+        final p = image.getPixel(x, y);
+        pixels[y * image.width + x] = (0xFF << 24) |
+            (p.r.toInt() << 16) |
+            (p.g.toInt() << 8) |
+            p.b.toInt();
+      }
+    }
+    final bitmap = BinaryBitmap(
+      HybridBinarizer(RGBLuminanceSource(image.width, image.height, pixels)),
+    );
+    return QRCodeReader().decode(bitmap).text;
+  } on Exception {
+    return null; // NotFoundException et al.
+  }
+}
+
+/// Unified product-scan entry point used by Products, POS and Dashboard.
+/// Offers a camera/image chooser where both are supported (mobile), goes
+/// straight to the camera on camera-only, or the image picker on desktop
+/// (macOS). Returns the decoded code, [barcodeNoCodeFoundSentinel] when an
+/// image had no readable code, or null on cancel / unsupported.
+Future<String?> scanProductCode(
+  BuildContext context, {
+  String title = 'Scan Product',
+}) async {
+  final hasCamera = barcodeScanSupported;
+  final hasImage = barcodeImageScanSupported;
+  if (!hasCamera && !hasImage) return null;
+
+  String source;
+  if (hasCamera && hasImage) {
+    final choice = await showAppSheet<String>(
+      context: context,
+      builder: (_) => const _ScanSourceSheet(),
+    );
+    if (choice == null) return null;
+    source = choice;
+  } else {
+    source = hasCamera ? 'camera' : 'image';
+  }
+
+  if (source == 'image') return scanBarcodeFromImage();
+
+  if (!context.mounted) return null;
+  final code = await scanBarcode(context, title: title);
+  if (code == null || code == _manualEntrySentinel) return null;
+  return code;
 }
 
 Future<String?> scanBarcode(
@@ -326,4 +399,46 @@ class _ScanOverlayPainter extends CustomPainter {
   @override
   bool shouldRepaint(covariant _ScanOverlayPainter oldDelegate) =>
       cutout != oldDelegate.cutout || color != oldDelegate.color;
+}
+
+class _ScanSourceSheet extends StatelessWidget {
+  const _ScanSourceSheet();
+
+  @override
+  Widget build(BuildContext context) {
+    final lum = context.lum;
+    return Column(
+      mainAxisSize: MainAxisSize.min,
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        Padding(
+          padding: const EdgeInsets.fromLTRB(4, 4, 4, 12),
+          child: Text('Scan product',
+              style: AppTypography.title3.copyWith(color: lum.textPrimary)),
+        ),
+        _row(context, lum, LucideIcons.camera, 'Use camera', 'camera'),
+        const SizedBox(height: 8),
+        _row(context, lum, LucideIcons.image, 'From an image', 'image'),
+      ],
+    );
+  }
+
+  Widget _row(BuildContext context, LumColors lum, IconData icon, String label,
+      String value) {
+    return InkWell(
+      onTap: () => Navigator.of(context).pop(value),
+      borderRadius: BorderRadius.circular(AppRadius.md),
+      child: Padding(
+        padding: const EdgeInsets.symmetric(vertical: 14, horizontal: 8),
+        child: Row(
+          children: [
+            Icon(icon, size: 20, color: lum.accent),
+            const SizedBox(width: 14),
+            Text(label,
+                style: AppTypography.body.copyWith(color: lum.textPrimary)),
+          ],
+        ),
+      ),
+    );
+  }
 }
