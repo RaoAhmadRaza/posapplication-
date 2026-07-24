@@ -1,15 +1,20 @@
-import 'dart:async';
-
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:lucide_icons_flutter/lucide_icons.dart';
+
 import '../../../../core/design/app_colors.dart';
 import '../../../../core/design/app_radius.dart';
-import '../../../../core/design/app_spacing.dart';
 import '../../../../core/design/app_typography.dart';
+import '../../../../core/design/clay.dart';
 import '../../../../core/design/widgets/app_button.dart';
 import '../../../../core/design/widgets/app_card.dart';
-import '../../../../core/design/widgets/app_inline_banner.dart';
+import '../../../../core/design/widgets/app_confirm_dialog.dart';
+import '../../../../core/design/widgets/app_detail_scaffold.dart';
+import '../../../../core/design/widgets/app_list_skeleton.dart';
+import '../../../../core/design/widgets/app_pill.dart';
+import '../../../../core/design/widgets/app_states.dart';
 import '../../../../core/design/widgets/app_text_field.dart';
+import '../../../../core/design/widgets/app_toast.dart';
 import '../../../../core/services/scanner_support.dart';
 import '../../../../core/widgets/barcode_scan_page.dart';
 import '../../../../core/widgets/permission_gate.dart';
@@ -21,6 +26,7 @@ import '../../domain/failures/inventory_failure.dart';
 import '../../domain/usecases/load_count_items.dart';
 import '../controllers/counts_controller.dart';
 import '../controllers/products_controller.dart';
+import '../widgets/inventory_ui.dart';
 
 class CountSessionPage extends ConsumerStatefulWidget {
   const CountSessionPage({super.key, required this.countId});
@@ -38,8 +44,6 @@ class _CountSessionPageState extends ConsumerState<CountSessionPage> {
   final Map<String, String> _barcodeToProductId = {};
   final Map<String, String> _skuToProductId = {};
   final Map<String, GlobalKey> _itemKeys = {};
-  final ScrollController _scrollController = ScrollController();
-  String? _scanError;
   String? _error;
   bool _loading = true;
   bool _completing = false;
@@ -53,7 +57,6 @@ class _CountSessionPageState extends ConsumerState<CountSessionPage> {
   @override
   void dispose() {
     for (final c in _controllers.values) { c.dispose(); }
-    _scrollController.dispose();
     super.dispose();
   }
 
@@ -110,7 +113,6 @@ class _CountSessionPageState extends ConsumerState<CountSessionPage> {
   }
 
   Future<void> _scanForCountItem() async {
-    setState(() => _scanError = null);
     final code = await scanBarcode(context, title: 'Scan Count Item');
     if (code == null || code == BarcodeScanPage.manualEntrySentinel) return;
     if (!mounted) return;
@@ -119,58 +121,35 @@ class _CountSessionPageState extends ConsumerState<CountSessionPage> {
     if (items == null) return;
 
     final productId = _barcodeToProductId[code] ?? _skuToProductId[code];
-    if (productId == null) {
-      setState(() => _scanError = 'Not in this count');
-      Timer(const Duration(seconds: 3), () {
-        if (mounted) setState(() => _scanError = null);
-      });
-      return;
-    }
-
-    final itemIndex = items.indexWhere((i) => i.productId == productId);
+    final itemIndex = productId == null
+        ? -1
+        : items.indexWhere((i) => i.productId == productId);
     if (itemIndex == -1) {
-      setState(() => _scanError = 'Not in this count');
-      Timer(const Duration(seconds: 3), () {
-        if (mounted) setState(() => _scanError = null);
-      });
+      showAppToast(context, 'Not in this count');
       return;
     }
 
     final item = items[itemIndex];
-    final key = _itemKeys[item.id];
-    if (key?.currentContext != null) {
-      Scrollable.ensureVisible(key!.currentContext!,
-        duration: const Duration(milliseconds: 300),
-        curve: Curves.easeInOut,
-      );
-    } else {
-      final offset = itemIndex * 140.0;
-      _scrollController.animateTo(offset,
+    final ctx = _itemKeys[item.id]?.currentContext;
+    if (ctx != null && ctx.mounted) {
+      Scrollable.ensureVisible(ctx,
         duration: const Duration(milliseconds: 300),
         curve: Curves.easeInOut,
       );
     }
-
     final ctrl = _controllers[item.id];
-    ctrl?.selection = TextSelection(
-      baseOffset: 0,
-      extentOffset: ctrl.text.length,
-    );
-    FocusScope.of(context).requestFocus(FocusNode());
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      if (mounted && ctrl != null && _controllers.containsKey(item.id)) {
-        FocusScope.of(context).requestFocus(FocusNode());
-      }
-    });
+    if (ctrl != null) {
+      ctrl.selection =
+          TextSelection(baseOffset: 0, extentOffset: ctrl.text.length);
+    }
   }
 
   Future<void> _record(String itemId, double counted) async {
     try {
       await ref.read(countsProvider.notifier).recordItem(itemId, counted);
-      if (mounted) setState(() => _error = null);
     } on InventoryFailure catch (f) {
       if (!mounted) return;
-      setState(() => _error = f.message);
+      showAppToast(context, f.message);
       // Keep the user on the field with the typed qty selected, to retry.
       final ctrl = _controllers[itemId];
       if (ctrl != null) {
@@ -183,43 +162,29 @@ class _CountSessionPageState extends ConsumerState<CountSessionPage> {
   Future<void> _complete() async {
     final count = _count;
     if (count == null) return;
+
     final remaining = count.totalItems - count.itemsCounted;
     if (remaining > 0) {
-      final ok = await showDialog<bool>(
-        context: context,
-        builder: (ctx) => AlertDialog(
-          title: const Text('Items Remaining'),
-          content: Text('$remaining items not yet counted. Complete anyway?'),
-          actions: [
-            TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text('Keep Counting')),
-            TextButton(onPressed: () => Navigator.pop(ctx, true), child: const Text('Complete')),
-          ],
-        ),
+      final ok = await showAppConfirm(
+        context,
+        title: 'Items remaining',
+        message: '$remaining items not yet counted. Complete anyway?',
+        confirmLabel: 'Complete',
+        cancelLabel: 'Keep counting',
       );
-      if (ok != true) return;
+      if (!ok || !mounted) return;
     }
 
     final varianceCount = count.varianceCount;
-    if (!mounted) return;
-    final ok = await showDialog<bool>(
-      context: context,
-      builder: (ctx) => AlertDialog(
-        title: const Text('Complete Count'),
-        content: Text(
-          varianceCount > 0
-              ? '$varianceCount items have variance. Completing will post reconciliation adjustments to stock.'
-              : 'No variance detected. Complete the count?',
-        ),
-        actions: [
-          TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text('Cancel')),
-          TextButton(
-            onPressed: () => Navigator.pop(ctx, true),
-            child: const Text('Complete'),
-          ),
-        ],
-      ),
+    final ok = await showAppConfirm(
+      context,
+      title: 'Complete count',
+      message: varianceCount > 0
+          ? '$varianceCount items have variance. Completing will post reconciliation adjustments to stock.'
+          : 'No variance detected. Complete the count?',
+      confirmLabel: 'Complete',
     );
-    if (ok != true) return;
+    if (!ok || !mounted) return;
 
     setState(() => _completing = true);
     try {
@@ -228,189 +193,183 @@ class _CountSessionPageState extends ConsumerState<CountSessionPage> {
       Navigator.of(context).pop();
     } catch (e) {
       if (!mounted) return;
-      setState(() { _completing = false; _error = e.toString(); });
+      setState(() => _completing = false);
+      showAppToast(context, e.toString());
     }
   }
 
   @override
   Widget build(BuildContext context) {
-    final progress = _count != null && _count!.totalItems > 0
-        ? _count!.itemsCounted / _count!.totalItems
-        : 0.0;
+    final count = _count;
+    final inProgress = count?.status == StockCountStatus.inProgress;
 
-    return Scaffold(
-      backgroundColor: AppColors.background,
-      appBar: AppBar(
-        backgroundColor: AppColors.background,
-        surfaceTintColor: AppColors.background,
-        leading: IconButton(
-          icon: const Icon(Icons.arrow_back_ios, color: AppColors.accent, size: 20),
-          onPressed: () => Navigator.of(context).pop(),
-        ),
-        title: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Text('Count ${_count?.countNumber ?? '...'}', style: AppTypography.headline),
-            Text(
-              '${_count?.itemsCounted ?? 0}/${_count?.totalItems ?? 0} items',
-              style: AppTypography.footnote.copyWith(color: AppColors.textMuted),
+    return AppDetailScaffold(
+      eyebrow: 'Inventory',
+      title: 'Count session',
+      description:
+          '${count?.itemsCounted ?? 0} of ${count?.totalItems ?? 0} counted',
+      actions: [
+        if (barcodeScanSupported && inProgress) _ScanAction(onTap: _scanForCountItem),
+      ],
+      child: _buildBody(inProgress),
+    );
+  }
+
+  Widget _buildBody(bool inProgress) {
+    if (_loading) return const AppListSkeleton();
+    if (_error != null && _items == null) {
+      return AppErrorState(
+        title: "We couldn't load this count",
+        body: _error!,
+        onRetry: _load,
+      );
+    }
+
+    final items = _items ?? const <StockCountItem>[];
+    final products = ref.watch(productsProvider).value ?? const <Product>[];
+    final byId = {for (final p in products) p.id: p};
+
+    return Column(
+      children: [
+        for (final item in items) ...[
+          _CountItemCard(
+            key: _itemKeys[item.id],
+            item: item,
+            product: byId[item.productId],
+            controller: _controllers[item.id]!,
+          ),
+          if (item != items.last) const SizedBox(height: 10),
+        ],
+        if (inProgress) ...[
+          const SizedBox(height: 20),
+          PermissionGate(
+            module: 'inventory',
+            action: 'approve',
+            child: AppButton(
+              label: 'Complete count',
+              loading: _completing,
+              onPressed: _complete,
+              fullWidth: true,
             ),
-          ],
+          ),
+        ],
+      ],
+    );
+  }
+}
+
+/// Clay icon button used as a header action to scan-and-jump to a count line.
+class _ScanAction extends StatelessWidget {
+  const _ScanAction({required this.onTap});
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    final lum = context.lum;
+    return Semantics(
+      button: true,
+      label: 'Scan product to count',
+      child: GestureDetector(
+        behavior: HitTestBehavior.opaque,
+        onTap: onTap,
+        child: ClayContainer(
+          variant: ClayVariant.soft,
+          color: lum.surface,
+          borderRadius: AppRadius.sm,
+          isDark: lum.isDark,
+          width: 44,
+          height: 44,
+          child: Icon(LucideIcons.scanLine, size: 20, color: lum.accent),
         ),
-        actions: [
-          if (barcodeScanSupported && _count?.status == StockCountStatus.inProgress)
-            IconButton(
-              icon: const Icon(Icons.qr_code_scanner, color: AppColors.accent),
-              onPressed: _scanForCountItem,
-              tooltip: 'Scan product to count',
+      ),
+    );
+  }
+}
+
+class _CountItemCard extends StatelessWidget {
+  const _CountItemCard({
+    super.key,
+    required this.item,
+    required this.product,
+    required this.controller,
+  });
+
+  final StockCountItem item;
+  final Product? product;
+  final TextEditingController controller;
+
+  @override
+  Widget build(BuildContext context) {
+    final lum = context.lum;
+    final name = product?.name ?? 'Item ${item.productId.substring(0, 8)}';
+    final sku = product?.sku ?? '—';
+    final pill = _variancePill();
+
+    return AppCard(
+      padding: const EdgeInsets.all(14),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.center,
+        children: [
+          ClayContainer(
+            variant: ClayVariant.soft,
+            color: lum.accentSoft,
+            borderRadius: AppRadius.sm,
+            isDark: lum.isDark,
+            width: 42,
+            height: 42,
+            child: Center(child: Icon(kInvItemIcon, size: 19, color: lum.accent)),
+          ),
+          const SizedBox(width: 14),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  name,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: AppTypography.headline.copyWith(color: lum.textPrimary),
+                ),
+                const SizedBox(height: 3),
+                Text(
+                  '$sku · expected ${qtyLabel(item.systemQty)}',
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: AppTypography.monoValue.copyWith(fontSize: 12, color: lum.g500),
+                ),
+                if (pill != null) ...[
+                  const SizedBox(height: 8),
+                  pill,
+                ],
+              ],
             ),
+          ),
+          const SizedBox(width: 12),
+          SizedBox(
+            width: 88,
+            child: AppTextField(
+              controller: controller,
+              label: 'Counted',
+              prefixIcon: LucideIcons.hash,
+              keyboardType: const TextInputType.numberWithOptions(decimal: true),
+              hint: qtyLabel(item.systemQty),
+            ),
+          ),
         ],
       ),
-      body: _loading
-          ? const Center(child: CircularProgressIndicator())
-          : _error != null && _items == null
-              ? Center(
-                  child: Padding(
-                    padding: const EdgeInsets.symmetric(horizontal: AppSpacing.screenPadding),
-                    child: Column(
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        AppInlineBanner(message: _error!, type: BannerType.error),
-                        const SizedBox(height: AppSpacing.md),
-                        AppButton(label: 'Retry', onPressed: _load),
-                      ],
-                    ),
-                  ),
-                )
-              : Column(
-                  children: [
-                    if (_count?.status == StockCountStatus.inProgress) ...[
-                      Padding(
-                        padding: const EdgeInsets.symmetric(horizontal: AppSpacing.screenPadding),
-                        child: Column(
-                          children: [
-                            const SizedBox(height: AppSpacing.sm),
-                            ClipRRect(
-                              borderRadius: BorderRadius.circular(4),
-                              child: LinearProgressIndicator(
-                                value: progress,
-                                backgroundColor: AppColors.fieldFill,
-                                color: progress >= 1 ? AppColors.success : AppColors.accent,
-                                minHeight: 8,
-                              ),
-                            ),
-                            const SizedBox(height: AppSpacing.xs),
-                            Align(
-                              alignment: Alignment.centerRight,
-                              child: Text(
-                                '${(progress * 100).toStringAsFixed(0)}%',
-                                style: AppTypography.caption.copyWith(color: AppColors.textMuted),
-                              ),
-                            ),
-                          ],
-                        ),
-                      ),
-                    ],
-                    if (_error != null)
-                      Padding(
-                        padding: const EdgeInsets.symmetric(horizontal: AppSpacing.screenPadding, vertical: AppSpacing.sm),
-                        child: AppInlineBanner(message: _error!, type: BannerType.error),
-                      ),
-                    if (_scanError != null)
-                      Padding(
-                        padding: const EdgeInsets.symmetric(horizontal: AppSpacing.screenPadding, vertical: AppSpacing.sm),
-                        child: AppInlineBanner(message: _scanError!, type: BannerType.info),
-                      ),
-                    Expanded(
-                      child: ListView.builder(
-                        controller: _scrollController,
-                        padding: const EdgeInsets.symmetric(horizontal: AppSpacing.screenPadding, vertical: AppSpacing.md),
-                        itemCount: _items?.length ?? 0,
-                        itemBuilder: (_, i) {
-                          final item = _items![i];
-                          final ctrl = _controllers[item.id]!;
-                          final variance = item.variance;
-
-                          return Padding(
-                            key: _itemKeys[item.id],
-                            padding: EdgeInsets.only(bottom: i < _items!.length - 1 ? AppSpacing.sm : 0),
-                            child: AppCard(
-                              child: Padding(
-                                padding: const EdgeInsets.all(AppSpacing.lg),
-                                child: Column(
-                                  crossAxisAlignment: CrossAxisAlignment.start,
-                                  children: [
-                                    Row(
-                                      children: [
-                                        Expanded(
-                                          child: Column(
-                                            crossAxisAlignment: CrossAxisAlignment.start,
-                                            children: [
-                                              Text(
-                                                'Item ${item.productId.substring(0, 8)}...',
-                                                style: AppTypography.body,
-                                                maxLines: 1, overflow: TextOverflow.ellipsis,
-                                              ),
-                                              const SizedBox(height: 2),
-                                              Text(
-                                                'System: ${item.systemQty.toStringAsFixed(1)}',
-                                                style: AppTypography.caption.copyWith(color: AppColors.textMuted),
-                                              ),
-                                            ],
-                                          ),
-                                        ),
-                                        SizedBox(
-                                          width: 100,
-                                          child: AppTextField(
-                                            controller: ctrl,
-                                            label: 'Counted',
-                                            prefixIcon: Icons.edit,
-                                            keyboardType: const TextInputType.numberWithOptions(decimal: true),
-                                            hint: item.systemQty.toStringAsFixed(0),
-                                          ),
-                                        ),
-                                      ],
-                                    ),
-                                    if (variance != null && variance != 0) ...[
-                                      const SizedBox(height: AppSpacing.sm),
-                                      Container(
-                                        padding: const EdgeInsets.symmetric(horizontal: AppSpacing.sm, vertical: 4),
-                                        decoration: BoxDecoration(
-                                          color: AppColors.warning.withValues(alpha: 0.12),
-                                          borderRadius: BorderRadius.circular(AppRadius.chip),
-                                        ),
-                                        child: Text(
-                                          'Variance: ${variance > 0 ? "+" : ""}${variance.toStringAsFixed(1)}',
-                                          style: AppTypography.caption.copyWith(color: AppColors.warning, fontWeight: FontWeight.w600),
-                                        ),
-                                      ),
-                                    ],
-                                  ],
-                                ),
-                              ),
-                            ),
-                          );
-                        },
-                      ),
-                    ),
-                    if (_count?.status == StockCountStatus.inProgress)
-                      SafeArea(
-                        child: Padding(
-                          padding: const EdgeInsets.all(AppSpacing.screenPadding),
-                          child: PermissionGate(
-                            module: 'inventory',
-                            action: 'approve',
-                            child: AppButton(
-                              label: 'Complete Count',
-                              loading: _completing,
-                              onPressed: _complete,
-                              fullWidth: true,
-                            ),
-                          ),
-                        ),
-                      ),
-                  ],
-                ),
     );
+  }
+
+  Widget? _variancePill() {
+    final counted = item.countedQty;
+    if (counted == null) return null;
+    final delta = counted - item.systemQty;
+    if (delta == 0) {
+      return const AppPill(label: 'Match', tone: AppPillTone.success);
+    }
+    if (delta > 0) {
+      return AppPill(label: '+${qtyLabel(delta)}', tone: AppPillTone.success);
+    }
+    return AppPill(label: '-${qtyLabel(delta.abs())}', tone: AppPillTone.warning);
   }
 }
