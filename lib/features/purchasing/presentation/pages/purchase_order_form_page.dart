@@ -526,7 +526,7 @@ class _PurchaseOrderFormPageState
 
     return ClayContainer(
       variant: ClayVariant.inset,
-      color: lum.surface2,
+      color: lum.surface,
       borderRadius: AppRadius.md,
       isDark: lum.isDark,
       padding: const EdgeInsets.all(14),
