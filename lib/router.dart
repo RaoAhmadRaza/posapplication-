@@ -357,148 +357,6 @@ final appRouter = GoRouter(
       redirect: (context, state) => '/dashboard',
     ),
     GoRoute(
-      path: '/inventory/categories',
-      builder: (context, state) => const CategoriesPage(),
-    ),
-    GoRoute(
-      path: '/inventory/categories/create',
-      builder: (context, state) => const CategoryFormPage(),
-    ),
-    GoRoute(
-      path: '/inventory/categories/:categoryId',
-      builder: (context, state) {
-        final id = state.pathParameters['categoryId'];
-        return CategoryFormPage(categoryId: id);
-      },
-    ),
-    GoRoute(
-      path: '/inventory/brands',
-      builder: (context, state) => const BrandsPage(),
-    ),
-    GoRoute(
-      path: '/inventory/brands/create',
-      builder: (context, state) => const BrandFormPage(),
-    ),
-    GoRoute(
-      path: '/inventory/brands/:brandId',
-      builder: (context, state) {
-        final id = state.pathParameters['brandId'];
-        return BrandFormPage(brandId: id);
-      },
-    ),
-    GoRoute(
-      path: '/inventory/products',
-      builder: (context, state) => const ProductsPage(),
-    ),
-    GoRoute(
-      path: '/inventory/products/create',
-      builder: (context, state) => const ProductFormPage(),
-    ),
-    GoRoute(
-      path: '/inventory/products/:productId',
-      builder: (context, state) {
-        final id = state.pathParameters['productId']!;
-        return ProductFormPage(productId: id);
-      },
-    ),
-    GoRoute(
-      path: '/inventory/barcode-templates',
-      builder: (context, state) => const BarcodeTemplatesPage(),
-    ),
-    GoRoute(
-      path: '/inventory/barcode-templates/create',
-      builder: (context, state) => const BarcodeTemplateFormPage(),
-    ),
-    GoRoute(
-      path: '/inventory/barcode-templates/:templateId',
-      builder: (context, state) {
-        final id = state.pathParameters['templateId'];
-        return BarcodeTemplateFormPage(templateId: id);
-      },
-    ),
-    GoRoute(
-      path: '/inventory/warehouses',
-      builder: (context, state) => const WarehousesPage(),
-    ),
-    GoRoute(
-      path: '/inventory/warehouses/create',
-      builder: (context, state) => const WarehouseFormPage(),
-    ),
-    GoRoute(
-      path: '/inventory/warehouses/:warehouseId',
-      builder: (context, state) {
-        final id = state.pathParameters['warehouseId'];
-        return WarehouseFormPage(warehouseId: id);
-      },
-    ),
-    GoRoute(
-      path: '/inventory/stock',
-      builder: (context, state) => const StockLevelsPage(),
-    ),
-    GoRoute(
-      path: '/inventory/stock/movement',
-      builder: (context, state) {
-        final extra = state.extra as Map<String, dynamic>?;
-        return StockMovementFormPage(productId: extra?['productId'] as String?);
-      },
-    ),
-    GoRoute(
-      path: '/inventory/stock/:productId',
-      builder: (context, state) {
-        final id = state.pathParameters['productId']!;
-        return ProductStockDetailPage(productId: id);
-      },
-    ),
-    GoRoute(
-      path: '/inventory/adjustments',
-      builder: (context, state) => const AdjustmentsPage(),
-    ),
-    GoRoute(
-      path: '/inventory/adjustments/create',
-      builder: (context, state) => const AdjustmentFormPage(),
-    ),
-    GoRoute(
-      path: '/inventory/transfers',
-      builder: (context, state) => const TransfersPage(),
-    ),
-    GoRoute(
-      path: '/inventory/transfers/create',
-      builder: (context, state) => const TransferFormPage(),
-    ),
-    GoRoute(
-      path: '/inventory/transfers/:transferId/receive',
-      builder: (context, state) {
-        final id = state.pathParameters['transferId']!;
-        return TransferReceivePage(transferId: id);
-      },
-    ),
-    GoRoute(
-      path: '/inventory/counts',
-      builder: (context, state) => const CountsPage(),
-    ),
-    GoRoute(
-      path: '/inventory/counts/:countId',
-      builder: (context, state) {
-        final id = state.pathParameters['countId']!;
-        return CountSessionPage(countId: id);
-      },
-    ),
-    GoRoute(
-      path: '/inventory/imei',
-      builder: (context, state) => const ImeiLookupPage(),
-    ),
-    GoRoute(
-      path: '/inventory/labels',
-      builder: (context, state) {
-        final ids = state.extra as List<String>;
-        return LabelPrintPage(productIds: ids);
-      },
-    ),
-    GoRoute(
-      path: '/inventory/import',
-      builder: (context, state) => const ImportProductsPage(),
-    ),
-    GoRoute(
       path: '/notifications',
       builder: (context, state) => const NotificationsPage(),
     ),
@@ -650,7 +508,169 @@ final appRouter = GoRouter(
           routes: [
             GoRoute(
               path: '/inventory',
-              builder: (context, state) => const InventoryHubPage(),
+              pageBuilder: (context, state) =>
+                  _fadePage(state, const InventoryHubPage()),
+            ),
+            // Inventory sub-routes promoted into the branch so the rail/bottom
+            // bar persist on every screen, as the design draws them. Same chrome
+            // -> cross-fade, not slide. Order matters: literal segments precede
+            // ':param'. The two detail routes /inventory/products/:productId and
+            // /inventory/stock/:productId stay TOP-LEVEL below the shell (they are
+            // pushed from above the shell by the drilldown / notifications / sync
+            // centre) and are declared after the shell so these in-branch
+            // 'create'/'movement' leaves win the match.
+            GoRoute(
+              path: '/inventory/categories',
+              pageBuilder: (context, state) =>
+                  _fadePage(state, const CategoriesPage()),
+            ),
+            GoRoute(
+              path: '/inventory/categories/create',
+              pageBuilder: (context, state) =>
+                  _fadePage(state, const CategoryFormPage()),
+            ),
+            GoRoute(
+              path: '/inventory/categories/:categoryId',
+              pageBuilder: (context, state) => _fadePage(
+                state,
+                CategoryFormPage(categoryId: state.pathParameters['categoryId']),
+              ),
+            ),
+            GoRoute(
+              path: '/inventory/brands',
+              pageBuilder: (context, state) =>
+                  _fadePage(state, const BrandsPage()),
+            ),
+            GoRoute(
+              path: '/inventory/brands/create',
+              pageBuilder: (context, state) =>
+                  _fadePage(state, const BrandFormPage()),
+            ),
+            GoRoute(
+              path: '/inventory/brands/:brandId',
+              pageBuilder: (context, state) => _fadePage(
+                state,
+                BrandFormPage(brandId: state.pathParameters['brandId']),
+              ),
+            ),
+            GoRoute(
+              path: '/inventory/products',
+              pageBuilder: (context, state) =>
+                  _fadePage(state, const ProductsPage()),
+            ),
+            GoRoute(
+              path: '/inventory/products/create',
+              pageBuilder: (context, state) =>
+                  _fadePage(state, const ProductFormPage()),
+            ),
+            GoRoute(
+              path: '/inventory/barcode-templates',
+              pageBuilder: (context, state) =>
+                  _fadePage(state, const BarcodeTemplatesPage()),
+            ),
+            GoRoute(
+              path: '/inventory/barcode-templates/create',
+              pageBuilder: (context, state) =>
+                  _fadePage(state, const BarcodeTemplateFormPage()),
+            ),
+            GoRoute(
+              path: '/inventory/barcode-templates/:templateId',
+              pageBuilder: (context, state) => _fadePage(
+                state,
+                BarcodeTemplateFormPage(
+                    templateId: state.pathParameters['templateId']),
+              ),
+            ),
+            GoRoute(
+              path: '/inventory/warehouses',
+              pageBuilder: (context, state) =>
+                  _fadePage(state, const WarehousesPage()),
+            ),
+            GoRoute(
+              path: '/inventory/warehouses/create',
+              pageBuilder: (context, state) =>
+                  _fadePage(state, const WarehouseFormPage()),
+            ),
+            GoRoute(
+              path: '/inventory/warehouses/:warehouseId',
+              pageBuilder: (context, state) => _fadePage(
+                state,
+                WarehouseFormPage(
+                    warehouseId: state.pathParameters['warehouseId']),
+              ),
+            ),
+            GoRoute(
+              path: '/inventory/stock',
+              pageBuilder: (context, state) =>
+                  _fadePage(state, const StockLevelsPage()),
+            ),
+            GoRoute(
+              path: '/inventory/stock/movement',
+              pageBuilder: (context, state) {
+                final extra = state.extra as Map<String, dynamic>?;
+                return _fadePage(
+                  state,
+                  StockMovementFormPage(
+                      productId: extra?['productId'] as String?),
+                );
+              },
+            ),
+            GoRoute(
+              path: '/inventory/adjustments',
+              pageBuilder: (context, state) =>
+                  _fadePage(state, const AdjustmentsPage()),
+            ),
+            GoRoute(
+              path: '/inventory/adjustments/create',
+              pageBuilder: (context, state) =>
+                  _fadePage(state, const AdjustmentFormPage()),
+            ),
+            GoRoute(
+              path: '/inventory/transfers',
+              pageBuilder: (context, state) =>
+                  _fadePage(state, const TransfersPage()),
+            ),
+            GoRoute(
+              path: '/inventory/transfers/create',
+              pageBuilder: (context, state) =>
+                  _fadePage(state, const TransferFormPage()),
+            ),
+            GoRoute(
+              path: '/inventory/transfers/:transferId/receive',
+              pageBuilder: (context, state) => _fadePage(
+                state,
+                TransferReceivePage(
+                    transferId: state.pathParameters['transferId']!),
+              ),
+            ),
+            GoRoute(
+              path: '/inventory/counts',
+              pageBuilder: (context, state) =>
+                  _fadePage(state, const CountsPage()),
+            ),
+            GoRoute(
+              path: '/inventory/counts/:countId',
+              pageBuilder: (context, state) => _fadePage(
+                state,
+                CountSessionPage(countId: state.pathParameters['countId']!),
+              ),
+            ),
+            GoRoute(
+              path: '/inventory/imei',
+              pageBuilder: (context, state) =>
+                  _fadePage(state, const ImeiLookupPage()),
+            ),
+            GoRoute(
+              path: '/inventory/labels',
+              pageBuilder: (context, state) => _fadePage(
+                state,
+                LabelPrintPage(productIds: state.extra as List<String>),
+              ),
+            ),
+            GoRoute(
+              path: '/inventory/import',
+              pageBuilder: (context, state) =>
+                  _fadePage(state, const ImportProductsPage()),
             ),
           ],
         ),
@@ -1251,6 +1271,25 @@ final appRouter = GoRouter(
           ],
         ),
       ],
+    ),
+    // Two inventory detail routes kept TOP-LEVEL (outside the shell): they are
+    // pushed from ABOVE the shell (dashboard drilldown, notifications, global
+    // search, sync exception centre). Declared AFTER the StatefulShellRoute so
+    // the in-branch '/inventory/products/create' and '/inventory/stock/movement'
+    // literal leaves win the match over these ':productId' params.
+    GoRoute(
+      path: '/inventory/products/:productId',
+      builder: (context, state) {
+        final id = state.pathParameters['productId']!;
+        return ProductFormPage(productId: id);
+      },
+    ),
+    GoRoute(
+      path: '/inventory/stock/:productId',
+      builder: (context, state) {
+        final id = state.pathParameters['productId']!;
+        return ProductStockDetailPage(productId: id);
+      },
     ),
   ],
 );
