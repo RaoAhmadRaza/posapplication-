@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -6,6 +8,8 @@ import 'package:sqflite_common_ffi/sqflite_ffi.dart';
 import 'package:window_manager/window_manager.dart';
 import 'core/env.dart';
 import 'core/services/pin_service.dart';
+import 'core/services/voice_support.dart';
+import 'core/services/voxa_stt_service.dart';
 import 'core/state/app_flow_state.dart';
 import 'core/state/theme_controller.dart';
 import 'core/supabase.dart';
@@ -24,6 +28,12 @@ Future<void> main() async {
     databaseFactory = databaseFactoryFfi;
     await windowManager.ensureInitialized();
     await windowManager.setMinimumSize(const Size(420, 640));
+    // Windows/Linux: warm up the bundled Voxa STT sidecar at launch so voice
+    // search is ready by the time the user taps the mic. Fire-and-forget; the
+    // health-check reuses it if it's already running.
+    if (voiceSearchCloudSupported) {
+      unawaited(VoxaStt.instance.ensureRunning());
+    }
   }
 
   await Supabase.initialize(

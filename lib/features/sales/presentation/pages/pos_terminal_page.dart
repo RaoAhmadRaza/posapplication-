@@ -6,6 +6,9 @@ import 'package:lucide_icons_flutter/lucide_icons.dart';
 import '../../../../core/design/app_colors.dart';
 import '../../../../core/design/widgets/app_filter_chips.dart';
 import '../../../../core/services/scanner_support.dart';
+import '../../../../core/services/voice_input_service.dart';
+import '../../../../core/services/voice_support.dart';
+import '../../../../core/services/voxa_stt_service.dart';
 import '../../../../core/widgets/barcode_scan_page.dart';
 import '../../../../core/widgets/no_access_scaffold.dart';
 import '../../../../core/widgets/permission_gate.dart';
@@ -46,6 +49,8 @@ class PosTerminalPage extends ConsumerStatefulWidget {
 class _PosTerminalPageState extends ConsumerState<PosTerminalPage>
     with WidgetsBindingObserver {
   final _searchCtrl = TextEditingController();
+  final _voiceService = VoiceInputService();
+  bool _voiceListening = false;
   Timer? _debounce;
   bool _showAutoSavedNote = false;
   bool _pulledOnce = false;
@@ -66,6 +71,7 @@ class _PosTerminalPageState extends ConsumerState<PosTerminalPage>
     WidgetsBinding.instance.removeObserver(this);
     _searchCtrl.removeListener(_onSearchChanged);
     _searchCtrl.dispose();
+    _voiceService.cancel();
     _debounce?.cancel();
     super.dispose();
   }
@@ -166,6 +172,43 @@ class _PosTerminalPageState extends ConsumerState<PosTerminalPage>
   void _snack(String msg) {
     ScaffoldMessenger.of(context)
         .showSnackBar(SnackBar(content: Text(msg)));
+  }
+
+  Future<void> _startVoice() async {
+    // Windows/Linux: record → Voxa transcribe on the second tap (no live partials).
+    if (voiceSearchCloudSupported) {
+      if (VoxaStt.instance.isRecording) {
+        final text = await VoxaStt.instance.stopAndTranscribe();
+        if (!mounted) return;
+        setState(() => _voiceListening = false);
+        if (text != null) {
+          _searchCtrl.text = text;
+        } else {
+          _snack('Voice service unavailable — is Voxa running?');
+        }
+        return;
+      }
+      final ok = await VoxaStt.instance.startRecording();
+      if (!mounted) return;
+      setState(() => _voiceListening = ok);
+      if (!ok) _snack('Microphone permission needed');
+      return;
+    }
+    // iOS/Android/macOS: on-device speech_to_text with live partials.
+    if (_voiceListening) {
+      _voiceService.cancel();
+      setState(() => _voiceListening = false);
+      return;
+    }
+    setState(() => _voiceListening = true);
+    final result = await _voiceService.listen(
+      onPartial: (partial) {
+        if (mounted) _searchCtrl.text = partial;
+      },
+    );
+    if (!mounted) return;
+    setState(() => _voiceListening = false);
+    if (result != null && result.isNotEmpty) _searchCtrl.text = result;
   }
 
   void _addLine(Product product) {
@@ -305,6 +348,16 @@ class _PosTerminalPageState extends ConsumerState<PosTerminalPage>
           SalesHeader(
             title: 'Point of sale',
             actions: [
+              if (voiceSearchSupported)
+                IconButton(
+                  icon: Icon(
+                    _voiceListening ? LucideIcons.mic : LucideIcons.micOff,
+                    size: 22,
+                    color: _voiceListening ? lum.accent : null,
+                  ),
+                  tooltip: 'Voice search',
+                  onPressed: _startVoice,
+                ),
               if (barcodeScanSupported || barcodeImageScanSupported)
                 IconButton(
                   icon: const Icon(LucideIcons.qrCode, size: 22),

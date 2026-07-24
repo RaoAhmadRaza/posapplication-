@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'core/design/app_theme.dart';
 import 'core/services/pin_service.dart';
+import 'core/services/voxa_stt_service.dart';
 import 'core/state/app_flow_state.dart';
 import 'core/state/theme_controller.dart';
 import 'core/supabase.dart';
@@ -30,6 +31,9 @@ class _AppState extends State<App> with WidgetsBindingObserver {
   void didChangeAppLifecycleState(AppLifecycleState state) {
     if (state == AppLifecycleState.resumed) {
       _checkPinLock();
+    } else if (state == AppLifecycleState.detached) {
+      // App shutting down — stop the app-launched Voxa STT sidecar (best effort).
+      VoxaStt.instance.stopServer();
     }
   }
 

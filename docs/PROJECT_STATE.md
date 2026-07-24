@@ -630,7 +630,13 @@ mobile_scanner has no plugin; QR/DataMatrix only, not 1D). barcodeImageScanSuppo
 barcode/SKU lookup: products_page scan icon → jump to stock detail; POS terminal HEADER scan action (ModuleHeader actions) →
 add to cart on exact match (else fill search); dashboard HEADER scan button (DashboardAppBar) → jump to stock detail. label
 printing (LabelPdfService/LabelPrintPage);
-notifications (+prefs, trg_low_stock_notify, hub bell badge); bulk CSV import (bulk_import_products); voice search (speech_to_text).
+notifications (+prefs, trg_low_stock_notify, hub bell badge); bulk CSV import (bulk_import_products); voice search
+(speech_to_text, gated voiceSearchNativeSupported = iOS/Android/macOS): products search-row mic, POS header mic → fill search,
+dashboard header mic → fill global search (wide only). macOS needs mic + speech Info.plist strings + audio-input entitlement.
+Windows/Linux voice = Voxa (self-hosted STT sidecar): mic recorded via `record` → POST http://127.0.0.1:8000/transcribe?format=txt
+→ text (VoxaStt in core/services/voxa_stt_service.dart; health-check + optional app-launch via --dart-define VOXA_URL/VOXA_CMD).
+No partials on the Voxa path (tap to start, tap to stop→transcribe). Mics gate on voiceSearchSupported (native OR cloud).
+NOT verified on-device; needs Voxa running/reachable on the Windows box.
 
 ## Known Issues
 - ✓ FIXED 2026-07-24 (customer-module audit, DECISIONS): (a) customer RLS gate was DEAD — the ungated

@@ -28,6 +28,11 @@
 	<string>MainMenu</string>
 	<key>NSPrincipalClass</key>
 	<string>NSApplication</string>
+	<!-- Voice search (speech_to_text) needs mic + speech recognition access. -->
+	<key>NSMicrophoneUsageDescription</key>
+	<string>Voice search uses the microphone to let you speak a product name.</string>
+	<key>NSSpeechRecognitionUsageDescription</key>
+	<string>Voice search converts your speech to text to find products.</string>
 	<!-- Opt out of the experimental merged platform/UI thread. The printing
 	     plugin presents a native modal (NSPrintOperation) that runs a nested
 	     run loop on the platform thread; under the merged thread that deadlocks
