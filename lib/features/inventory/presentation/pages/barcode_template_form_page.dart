@@ -1,12 +1,16 @@
 import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:lucide_icons_flutter/lucide_icons.dart';
 import '../../../../core/design/app_colors.dart';
-import '../../../../core/design/app_spacing.dart';
 import '../../../../core/design/app_typography.dart';
 import '../../../../core/design/widgets/app_button.dart';
+import '../../../../core/design/widgets/app_detail_scaffold.dart';
+import '../../../../core/design/widgets/app_dropdown.dart';
 import '../../../../core/design/widgets/app_inline_banner.dart';
+import '../../../../core/design/widgets/app_section_card.dart';
 import '../../../../core/design/widgets/app_text_field.dart';
+import '../../../../core/design/widgets/app_toggle.dart';
 import '../controllers/barcode_templates_controller.dart';
 
 class BarcodeTemplateFormPage extends ConsumerStatefulWidget {
@@ -14,10 +18,12 @@ class BarcodeTemplateFormPage extends ConsumerStatefulWidget {
   final String? templateId;
 
   @override
-  ConsumerState<BarcodeTemplateFormPage> createState() => _BarcodeTemplateFormPageState();
+  ConsumerState<BarcodeTemplateFormPage> createState() =>
+      _BarcodeTemplateFormPageState();
 }
 
-class _BarcodeTemplateFormPageState extends ConsumerState<BarcodeTemplateFormPage> {
+class _BarcodeTemplateFormPageState
+    extends ConsumerState<BarcodeTemplateFormPage> {
   final _nameCtrl = TextEditingController();
   final _widthCtrl = TextEditingController(text: '50');
   final _heightCtrl = TextEditingController(text: '25');
@@ -49,7 +55,8 @@ class _BarcodeTemplateFormPageState extends ConsumerState<BarcodeTemplateFormPag
     setState(() => _loadingExisting = true);
     final state = ref.read(barcodeTemplatesProvider);
     if (state.value != null) {
-      final t = state.value!.where((b) => b.id == widget.templateId).firstOrNull;
+      final t =
+          state.value!.where((b) => b.id == widget.templateId).firstOrNull;
       if (t != null) {
         _nameCtrl.text = t.name;
         _format = t.format;
@@ -64,16 +71,23 @@ class _BarcodeTemplateFormPageState extends ConsumerState<BarcodeTemplateFormPag
 
   Future<void> _save() async {
     final name = _nameCtrl.text.trim();
-    if (name.isEmpty) { setState(() => _error = 'Name is required.'); return; }
+    if (name.isEmpty) {
+      setState(() => _error = 'Name is required.');
+      return;
+    }
 
     Map<String, dynamic> layout;
     try {
       layout = jsonDecode(_layoutCtrl.text.trim()) as Map<String, dynamic>;
     } catch (_) {
-      setState(() => _error = 'Layout must be valid JSON.'); return;
+      setState(() => _error = 'Layout must be valid JSON.');
+      return;
     }
 
-    setState(() { _saving = true; _error = null; });
+    setState(() {
+      _saving = true;
+      _error = null;
+    });
 
     final data = <String, dynamic>{
       'name': name,
@@ -84,10 +98,15 @@ class _BarcodeTemplateFormPageState extends ConsumerState<BarcodeTemplateFormPag
       'is_default': _isDefault,
     };
 
-    final failure = await ref.read(barcodeTemplatesProvider.notifier).save(data: data, id: widget.templateId);
+    final failure = await ref
+        .read(barcodeTemplatesProvider.notifier)
+        .save(data: data, id: widget.templateId);
     if (!mounted) return;
     if (failure != null) {
-      setState(() { _saving = false; _error = failure.message; });
+      setState(() {
+        _saving = false;
+        _error = failure.message;
+      });
       return;
     }
     if (mounted) Navigator.of(context).pop();
@@ -95,77 +114,142 @@ class _BarcodeTemplateFormPageState extends ConsumerState<BarcodeTemplateFormPag
 
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
-      backgroundColor: AppColors.background,
-      appBar: AppBar(
-        backgroundColor: AppColors.background,
-        surfaceTintColor: AppColors.background,
-        leading: IconButton(
-          icon: const Icon(Icons.arrow_back_ios, color: AppColors.accent, size: 20),
-          onPressed: () => Navigator.of(context).pop(),
-        ),
-        title: Text(_isEditing ? 'Edit Template' : 'New Template', style: AppTypography.headline),
-      ),
-      body: _loadingExisting
-          ? const Center(child: CircularProgressIndicator())
-          : SafeArea(
-              child: SingleChildScrollView(
-                padding: const EdgeInsets.symmetric(horizontal: AppSpacing.screenPadding),
-                child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
-                  const SizedBox(height: AppSpacing.lg),
-                  if (_error != null) ...[
-                    AppInlineBanner(message: _error!, type: BannerType.error),
-                    const SizedBox(height: AppSpacing.lg),
-                  ],
-                  AppTextField(controller: _nameCtrl, label: 'Name', prefixIcon: Icons.label, hint: 'e.g. Standard Label'),
-                  const SizedBox(height: AppSpacing.fieldGap),
-                  _DropdownField(label: 'Format', value: _format, items: const ['CODE128', 'EAN13', 'QR'], onChanged: (v) => setState(() => _format = v)),
-                  const SizedBox(height: AppSpacing.fieldGap),
-                  Row(children: [
-                    Expanded(child: AppTextField(controller: _widthCtrl, label: 'Width (mm)', prefixIcon: Icons.straighten, keyboardType: TextInputType.number)),
-                    const SizedBox(width: AppSpacing.md),
-                    Expanded(child: AppTextField(controller: _heightCtrl, label: 'Height (mm)', prefixIcon: Icons.height, keyboardType: TextInputType.number)),
-                  ]),
-                  const SizedBox(height: AppSpacing.fieldGap),
-                  AppTextField(controller: _layoutCtrl, label: 'Layout (JSON)', prefixIcon: Icons.code, hint: '{"showPrice": true}'),
-                  const SizedBox(height: AppSpacing.fieldGap),
-                  SwitchListTile(
-                    contentPadding: EdgeInsets.zero, title: Text('Default', style: AppTypography.body),
-                    value: _isDefault, activeThumbColor: AppColors.accent,
-                    onChanged: (v) => setState(() => _isDefault = v),
+    final lum = context.lum;
+
+    return AppDetailScaffold(
+      eyebrow: 'Inventory',
+      title: _isEditing ? 'Edit template' : 'New template',
+      child: _loadingExisting
+          ? const Padding(
+              padding: EdgeInsets.only(top: 80),
+              child: Center(child: CircularProgressIndicator()),
+            )
+          : Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                if (_error != null) ...[
+                  AppInlineBanner(message: _error!, type: BannerType.error),
+                  const SizedBox(height: 16),
+                ],
+                AppSectionCard(
+                  eyebrow: 'Template',
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.stretch,
+                    children: [
+                      AppTextField(
+                        controller: _nameCtrl,
+                        label: 'Template name',
+                        prefixIcon: LucideIcons.tag,
+                        hint: 'e.g. Standard Label',
+                      ),
+                      const SizedBox(height: 16),
+                      _labeled(
+                        lum,
+                        'Format',
+                        AppDropdown<String>(
+                          value: _format,
+                          options: const [
+                            AppDropdownOption(
+                                value: 'CODE128', label: 'CODE128'),
+                            AppDropdownOption(value: 'EAN13', label: 'EAN13'),
+                            AppDropdownOption(value: 'QR', label: 'QR'),
+                          ],
+                          onSelected: (v) => setState(() => _format = v),
+                        ),
+                      ),
+                      const SizedBox(height: 16),
+                      Row(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Expanded(
+                            child: AppTextField(
+                              controller: _widthCtrl,
+                              label: 'Width (mm)',
+                              prefixIcon: LucideIcons.moveHorizontal,
+                              keyboardType: TextInputType.number,
+                            ),
+                          ),
+                          const SizedBox(width: 14),
+                          Expanded(
+                            child: AppTextField(
+                              controller: _heightCtrl,
+                              label: 'Height (mm)',
+                              prefixIcon: LucideIcons.moveVertical,
+                              keyboardType: TextInputType.number,
+                            ),
+                          ),
+                        ],
+                      ),
+                      const SizedBox(height: 16),
+                      AppTextField(
+                        controller: _layoutCtrl,
+                        label: 'Layout (JSON)',
+                        prefixIcon: LucideIcons.braces,
+                        hint: '{"showPrice": true}',
+                        maxLines: 5,
+                      ),
+                      const SizedBox(height: 22),
+                      Row(
+                        children: [
+                          Expanded(
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Text(
+                                  'Default template',
+                                  style: AppTypography.headline.copyWith(
+                                      fontSize: 14.5,
+                                      color: lum.textPrimary),
+                                ),
+                                const SizedBox(height: 2),
+                                Text(
+                                  'Use for new barcode prints',
+                                  style: AppTypography.subhead
+                                      .copyWith(color: lum.g500),
+                                ),
+                              ],
+                            ),
+                          ),
+                          const SizedBox(width: 16),
+                          AppToggle(
+                            value: _isDefault,
+                            onChanged: (v) => setState(() => _isDefault = v),
+                            semanticLabel: 'Default template',
+                          ),
+                        ],
+                      ),
+                    ],
                   ),
-                  const SizedBox(height: AppSpacing.xxl),
-                  AppButton(label: _isEditing ? 'Update' : 'Create', loading: _saving, onPressed: _save),
-                  const SizedBox(height: AppSpacing.xxl),
-                ]),
-              ),
+                ),
+                const SizedBox(height: 20),
+                AppButton(
+                  label: 'Save',
+                  icon: LucideIcons.check,
+                  loading: _saving,
+                  fullWidth: true,
+                  onPressed: _save,
+                ),
+                const SizedBox(height: 12),
+                AppButton(
+                  label: 'Cancel',
+                  variant: AppButtonVariant.plain,
+                  fullWidth: true,
+                  onPressed: () => Navigator.of(context).pop(),
+                ),
+              ],
             ),
     );
   }
-}
 
-class _DropdownField extends StatelessWidget {
-  const _DropdownField({required this.label, required this.value, required this.items, required this.onChanged});
-  final String label, value;
-  final List<String> items;
-  final ValueChanged<String> onChanged;
-
-  @override
-  Widget build(BuildContext context) {
-    return Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-      Padding(padding: const EdgeInsets.only(left: 4, bottom: 8), child: Text(label, style: AppTypography.fieldLabel)),
-      Container(
-        height: 52, padding: const EdgeInsets.symmetric(horizontal: 16),
-        decoration: BoxDecoration(color: AppColors.fieldFill, borderRadius: BorderRadius.circular(12)),
-        child: DropdownButtonHideUnderline(
-          child: DropdownButton<String>(
-            value: value, isExpanded: true,
-            icon: const Icon(Icons.keyboard_arrow_down, color: AppColors.textMuted),
-            items: items.map((i) => DropdownMenuItem(value: i, child: Text(i))).toList(),
-            onChanged: (v) { if (v != null) onChanged(v); },
+  Widget _labeled(LumColors lum, String label, Widget control) => Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Padding(
+            padding: const EdgeInsets.only(left: 2, bottom: 8),
+            child: Text(label,
+                style: AppTypography.fieldLabel.copyWith(color: lum.g700)),
           ),
-        ),
-      ),
-    ]);
-  }
+          control,
+        ],
+      );
 }

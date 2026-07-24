@@ -1,11 +1,14 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:lucide_icons_flutter/lucide_icons.dart';
 import '../../../../core/design/app_colors.dart';
-import '../../../../core/design/app_spacing.dart';
 import '../../../../core/design/app_typography.dart';
 import '../../../../core/design/widgets/app_button.dart';
+import '../../../../core/design/widgets/app_detail_scaffold.dart';
 import '../../../../core/design/widgets/app_inline_banner.dart';
+import '../../../../core/design/widgets/app_section_card.dart';
 import '../../../../core/design/widgets/app_text_field.dart';
+import '../../../../core/design/widgets/app_toggle.dart';
 import '../controllers/warehouses_controller.dart';
 
 class WarehouseFormPage extends ConsumerStatefulWidget {
@@ -111,82 +114,116 @@ class _WarehouseFormPageState extends ConsumerState<WarehouseFormPage> {
 
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
-      backgroundColor: AppColors.background,
-      appBar: AppBar(
-        backgroundColor: AppColors.background,
-        surfaceTintColor: AppColors.background,
-        leading: IconButton(
-          icon: const Icon(Icons.arrow_back_ios, color: AppColors.accent, size: 20),
-          onPressed: () => Navigator.of(context).pop(),
+    final lum = context.lum;
+
+    if (_loadingExisting) {
+      return AppDetailScaffold(
+        eyebrow: 'Inventory',
+        title: _isEditing ? 'Edit warehouse' : 'New warehouse',
+        maxContentWidth: 720,
+        child: const Padding(
+          padding: EdgeInsets.symmetric(vertical: 48),
+          child: Center(child: CircularProgressIndicator()),
         ),
-        title: Text(
-          _isEditing ? 'Edit Warehouse' : 'New Warehouse',
-          style: AppTypography.headline,
-        ),
-      ),
-      body: _loadingExisting
-          ? const Center(child: CircularProgressIndicator())
-          : SafeArea(
-              child: SingleChildScrollView(
-                padding: const EdgeInsets.symmetric(
-                  horizontal: AppSpacing.screenPadding,
+      );
+    }
+
+    return AppDetailScaffold(
+      eyebrow: 'Inventory',
+      title: _isEditing ? 'Edit warehouse' : 'New warehouse',
+      maxContentWidth: 720,
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          if (_error != null) ...[
+            AppInlineBanner(message: _error!, type: BannerType.error),
+            const SizedBox(height: 16),
+          ],
+          AppSectionCard(
+            eyebrow: 'Details',
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                AppTextField(
+                  controller: _nameController,
+                  label: 'Name',
+                  prefixIcon: LucideIcons.warehouse,
+                  hint: 'e.g. Main Warehouse',
                 ),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                const SizedBox(height: 16),
+                AppTextField(
+                  controller: _codeController,
+                  label: 'Code',
+                  prefixIcon: LucideIcons.hash,
+                  hint: 'e.g. WH01',
+                ),
+                const SizedBox(height: 16),
+                AppTextField(
+                  controller: _addressController,
+                  label: 'Address',
+                  prefixIcon: LucideIcons.mapPin,
+                  hint: 'Optional',
+                  maxLines: 2,
+                ),
+                const SizedBox(height: 16),
+                AppTextField(
+                  controller: _capacityNotesController,
+                  label: 'Capacity notes',
+                  prefixIcon: LucideIcons.notebookPen,
+                  hint: 'Optional',
+                  maxLines: 3,
+                ),
+                const SizedBox(height: 20),
+                Row(
                   children: [
-                    const SizedBox(height: AppSpacing.lg),
-                    if (_error != null) ...[
-                      AppInlineBanner(message: _error!, type: BannerType.error),
-                      const SizedBox(height: AppSpacing.lg),
-                    ],
-                    AppTextField(
-                      controller: _nameController,
-                      label: 'Name',
-                      prefixIcon: Icons.warehouse,
-                      hint: 'e.g. Main Warehouse',
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            'Active',
+                            style: AppTypography.headline.copyWith(
+                              fontSize: 14.5,
+                              color: lum.textPrimary,
+                            ),
+                          ),
+                          const SizedBox(height: 2),
+                          Text(
+                            'Show this warehouse in pickers and reports',
+                            style:
+                                AppTypography.subhead.copyWith(color: lum.g500),
+                          ),
+                        ],
+                      ),
                     ),
-                    const SizedBox(height: AppSpacing.fieldGap),
-                    AppTextField(
-                      controller: _codeController,
-                      label: 'Code',
-                      prefixIcon: Icons.tag,
-                      hint: 'e.g. WH01',
-                    ),
-                    const SizedBox(height: AppSpacing.fieldGap),
-                    AppTextField(
-                      controller: _addressController,
-                      label: 'Address',
-                      prefixIcon: Icons.location_on,
-                      hint: 'Optional',
-                    ),
-                    const SizedBox(height: AppSpacing.fieldGap),
-                    AppTextField(
-                      controller: _capacityNotesController,
-                      label: 'Capacity Notes',
-                      prefixIcon: Icons.info,
-                      hint: 'Optional',
-                    ),
-                    const SizedBox(height: AppSpacing.fieldGap),
-                    SwitchListTile(
-                      contentPadding: EdgeInsets.zero,
-                      title: Text('Active', style: AppTypography.body),
+                    const SizedBox(width: 16),
+                    AppToggle(
                       value: _isActive,
-                      activeThumbColor: AppColors.accent,
+                      semanticLabel: 'Active',
                       onChanged: (v) => setState(() => _isActive = v),
                     ),
-                    const SizedBox(height: AppSpacing.xxl),
-                    AppButton(
-                      label: _isEditing ? 'Update' : 'Create',
-                      loading: _saving,
-                      onPressed: _save,
-                      fullWidth: true,
-                    ),
-                    const SizedBox(height: AppSpacing.xxl),
                   ],
                 ),
-              ),
+              ],
             ),
+          ),
+          const SizedBox(height: 20),
+          AppButton(
+            label: 'Save',
+            icon: LucideIcons.check,
+            loading: _saving,
+            fullWidth: true,
+            onPressed: _save,
+          ),
+          const SizedBox(height: 10),
+          AppButton(
+            label: 'Cancel',
+            variant: AppButtonVariant.plain,
+            fullWidth: true,
+            onPressed: () => Navigator.of(context).pop(),
+          ),
+        ],
+      ),
     );
   }
 }
