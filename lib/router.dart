@@ -513,12 +513,15 @@ final appRouter = GoRouter(
             ),
             // Inventory sub-routes promoted into the branch so the rail/bottom
             // bar persist on every screen, as the design draws them. Same chrome
-            // -> cross-fade, not slide. Order matters: literal segments precede
-            // ':param'. The two detail routes /inventory/products/:productId and
-            // /inventory/stock/:productId stay TOP-LEVEL below the shell (they are
-            // pushed from above the shell by the drilldown / notifications / sync
-            // centre) and are declared after the shell so these in-branch
-            // 'create'/'movement' leaves win the match.
+            // -> cross-fade, not slide. EXCEPTIONS kept TOP-LEVEL below the shell
+            // (declared after it): the detail routes /inventory/products/:productId
+            // and /inventory/stock/:productId, plus the action/form routes
+            // /inventory/stock/movement, /inventory/adjustments/create and
+            // /inventory/labels. All of these are pushed from the root-level
+            // stock-detail page (onEdit/onAdjust/onOpening/onPrint) and/or from
+            // above the shell (drilldown / notifications / sync centre); pushing a
+            // shell descendant from a page above the shell duplicates the shell
+            // page key ('!keyReservation.contains(key)'), so they must be root.
             GoRoute(
               path: '/inventory/categories',
               pageBuilder: (context, state) =>
@@ -605,25 +608,9 @@ final appRouter = GoRouter(
                   _fadePage(state, const StockLevelsPage()),
             ),
             GoRoute(
-              path: '/inventory/stock/movement',
-              pageBuilder: (context, state) {
-                final extra = state.extra as Map<String, dynamic>?;
-                return _fadePage(
-                  state,
-                  StockMovementFormPage(
-                      productId: extra?['productId'] as String?),
-                );
-              },
-            ),
-            GoRoute(
               path: '/inventory/adjustments',
               pageBuilder: (context, state) =>
                   _fadePage(state, const AdjustmentsPage()),
-            ),
-            GoRoute(
-              path: '/inventory/adjustments/create',
-              pageBuilder: (context, state) =>
-                  _fadePage(state, const AdjustmentFormPage()),
             ),
             GoRoute(
               path: '/inventory/transfers',
@@ -659,13 +646,6 @@ final appRouter = GoRouter(
               path: '/inventory/imei',
               pageBuilder: (context, state) =>
                   _fadePage(state, const ImeiLookupPage()),
-            ),
-            GoRoute(
-              path: '/inventory/labels',
-              pageBuilder: (context, state) => _fadePage(
-                state,
-                LabelPrintPage(productIds: state.extra as List<String>),
-              ),
             ),
             GoRoute(
               path: '/inventory/import',
@@ -1284,12 +1264,47 @@ final appRouter = GoRouter(
         return ProductFormPage(productId: id);
       },
     ),
+    // Stock-movement form kept TOP-LEVEL (outside the shell): pushed from the
+    // root stock-detail page (onOpening) as well as the in-branch stock-levels
+    // page. Declared BEFORE '/inventory/stock/:productId' so the literal
+    // 'movement' segment wins the match over the ':productId' param.
+    GoRoute(
+      path: '/inventory/stock/movement',
+      pageBuilder: (context, state) {
+        final extra = state.extra as Map<String, dynamic>?;
+        return _fadePage(
+          state,
+          StockMovementFormPage(productId: extra?['productId'] as String?),
+        );
+      },
+    ),
     GoRoute(
       path: '/inventory/stock/:productId',
       builder: (context, state) {
         final id = state.pathParameters['productId']!;
         return ProductStockDetailPage(productId: id);
       },
+    ),
+    // Adjustment-create form kept TOP-LEVEL for the same reason: pushed from the
+    // root stock-detail page (onAdjust) as well as the in-branch adjustments
+    // page. A root page pushes cleanly from both; a shell descendant would
+    // duplicate the shell page key.
+    GoRoute(
+      path: '/inventory/adjustments/create',
+      pageBuilder: (context, state) =>
+          _fadePage(state, const AdjustmentFormPage()),
+    ),
+    // Label print kept TOP-LEVEL (outside the shell) for the same reason as the
+    // detail routes above: it is pushed from the root-level stock-detail page
+    // (onPrint) as well as from the in-branch products page. Pushing a shell
+    // descendant from a page above the shell duplicates the shell page key
+    // ('!keyReservation.contains(key)'); a root page pushes cleanly from both.
+    GoRoute(
+      path: '/inventory/labels',
+      pageBuilder: (context, state) => _fadePage(
+        state,
+        LabelPrintPage(productIds: state.extra as List<String>),
+      ),
     ),
   ],
 );
