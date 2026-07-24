@@ -3,6 +3,7 @@ import 'dart:typed_data';
 import 'package:barcode/barcode.dart' as bc;
 import 'package:pdf/pdf.dart';
 import 'package:pdf/widgets.dart' as pw;
+import 'package:printing/printing.dart';
 
 import '../../../../core/design/format.dart';
 import '../../domain/entities/barcode_template.dart';
@@ -12,7 +13,15 @@ class LabelPdfService {
   static const _eap13Pattern = '^\\d{13}\$';
 
   Future<Uint8List> generate(List<Product> products, BarcodeTemplate template) async {
-    final doc = pw.Document();
+    // Embed a Unicode font so product names with non-Latin1 glyphs (e.g. the
+    // em-dash "—" U+2014) render instead of a blank .notdef box. Mirrors the
+    // receipt PDF service. dart_pdf's default Helvetica is Latin-1 only.
+    final doc = pw.Document(
+      theme: pw.ThemeData.withFont(
+        base: await PdfGoogleFonts.openSansRegular(),
+        bold: await PdfGoogleFonts.openSansBold(),
+      ),
+    );
 
     final labelW = template.widthMm * PdfPageFormat.mm;
     final labelH = template.heightMm * PdfPageFormat.mm;

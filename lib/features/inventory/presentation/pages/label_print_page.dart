@@ -104,14 +104,18 @@ class _LabelPrintPageState extends ConsumerState<LabelPrintPage> {
     setState(() => _generating = true);
 
     try {
+      debugPrint('[LABELS] generating PDF for ${expanded.length} labels…');
       final pdf = await LabelPdfService().generate(expanded, template);
+      debugPrint('[LABELS] PDF ready (${pdf.lengthInBytes} bytes) → layoutPdf');
       await Printing.layoutPdf(
         onLayout: (_) async => pdf,
         name: 'product-labels.pdf',
       );
-    } catch (e) {
+      debugPrint('[LABELS] layoutPdf returned');
+    } catch (e, st) {
+      debugPrint('[LABELS] FAILED: $e\n$st');
       if (!mounted) return;
-      showAppToast(context, 'Failed to generate labels.',
+      showAppToast(context, 'Failed to generate labels: $e',
           type: BannerType.error);
     } finally {
       if (mounted) setState(() => _generating = false);
