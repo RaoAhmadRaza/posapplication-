@@ -122,31 +122,8 @@ class _ProductsPageState extends ConsumerState<ProductsPage> {
     _applyFilters();
   }
 
-  /// Scan icon tap. Mobile has both camera + image; offer a chooser. Desktop
-  /// (macOS) has only image decoding, so go straight to the picker.
-  Future<void> _onScanTap() async {
-    if (barcodeScanSupported && barcodeImageScanSupported) {
-      final choice = await showAppSheet<String>(
-        context: context,
-        builder: (_) => const _ScanSourceSheet(),
-      );
-      if (choice == 'camera') await _scanWithCamera();
-      if (choice == 'image') await _scanFromImage();
-    } else if (barcodeScanSupported) {
-      await _scanWithCamera();
-    } else {
-      await _scanFromImage();
-    }
-  }
-
-  Future<void> _scanWithCamera() async {
-    final code = await scanBarcode(context, title: 'Scan Product');
-    if (code == null || code == BarcodeScanPage.manualEntrySentinel) return;
-    await _handleScannedCode(code);
-  }
-
-  Future<void> _scanFromImage() async {
-    final code = await scanBarcodeFromImage();
+  Future<void> _scan() async {
+    final code = await scanProductCode(context);
     if (!mounted || code == null) return;
     if (code == barcodeNoCodeFoundSentinel) {
       showAppToast(context, 'No barcode or QR found in that image',
@@ -271,7 +248,7 @@ class _ProductsPageState extends ConsumerState<ProductsPage> {
                               tooltip: barcodeScanSupported
                                   ? 'Scan product'
                                   : 'Scan product from image',
-                              onTap: _onScanTap,
+                              onTap: _scan,
                             ),
                           ],
                           if (voiceSearchSupported) ...[
@@ -570,48 +547,6 @@ class _ToolIcon extends StatelessWidget {
             child: Icon(icon,
                 size: 19, color: active ? lum.accentPress : lum.g600),
           ),
-        ),
-      ),
-    );
-  }
-}
-
-class _ScanSourceSheet extends StatelessWidget {
-  const _ScanSourceSheet();
-
-  @override
-  Widget build(BuildContext context) {
-    final lum = context.lum;
-    return Column(
-      mainAxisSize: MainAxisSize.min,
-      crossAxisAlignment: CrossAxisAlignment.stretch,
-      children: [
-        Padding(
-          padding: const EdgeInsets.fromLTRB(4, 4, 4, 12),
-          child: Text('Scan product',
-              style: AppTypography.title3.copyWith(color: lum.textPrimary)),
-        ),
-        _row(context, lum, LucideIcons.camera, 'Use camera', 'camera'),
-        const SizedBox(height: 8),
-        _row(context, lum, LucideIcons.image, 'From an image', 'image'),
-      ],
-    );
-  }
-
-  Widget _row(BuildContext context, LumColors lum, IconData icon, String label,
-      String value) {
-    return InkWell(
-      onTap: () => Navigator.of(context).pop(value),
-      borderRadius: BorderRadius.circular(AppRadius.md),
-      child: Padding(
-        padding: const EdgeInsets.symmetric(vertical: 14, horizontal: 8),
-        child: Row(
-          children: [
-            Icon(icon, size: 20, color: lum.accent),
-            const SizedBox(width: 14),
-            Text(label,
-                style: AppTypography.body.copyWith(color: lum.textPrimary)),
-          ],
         ),
       ),
     );
