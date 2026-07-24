@@ -39,7 +39,11 @@ class _AppListSkeletonState extends State<AppListSkeleton>
         ? Colors.white.withValues(alpha: 0.10)
         : Colors.white.withValues(alpha: 0.65);
 
-    final rows = Padding(
+    // Clip rather than overflow: placed inside a bounded Expanded on list
+    // screens, the fixed-height rows can exceed a short viewport. Non-scrolling
+    // so it still reads as a static placeholder.
+    final rows = SingleChildScrollView(
+      physics: const NeverScrollableScrollPhysics(),
       padding: const EdgeInsets.symmetric(
         horizontal: AppSpacing.screenPadding,
         vertical: AppSpacing.md,

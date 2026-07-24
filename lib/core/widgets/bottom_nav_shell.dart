@@ -321,8 +321,8 @@ class _NavRail extends StatelessWidget {
             ),
           ),
           Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.stretch,
+            child: ListView(
+              padding: EdgeInsets.zero,
               children: [
                 for (var i = 0; i < lastIndex; i++) ...[
                   _RailItem(

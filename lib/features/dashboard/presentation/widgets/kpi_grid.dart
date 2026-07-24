@@ -76,8 +76,10 @@ class KpiGrid extends ConsumerWidget {
 
   static const _spacing = 10.0;
 
-  /// 15 pad + 16 label + 11 + 26 value + 5 + 32 (two-line sub) + 15 pad.
-  static const _tileHeight = 120.0;
+  /// 15 pad + 17 label + 11 + 30 value (count mono is 24px) + 5 + 33
+  /// (two-line sub) + 15 pad, plus a little slack so real line metrics never
+  /// tip a tile into a few-px overflow.
+  static const _tileHeight = 132.0;
 
   /// 12 margin + 11 pad + 30 button.
   static const _footerHeight = 53.0;

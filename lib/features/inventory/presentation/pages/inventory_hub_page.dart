@@ -51,7 +51,8 @@ class InventoryHubPage extends StatelessWidget {
       title: 'Inventory',
       maxContentWidth: 940,
       padding: const EdgeInsets.fromLTRB(20, 22, 20, 40),
-      child: Column(
+      child: SingleChildScrollView(
+        child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Text(
@@ -90,6 +91,7 @@ class InventoryHubPage extends StatelessWidget {
             const SizedBox(height: 26),
           ],
         ],
+        ),
       ),
     );
   }

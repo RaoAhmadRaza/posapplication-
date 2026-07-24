@@ -69,7 +69,8 @@ class PurchaseHubPage extends StatelessWidget {
       title: 'Purchasing',
       maxContentWidth: 1000,
       padding: const EdgeInsets.fromLTRB(20, 22, 20, 40),
-      child: Column(
+      child: SingleChildScrollView(
+        child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Text(
@@ -94,6 +95,7 @@ class PurchaseHubPage extends StatelessWidget {
             },
           ),
         ],
+        ),
       ),
     );
   }
