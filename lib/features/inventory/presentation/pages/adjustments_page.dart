@@ -1,20 +1,27 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
+import 'package:lucide_icons_flutter/lucide_icons.dart';
+
 import '../../../../core/design/app_colors.dart';
 import '../../../../core/design/app_radius.dart';
-import '../../../../core/design/app_spacing.dart';
 import '../../../../core/design/app_typography.dart';
+import '../../../../core/design/clay.dart';
 import '../../../../core/design/widgets/app_button.dart';
 import '../../../../core/design/widgets/app_card.dart';
-import '../../../../core/design/widgets/app_inline_banner.dart';
+import '../../../../core/design/widgets/app_detail_scaffold.dart';
+import '../../../../core/design/widgets/app_list_skeleton.dart';
+import '../../../../core/design/widgets/app_pill.dart';
+import '../../../../core/design/widgets/app_states.dart';
 import '../../../../core/widgets/permission_gate.dart';
 import '../../../auth/presentation/controllers/branch_controller.dart';
-import '../../domain/entities/stock_adjustment.dart';
 import '../../domain/entities/product.dart';
-import '../../domain/entities/adjustment_reason.dart';
+import '../../domain/entities/stock_adjustment.dart';
+import '../../domain/entities/warehouse.dart';
 import '../controllers/adjustments_controller.dart';
 import '../controllers/products_controller.dart';
+import '../controllers/warehouses_controller.dart';
+import '../widgets/inventory_ui.dart';
 
 class AdjustmentsPage extends ConsumerStatefulWidget {
   const AdjustmentsPage({super.key});
@@ -28,57 +35,37 @@ class _AdjustmentsPageState extends ConsumerState<AdjustmentsPage> {
 
   @override
   Widget build(BuildContext context) {
-    final branch = ref.watch(currentBranchProvider);
+    // Keep the branch watch so the list re-scopes when the active branch changes.
+    ref.watch(currentBranchProvider);
     final state = ref.watch(adjustmentsProvider);
 
-    return Scaffold(
-      backgroundColor: AppColors.background,
-      appBar: AppBar(
-        backgroundColor: AppColors.background,
-        surfaceTintColor: AppColors.background,
-        leading: IconButton(
-          icon: const Icon(Icons.arrow_back_ios, color: AppColors.accent, size: 20),
-          onPressed: () => Navigator.of(context).pop(),
-        ),
-        title: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Text('Adjustments', style: AppTypography.headline),
-            if (branch != null)
-              Text(branch.name, style: AppTypography.footnote.copyWith(color: AppColors.textMuted)),
-          ],
-        ),
-        actions: [
-          PermissionGate(
-            module: 'inventory',
-            action: 'update',
-            child: IconButton(
-              icon: const Icon(Icons.add, color: AppColors.accent),
-              onPressed: () => context.push('/inventory/adjustments/create'),
-            ),
+    return AppDetailScaffold(
+      eyebrow: 'Inventory',
+      title: 'Adjustments',
+      actions: [
+        PermissionGate(
+          module: 'inventory',
+          action: 'update',
+          child: AppButton(
+            label: 'New adjustment',
+            icon: LucideIcons.plus,
+            size: AppButtonSize.sm,
+            onPressed: () => context.push('/inventory/adjustments/create'),
           ),
-        ],
-      ),
-      body: Column(
+        ),
+      ],
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Padding(
-            padding: const EdgeInsets.symmetric(horizontal: AppSpacing.screenPadding),
-            child: Column(
-              children: [
-                const SizedBox(height: AppSpacing.md),
-                Row(
-                  children: [
-                    _PendingToggle(
-                      value: _pendingOnly,
-                      onChanged: (v) => setState(() => _pendingOnly = v),
-                    ),
-                  ],
-                ),
-              ],
+          Align(
+            alignment: Alignment.centerLeft,
+            child: _PendingToggle(
+              value: _pendingOnly,
+              onChanged: (v) => setState(() => _pendingOnly = v),
             ),
           ),
-          const SizedBox(height: AppSpacing.sm),
-          Expanded(child: _buildBody(state)),
+          const SizedBox(height: 14),
+          _buildBody(state),
         ],
       ),
     );
@@ -86,67 +73,50 @@ class _AdjustmentsPageState extends ConsumerState<AdjustmentsPage> {
 
   Widget _buildBody(AsyncValue<List<StockAdjustment>> state) {
     return state.when(
-      loading: () => const Center(child: CircularProgressIndicator()),
-      error: (e, _) => Center(
-        child: Padding(
-          padding: const EdgeInsets.symmetric(horizontal: AppSpacing.screenPadding),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              AppInlineBanner(message: 'Could not load adjustments.', type: BannerType.error),
-              const SizedBox(height: AppSpacing.md),
-              AppButton(
-                label: 'Retry',
-                onPressed: () => ref.invalidate(adjustmentsProvider),
-              ),
-            ],
-          ),
-        ),
+      loading: () => const AppListSkeleton(),
+      error: (e, _) => AppErrorState(
+        title: "We couldn't load adjustments",
+        body: 'Please try again in a moment.',
+        onRetry: () => ref.invalidate(adjustmentsProvider),
       ),
       data: (adjustments) {
-        var filtered = _pendingOnly
-            ? adjustments.where((a) => !a.posted && a.requiresApproval).toList()
+        final filtered = _pendingOnly
+            ? adjustments
+                .where((a) => a.requiresApproval && !a.posted)
+                .toList()
             : adjustments;
 
         if (filtered.isEmpty) {
-          return Center(
-            child: Padding(
-              padding: const EdgeInsets.symmetric(horizontal: AppSpacing.screenPadding),
-              child: Column(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  Icon(
-                    _pendingOnly ? Icons.checklist : Icons.tune,
-                    size: 48,
-                    color: AppColors.textHint,
+          return AppEmptyState(
+            icon: LucideIcons.slidersHorizontal,
+            title: _pendingOnly
+                ? 'No pending adjustments'
+                : 'No adjustments yet',
+            body: _pendingOnly
+                ? 'All adjustments have been processed.'
+                : 'Create a stock adjustment to get started.',
+            action: _pendingOnly
+                ? null
+                : PermissionGate(
+                    module: 'inventory',
+                    action: 'update',
+                    child: AppButton(
+                      label: 'New adjustment',
+                      icon: LucideIcons.plus,
+                      onPressed: () =>
+                          context.push('/inventory/adjustments/create'),
+                    ),
                   ),
-                  const SizedBox(height: AppSpacing.md),
-                  Text(
-                    _pendingOnly ? 'No pending adjustments' : 'No adjustments yet',
-                    style: AppTypography.subhead.copyWith(color: AppColors.textMuted),
-                  ),
-                  const SizedBox(height: AppSpacing.xs),
-                  Text(
-                    _pendingOnly ? 'All adjustments have been processed.' : 'Create a stock adjustment to get started.',
-                    textAlign: TextAlign.center,
-                    style: AppTypography.footnote.copyWith(color: AppColors.textHint),
-                  ),
-                ],
-              ),
-            ),
           );
         }
 
-        return ListView.builder(
-          padding: const EdgeInsets.symmetric(
-            horizontal: AppSpacing.screenPadding,
-            vertical: AppSpacing.md,
-          ),
-          itemCount: filtered.length,
-          itemBuilder: (_, i) => Padding(
-            padding: EdgeInsets.only(bottom: i < filtered.length - 1 ? AppSpacing.md : 0),
-            child: _AdjustmentCard(adjustment: filtered[i]),
-          ),
+        return Column(
+          children: [
+            for (final a in filtered) ...[
+              _AdjustmentCard(adjustment: a),
+              if (a != filtered.last) const SizedBox(height: 10),
+            ],
+          ],
         );
       },
     );
@@ -160,30 +130,38 @@ class _PendingToggle extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return InkWell(
-      onTap: () => onChanged(!value),
-      borderRadius: BorderRadius.circular(AppRadius.chip),
-      child: Container(
-        height: 40,
-        padding: const EdgeInsets.symmetric(horizontal: AppSpacing.md),
-        decoration: BoxDecoration(
-          color: value ? AppColors.warning.withValues(alpha: 0.12) : AppColors.fieldFill,
-          borderRadius: BorderRadius.circular(AppRadius.chip),
-          border: value ? Border.all(color: AppColors.warning, width: 1) : null,
-        ),
-        child: Row(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Icon(Icons.hourglass_empty, size: 16, color: value ? AppColors.warning : AppColors.textMuted),
-            const SizedBox(width: AppSpacing.xs),
-            Text(
-              'Pending',
-              style: AppTypography.footnote.copyWith(
-                color: value ? AppColors.warning : AppColors.textMuted,
-                fontWeight: value ? FontWeight.w600 : FontWeight.w400,
+    final lum = context.lum;
+    return Semantics(
+      button: true,
+      toggled: value,
+      label: 'Pending only',
+      child: GestureDetector(
+        onTap: () => onChanged(!value),
+        child: ClayContainer(
+          variant: value ? ClayVariant.pressed : ClayVariant.soft,
+          color: value ? lum.warningSoft : lum.surface,
+          borderRadius: AppRadius.pill,
+          isDark: lum.isDark,
+          height: 44,
+          padding: const EdgeInsets.symmetric(horizontal: 16),
+          child: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Icon(
+                LucideIcons.hourglass,
+                size: 15,
+                color: value ? lum.warningText : lum.textSecondary,
               ),
-            ),
-          ],
+              const SizedBox(width: 8),
+              Text(
+                'Pending only',
+                style: AppTypography.subhead.copyWith(
+                  color: value ? lum.warningText : lum.textSecondary,
+                  fontWeight: value ? FontWeight.w600 : FontWeight.w500,
+                ),
+              ),
+            ],
+          ),
         ),
       ),
     );
@@ -196,153 +174,120 @@ class _AdjustmentCard extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
+    final lum = context.lum;
     final products = ref.watch(productsProvider).value ?? <Product>[];
-    final product = products.where((p) => p.id == adjustment.productId).firstOrNull;
+    final warehouses = ref.watch(warehousesProvider).value ?? <Warehouse>[];
 
-    final isPositive = adjustment.adjQty > 0;
+    final product =
+        products.where((p) => p.id == adjustment.productId).firstOrNull;
+    final warehouse = adjustment.warehouseId == null
+        ? null
+        : warehouses.where((w) => w.id == adjustment.warehouseId).firstOrNull;
+
+    final isNegative = adjustment.adjQty < 0;
+    final signTint = isNegative ? lum.dangerSoft : lum.successSoft;
+    final signIcon = isNegative ? lum.dangerText : lum.successText;
+    final qtyColor = isNegative ? lum.dangerText : lum.successText;
+
+    final subtitle = [
+      adjustmentReasonLabel(adjustment.reasonCode),
+      if (warehouse != null) warehouse.name,
+      ymd(adjustment.createdAt),
+    ].join(' · ');
+
+    final signed = isNegative
+        ? '-${qtyLabel(adjustment.adjQty.abs())}'
+        : '+${qtyLabel(adjustment.adjQty)}';
+
+    final (pillTone, pillLabel) =
+        adjustmentStatusPill(posted: adjustment.posted);
+
+    final showApprove = adjustment.requiresApproval &&
+        !adjustment.posted &&
+        adjustment.approvedBy == null;
 
     return AppCard(
-      child: Padding(
-        padding: const EdgeInsets.all(AppSpacing.xl),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Row(
-              children: [
-                Container(
-                  width: 40, height: 40,
-                  decoration: BoxDecoration(
-                    color: AppColors.accent.withValues(alpha: 0.1),
-                    borderRadius: BorderRadius.circular(10),
+      padding: const EdgeInsets.all(14),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              ClayContainer(
+                variant: ClayVariant.soft,
+                color: signTint,
+                borderRadius: AppRadius.sm,
+                isDark: lum.isDark,
+                width: 42,
+                height: 42,
+                child: Center(
+                  child: Icon(
+                    LucideIcons.slidersHorizontal,
+                    size: 19,
+                    color: signIcon,
                   ),
-                  child: Center(
-                    child: Text(
-                      (product?.name ?? '?').isNotEmpty
-                          ? (product?.name ?? '?')[0].toUpperCase()
-                          : '?',
-                      style: AppTypography.headline.copyWith(color: AppColors.accent),
+                ),
+              ),
+              const SizedBox(width: 14),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      product?.name ?? 'Product',
+                      style: AppTypography.headline
+                          .copyWith(color: lum.textPrimary),
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                    const SizedBox(height: 2),
+                    Text(
+                      subtitle,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: AppTypography.footnote.copyWith(color: lum.g500),
+                    ),
+                  ],
+                ),
+              ),
+              const SizedBox(width: 10),
+              Column(
+                crossAxisAlignment: CrossAxisAlignment.end,
+                children: [
+                  Text(
+                    signed,
+                    style: AppTypography.headline.copyWith(
+                      color: qtyColor,
+                      fontFamily: AppTypography.mono,
+                      fontWeight: FontWeight.w600,
                     ),
                   ),
+                  const SizedBox(height: 4),
+                  AppPill(label: pillLabel, tone: pillTone),
+                ],
+              ),
+            ],
+          ),
+          if (showApprove) ...[
+            const SizedBox(height: 12),
+            Align(
+              alignment: Alignment.centerRight,
+              child: PermissionGate(
+                module: 'inventory',
+                action: 'approve',
+                child: AppButton(
+                  label: 'Approve',
+                  variant: AppButtonVariant.tinted,
+                  size: AppButtonSize.sm,
+                  onPressed: () => ref
+                      .read(adjustmentsProvider.notifier)
+                      .approve(adjustment.id),
                 ),
-                const SizedBox(width: AppSpacing.md),
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(
-                        product?.name ?? 'Product',
-                        style: AppTypography.headline,
-                        overflow: TextOverflow.ellipsis,
-                      ),
-                      const SizedBox(height: 2),
-                      Row(
-                        children: [
-                          Text(
-                            'SKU: ${product?.sku ?? '...'}',
-                            style: AppTypography.footnote.copyWith(color: AppColors.textMuted),
-                          ),
-                          const SizedBox(width: AppSpacing.sm),
-                          _ReasonChip(reason: adjustment.reasonCode),
-                        ],
-                      ),
-                    ],
-                  ),
-                ),
-                _StatusBadge(adjustment: adjustment),
-              ],
-            ),
-            const Divider(color: AppColors.separator, height: AppSpacing.xl),
-            Row(
-              children: [
-                Text(
-                  isPositive ? '+${adjustment.adjQty}' : '${adjustment.adjQty}',
-                  style: AppTypography.headline.copyWith(
-                    color: isPositive ? AppColors.success : AppColors.destructive,
-                  ),
-                ),
-                const SizedBox(width: AppSpacing.xs),
-                Text(
-                  '× ${adjustment.costPerUnit.toStringAsFixed(2)}',
-                  style: AppTypography.footnote.copyWith(color: AppColors.textMuted),
-                ),
-                const Spacer(),
-                if (adjustment.requiresApproval && !adjustment.posted)
-                  PermissionGate(
-                    module: 'inventory',
-                    action: 'approve',
-                    child: AppButton(
-                      label: 'Approve',
-                      variant: AppButtonVariant.tinted,
-                      onPressed: () {
-                        ref.read(adjustmentsProvider.notifier).approve(adjustment.id);
-                      },
-                    ),
-                  ),
-              ],
+              ),
             ),
           ],
-        ),
+        ],
       ),
     );
-  }
-}
-
-class _ReasonChip extends StatelessWidget {
-  const _ReasonChip({required this.reason});
-  final AdjustmentReason reason;
-
-  @override
-  Widget build(BuildContext context) {
-    final label = reason.dbValue.replaceAll('_', ' ');
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: AppSpacing.sm, vertical: 2),
-      decoration: BoxDecoration(
-        color: AppColors.textMuted.withValues(alpha: 0.12),
-        borderRadius: BorderRadius.circular(AppRadius.chip),
-      ),
-      child: Text(
-        label,
-        style: AppTypography.caption.copyWith(
-          color: AppColors.textMuted,
-          fontWeight: FontWeight.w600,
-        ),
-      ),
-    );
-  }
-}
-
-class _StatusBadge extends StatelessWidget {
-  const _StatusBadge({required this.adjustment});
-  final StockAdjustment adjustment;
-
-  @override
-  Widget build(BuildContext context) {
-    if (adjustment.posted) {
-      return Container(
-        padding: const EdgeInsets.symmetric(horizontal: AppSpacing.sm, vertical: 4),
-        decoration: BoxDecoration(
-          color: AppColors.success.withValues(alpha: 0.12),
-          borderRadius: BorderRadius.circular(AppRadius.chip),
-        ),
-        child: Text(
-          'Posted',
-          style: AppTypography.caption.copyWith(color: AppColors.success, fontWeight: FontWeight.w600),
-        ),
-      );
-    }
-    if (adjustment.requiresApproval) {
-      return Container(
-        padding: const EdgeInsets.symmetric(horizontal: AppSpacing.sm, vertical: 4),
-        decoration: BoxDecoration(
-          color: AppColors.warning.withValues(alpha: 0.12),
-          borderRadius: BorderRadius.circular(AppRadius.chip),
-        ),
-        child: Text(
-          'Pending',
-          style: AppTypography.caption.copyWith(color: AppColors.warning, fontWeight: FontWeight.w600),
-        ),
-      );
-    }
-    return const SizedBox.shrink();
   }
 }
