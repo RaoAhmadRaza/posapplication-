@@ -1,164 +1,159 @@
 import 'package:flutter/material.dart';
-import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
-import '../../../../core/design/app_colors.dart';
-import '../../../../core/design/app_spacing.dart';
-import '../../../../core/design/app_typography.dart';
-import '../../../notifications/presentation/widgets/notification_bell.dart';
+import 'package:lucide_icons_flutter/lucide_icons.dart';
 
-class InventoryHubPage extends ConsumerWidget {
+import '../../../../core/design/app_colors.dart';
+import '../../../../core/design/app_radius.dart';
+import '../../../../core/design/app_typography.dart';
+import '../../../../core/design/clay.dart';
+import '../../../../core/design/widgets/app_card.dart';
+import '../../../../core/widgets/module_scaffold.dart';
+
+/// Inventory landing menu — a launcher into every sub-area. Branch root, so no
+/// back button (the nav rail / bottom bar is the way out). Two groups mirror the
+/// design: Catalog and Stock. Sublabels are static descriptors — the hub loads
+/// no data, so it never shows a fabricated count.
+class InventoryHubPage extends StatelessWidget {
   const InventoryHubPage({super.key});
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
-    return Scaffold(
-      backgroundColor: AppColors.background,
-      appBar: AppBar(
-        backgroundColor: AppColors.background,
-        surfaceTintColor: AppColors.background,
-        title: Text('Inventory', style: AppTypography.largeTitle),
-        actions: const [NotificationBell()],
-      ),
-      body: SafeArea(
-        child: SingleChildScrollView(
-          padding: const EdgeInsets.symmetric(horizontal: AppSpacing.screenPadding),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              const SizedBox(height: AppSpacing.xl),
-              _HubRow(
-                icon: Icons.dashboard_rounded,
-                title: 'Products',
-                subtitle: 'Browse, search, and manage products',
-                onTap: () => context.push('/inventory/products'),
-              ),
-              const SizedBox(height: AppSpacing.md),
-              _HubRow(
-                icon: Icons.qr_code_2,
-                title: 'Barcode Templates',
-                subtitle: 'Label layouts for printing',
-                onTap: () => context.push('/inventory/barcode-templates'),
-              ),
-              const SizedBox(height: AppSpacing.md),
-              _HubRow(
-                icon: Icons.category,
-                title: 'Categories',
-                subtitle: 'Organize products by category',
-                onTap: () => context.push('/inventory/categories'),
-              ),
-              const SizedBox(height: AppSpacing.md),
-              _HubRow(
-                icon: Icons.branding_watermark,
-                title: 'Brands',
-                subtitle: 'Manage product brands',
-                onTap: () => context.push('/inventory/brands'),
-              ),
-              const SizedBox(height: AppSpacing.xxl),
-              _SectionLabel('Stock'),
-              const SizedBox(height: AppSpacing.sm),
-              _HubRow(
-                icon: Icons.warehouse,
-                title: 'Warehouses',
-                subtitle: 'Manage stock locations per branch',
-                onTap: () => context.push('/inventory/warehouses'),
-              ),
-              const SizedBox(height: AppSpacing.md),
-              _HubRow(
-                icon: Icons.inventory_2,
-                title: 'Stock Levels',
-                subtitle: 'View balances by product and location',
-                onTap: () => context.push('/inventory/stock'),
-              ),
-              const SizedBox(height: AppSpacing.md),
-              _HubRow(
-                icon: Icons.tune,
-                title: 'Adjustments',
-                subtitle: 'Damage, theft, write-offs, and recounts',
-                onTap: () => context.push('/inventory/adjustments'),
-              ),
-              const SizedBox(height: AppSpacing.md),
-              _HubRow(
-                icon: Icons.swap_horiz,
-                title: 'Transfers',
-                subtitle: 'Move stock between branches',
-                onTap: () => context.push('/inventory/transfers'),
-              ),
-              const SizedBox(height: AppSpacing.md),
-              _HubRow(
-                icon: Icons.checklist,
-                title: 'Stock Counts',
-                subtitle: 'Physical inventory audits',
-                onTap: () => context.push('/inventory/counts'),
-              ),
-              const SizedBox(height: AppSpacing.md),
-              _HubRow(
-                icon: Icons.qr_code,
-                title: 'IMEI Lookup',
-                subtitle: 'Search and track serialized items',
-                onTap: () => context.push('/inventory/imei'),
-              ),
-              const SizedBox(height: AppSpacing.xxl),
-              // Suppliers, Customers, Receivables, Accounting, Repair, HR and
-              // Approvals moved out of this hub once each became a nav-shell
-              // branch (or sub-rail destination) — they are reached from the
-              // rail / bottom bar now, so a duplicate row here would be dead
-              // weight. Only true Inventory sub-pages remain.
-            ],
-          ),
-        ),
-      ),
-    );
-  }
-}
-
-class _SectionLabel extends StatelessWidget {
-  const _SectionLabel(this.label);
-  final String label;
-
-  @override
   Widget build(BuildContext context) {
-    return Padding(
-      padding: const EdgeInsets.only(left: AppSpacing.xs, bottom: AppSpacing.xs),
-      child: Text(label.toUpperCase(), style: AppTypography.footnote.copyWith(color: AppColors.textMuted, fontWeight: FontWeight.w600)),
+    final lum = context.lum;
+
+    const groups = <_HubGroup>[
+      _HubGroup('Catalog', [
+        _HubTileData(LucideIcons.boxes, 'Products',
+            'Browse, search and manage products', '/inventory/products'),
+        _HubTileData(LucideIcons.scanLine, 'Barcode templates',
+            'Label layouts for printing', '/inventory/barcode-templates'),
+        _HubTileData(LucideIcons.folderTree, 'Categories',
+            'Organize products by category', '/inventory/categories'),
+        _HubTileData(LucideIcons.tag, 'Brands', 'Manage product brands',
+            '/inventory/brands'),
+      ]),
+      _HubGroup('Stock', [
+        _HubTileData(LucideIcons.warehouse, 'Warehouses',
+            'Stock locations per branch', '/inventory/warehouses'),
+        _HubTileData(LucideIcons.layers, 'Stock levels',
+            'On-hand by product and location', '/inventory/stock'),
+        _HubTileData(LucideIcons.slidersHorizontal, 'Adjustments',
+            'Damage, theft, write-offs, recounts', '/inventory/adjustments'),
+        _HubTileData(LucideIcons.arrowLeftRight, 'Transfers',
+            'Move stock between branches', '/inventory/transfers'),
+        _HubTileData(LucideIcons.clipboardCheck, 'Stock counts',
+            'Physical inventory audits', '/inventory/counts'),
+        _HubTileData(LucideIcons.searchCode, 'IMEI lookup',
+            'Search and track serialized items', '/inventory/imei'),
+      ]),
+    ];
+
+    return ModuleScaffold(
+      title: 'Inventory',
+      maxContentWidth: 940,
+      padding: const EdgeInsets.fromLTRB(20, 22, 20, 40),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            'One light. Every operation.',
+            style: AppTypography.subhead.copyWith(color: lum.g500),
+          ),
+          const SizedBox(height: 20),
+          for (final g in groups) ...[
+            Padding(
+              padding: const EdgeInsets.only(left: 2, bottom: 12),
+              child: Text(
+                g.label.toUpperCase(),
+                style: AppTypography.caption.copyWith(
+                  color: lum.textTertiary,
+                  fontWeight: FontWeight.w600,
+                  letterSpacing: 0.6,
+                ),
+              ),
+            ),
+            LayoutBuilder(
+              builder: (context, c) {
+                final w = c.maxWidth;
+                final cols = w >= 700 ? 2 : 1;
+                const gap = 12.0;
+                final tileW = (w - (cols - 1) * gap) / cols;
+                return Wrap(
+                  spacing: gap,
+                  runSpacing: gap,
+                  children: [
+                    for (final t in g.tiles)
+                      SizedBox(width: tileW, child: _HubTile(data: t)),
+                  ],
+                );
+              },
+            ),
+            const SizedBox(height: 26),
+          ],
+        ],
+      ),
     );
   }
 }
 
-class _HubRow extends StatelessWidget {
-  const _HubRow({
-    required this.icon,
-    required this.title,
-    required this.subtitle,
-    this.onTap,
-  });
+class _HubGroup {
+  const _HubGroup(this.label, this.tiles);
+  final String label;
+  final List<_HubTileData> tiles;
+}
 
+class _HubTileData {
+  const _HubTileData(this.icon, this.title, this.description, this.route);
   final IconData icon;
   final String title;
-  final String subtitle;
-  final VoidCallback? onTap;
+  final String description;
+  final String route;
+}
+
+class _HubTile extends StatelessWidget {
+  const _HubTile({required this.data});
+  final _HubTileData data;
 
   @override
   Widget build(BuildContext context) {
-    return Container(
-      decoration: BoxDecoration(
-        color: AppColors.background,
-        borderRadius: BorderRadius.circular(14),
-        border: Border.all(color: AppColors.separator, width: 0.5),
-      ),
-      child: ListTile(
-        contentPadding: const EdgeInsets.symmetric(horizontal: AppSpacing.base, vertical: AppSpacing.sm),
-        leading: Container(
-          width: 40, height: 40,
-          decoration: BoxDecoration(
-            color: AppColors.accent.withValues(alpha: 0.1),
-            borderRadius: BorderRadius.circular(10),
+    final lum = context.lum;
+    return AppCard(
+      onTap: () => context.push(data.route),
+      padding: const EdgeInsets.all(16),
+      child: Row(
+        children: [
+          ClayContainer(
+            variant: ClayVariant.soft,
+            color: lum.accentSoft,
+            borderRadius: AppRadius.sm,
+            isDark: lum.isDark,
+            width: 44,
+            height: 44,
+            child: Center(
+              child: Icon(data.icon, size: 21, color: lum.accent),
+            ),
           ),
-          child: Icon(icon, color: AppColors.accent, size: 20),
-        ),
-        title: Text(title, style: AppTypography.headline.copyWith(color: AppColors.textPrimary)),
-        subtitle: Text(subtitle, style: AppTypography.footnote.copyWith(color: AppColors.textHint)),
-        trailing: const Icon(Icons.chevron_right, color: AppColors.separator),
-        onTap: onTap,
+          const SizedBox(width: 14),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  data.title,
+                  style: AppTypography.headline.copyWith(color: lum.textPrimary),
+                ),
+                const SizedBox(height: 2),
+                Text(
+                  data.description,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: AppTypography.footnote.copyWith(color: lum.g500),
+                ),
+              ],
+            ),
+          ),
+          const SizedBox(width: 8),
+          Icon(LucideIcons.chevronRight, size: 18, color: lum.g400),
+        ],
       ),
     );
   }
