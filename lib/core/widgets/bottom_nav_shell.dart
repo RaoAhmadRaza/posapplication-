@@ -11,6 +11,7 @@ import '../design/app_radius.dart';
 import '../design/app_typography.dart';
 import '../design/clay.dart';
 import '../design/widgets/lumina_brand.dart';
+import 'tab_reload.dart';
 import '../../features/auth/presentation/controllers/permission_controller.dart';
 import '../../features/auth/presentation/controllers/profile_controller.dart';
 
@@ -184,10 +185,13 @@ class BottomNavShell extends ConsumerWidget {
     final items = [for (final b in branchMap) _allItems[b]];
     final selected = branchMap.indexOf(navigationShell.currentIndex);
 
-    void onSelect(int i) => navigationShell.goBranch(
-          branchMap[i],
-          initialLocation: i == selected,
-        );
+    void onSelect(int i) {
+      final branch = branchMap[i];
+      // Re-fetch the destination tab's data on (re)entry — tab roots are kept
+      // alive in the IndexedStack, so this replaces manual pull-to-refresh.
+      reloadBranchOnEnter(ref, branch);
+      navigationShell.goBranch(branch, initialLocation: i == selected);
+    }
 
     // Inside sales or repair the nav becomes that module's own destinations
     // (the design's module rail), with the other modules kept reachable below
