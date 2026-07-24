@@ -1,18 +1,26 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:lucide_icons_flutter/lucide_icons.dart';
 import 'package:printing/printing.dart';
 
 import '../../../../core/design/app_colors.dart';
 import '../../../../core/design/app_radius.dart';
 import '../../../../core/design/app_spacing.dart';
 import '../../../../core/design/app_typography.dart';
+import '../../../../core/design/clay.dart';
 import '../../../../core/design/widgets/app_button.dart';
+import '../../../../core/design/widgets/app_card.dart';
+import '../../../../core/design/widgets/app_detail_scaffold.dart';
+import '../../../../core/design/widgets/app_dropdown.dart';
 import '../../../../core/design/widgets/app_inline_banner.dart';
+import '../../../../core/design/widgets/app_qty_stepper.dart';
+import '../../../../core/design/widgets/app_toast.dart';
 import '../../domain/entities/barcode_template.dart';
 import '../../domain/entities/product.dart';
 import '../../data/services/label_pdf_service.dart';
 import '../controllers/barcode_templates_controller.dart';
 import '../controllers/products_controller.dart';
+import '../widgets/inventory_ui.dart';
 
 class LabelPrintPage extends ConsumerStatefulWidget {
   const LabelPrintPage({super.key, required this.productIds});
@@ -27,7 +35,6 @@ class _LabelPrintPageState extends ConsumerState<LabelPrintPage> {
   final Map<String, int> _quantities = {};
   String? _templateId;
   bool _generating = false;
-  String? _error;
 
   List<Product> _products = [];
 
@@ -59,33 +66,42 @@ class _LabelPrintPageState extends ConsumerState<LabelPrintPage> {
     return result;
   }
 
+  /// Mirrors the template resolution in [_print]: honour an explicit pick, else
+  /// the tenant default, else the first template.
+  BarcodeTemplate? _selectedTemplate(List<BarcodeTemplate> templates) {
+    if (templates.isEmpty) return null;
+    if (_templateId != null) {
+      final match = templates.where((t) => t.id == _templateId).firstOrNull;
+      if (match != null) return match;
+    }
+    return templates.where((t) => t.isDefault).firstOrNull ?? templates.first;
+  }
+
   Future<void> _print() async {
     final templates =
         ref.read(barcodeTemplatesProvider).value ?? <BarcodeTemplate>[];
     if (templates.isEmpty) {
-      setState(() => _error = 'No barcode templates found.');
+      showAppToast(context, 'No barcode templates found.',
+          type: BannerType.error);
       return;
     }
 
     final template = _templateId != null
         ? templates.where((t) => t.id == _templateId).firstOrNull
-        : templates.where((t) => t.isDefault).firstOrNull ??
-            templates.first;
+        : templates.where((t) => t.isDefault).firstOrNull ?? templates.first;
     if (template == null) {
-      setState(() => _error = 'No barcode templates found.');
+      showAppToast(context, 'No barcode templates found.',
+          type: BannerType.error);
       return;
     }
 
     final expanded = _expandedProducts();
     if (expanded.isEmpty) {
-      setState(() => _error = 'No products selected.');
+      showAppToast(context, 'No products selected.', type: BannerType.error);
       return;
     }
 
-    setState(() {
-      _generating = true;
-      _error = null;
-    });
+    setState(() => _generating = true);
 
     try {
       final pdf = await LabelPdfService().generate(expanded, template);
@@ -95,7 +111,8 @@ class _LabelPrintPageState extends ConsumerState<LabelPrintPage> {
       );
     } catch (e) {
       if (!mounted) return;
-      setState(() => _error = 'Failed to generate labels.');
+      showAppToast(context, 'Failed to generate labels.',
+          type: BannerType.error);
     } finally {
       if (mounted) setState(() => _generating = false);
     }
@@ -103,156 +120,93 @@ class _LabelPrintPageState extends ConsumerState<LabelPrintPage> {
 
   @override
   Widget build(BuildContext context) {
+    final lum = context.lum;
     final templatesAsync = ref.watch(barcodeTemplatesProvider);
     final templates = templatesAsync.value ?? <BarcodeTemplate>[];
+    final selected = _selectedTemplate(templates);
+    final labelCount =
+        _products.fold<int>(0, (sum, p) => sum + (_quantities[p.id] ?? 1));
 
-    return Scaffold(
-      backgroundColor: AppColors.background,
-      appBar: AppBar(
-        backgroundColor: AppColors.background,
-        surfaceTintColor: AppColors.background,
-        leading: IconButton(
-          icon: const Icon(Icons.arrow_back_ios, color: AppColors.accent, size: 20),
-          onPressed: () => Navigator.of(context).pop(),
-        ),
-        title: Text('Print Labels', style: AppTypography.headline),
-      ),
-      body: Column(
+    return AppDetailScaffold(
+      eyebrow: 'Inventory',
+      title: 'Print labels',
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          if (_error != null)
+          Text('Template',
+              style: AppTypography.footnote.copyWith(color: lum.g500)),
+          const SizedBox(height: AppSpacing.sm),
+          AppDropdown<String>(
+            value: selected?.id,
+            placeholder: 'Select template',
+            options: [
+              for (final t in templates)
+                AppDropdownOption(
+                  value: t.id,
+                  label:
+                      '${t.name}  ·  ${t.format}  ·  ${t.widthMm}×${t.heightMm}mm',
+                ),
+            ],
+            onSelected: (id) => setState(() => _templateId = id),
+          ),
+          const SizedBox(height: AppSpacing.lg),
+          if (_products.isEmpty)
             Padding(
-              padding: const EdgeInsets.symmetric(
-                horizontal: AppSpacing.screenPadding, vertical: AppSpacing.md),
-              child: AppInlineBanner(message: _error!, type: BannerType.error),
+              padding: const EdgeInsets.symmetric(vertical: AppSpacing.xl),
+              child: Center(
+                child: Text(
+                  'No products selected.',
+                  style: AppTypography.subhead.copyWith(color: lum.g500),
+                ),
+              ),
+            )
+          else
+            for (var i = 0; i < _products.length; i++)
+              Padding(
+                padding: EdgeInsets.only(
+                  bottom: i < _products.length - 1 ? AppSpacing.md : 0,
+                ),
+                child: _ProductQtyRow(
+                  product: _products[i],
+                  quantity: _quantities[_products[i].id] ?? 1,
+                  onChanged: (v) =>
+                      setState(() => _quantities[_products[i].id] = v),
+                ),
+              ),
+          const SizedBox(height: AppSpacing.lg),
+          ClayContainer(
+            variant: ClayVariant.lumen,
+            color: lum.accentSoft,
+            borderRadius: AppRadius.md,
+            isDark: lum.isDark,
+            padding: const EdgeInsets.symmetric(
+              horizontal: AppSpacing.base,
+              vertical: 12,
             ),
-          Padding(
-            padding: const EdgeInsets.symmetric(horizontal: AppSpacing.screenPadding),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
+            child: Row(
               children: [
-                const SizedBox(height: AppSpacing.md),
-                Text('Template', style: AppTypography.fieldLabel),
-                const SizedBox(height: AppSpacing.xs),
-                _buildTemplatePicker(templates),
-                const SizedBox(height: AppSpacing.md),
-                Text(
-                  '${_products.length} products · ${_expandedProducts().length} labels',
-                  style: AppTypography.footnote.copyWith(color: AppColors.textMuted),
+                Icon(LucideIcons.tag, size: 17, color: lum.accent),
+                const SizedBox(width: AppSpacing.sm),
+                Expanded(
+                  child: Text(
+                    selected != null
+                        ? '$labelCount labels · ${selected.name}'
+                        : '$labelCount labels',
+                    style: AppTypography.footnote.copyWith(color: lum.accent),
+                  ),
                 ),
               ],
             ),
           ),
-          const SizedBox(height: AppSpacing.sm),
-          Expanded(
-            child: _products.isEmpty
-                ? Center(
-                    child: Text(
-                      'No products selected.',
-                      style: AppTypography.subhead.copyWith(color: AppColors.textMuted),
-                    ),
-                  )
-                : ListView.builder(
-                    padding: const EdgeInsets.symmetric(
-                      horizontal: AppSpacing.screenPadding,
-                    ),
-                    itemCount: _products.length,
-                    itemBuilder: (_, i) => Padding(
-                      padding: EdgeInsets.only(
-                        bottom: i < _products.length - 1 ? AppSpacing.md : 0,
-                      ),
-                      child: _ProductQtyRow(
-                        product: _products[i],
-                        quantity: _quantities[_products[i].id] ?? 1,
-                        onChanged: (v) {
-                          setState(() => _quantities[_products[i].id] = v);
-                        },
-                      ),
-                    ),
-                  ),
-          ),
-          SafeArea(
-            child: Padding(
-              padding: const EdgeInsets.all(AppSpacing.screenPadding),
-              child: AppButton(
-                label: 'Preview / Print',
-                loading: _generating,
-                fullWidth: true,
-                onPressed: _generating || _products.isEmpty ? null : _print,
-                icon: Icons.print,
-              ),
-            ),
+          const SizedBox(height: AppSpacing.lg),
+          AppButton(
+            label: 'Preview & print',
+            loading: _generating,
+            fullWidth: true,
+            onPressed: _generating || _products.isEmpty ? null : _print,
+            icon: LucideIcons.printer,
           ),
         ],
-      ),
-    );
-  }
-
-  Widget _buildTemplatePicker(List<BarcodeTemplate> templates) {
-    final defaultTemplate =
-        templates.where((t) => t.isDefault).firstOrNull ?? templates.firstOrNull;
-
-    final selected = _templateId != null
-        ? templates.where((t) => t.id == _templateId).firstOrNull
-        : defaultTemplate;
-
-    return InkWell(
-      onTap: () => _showTemplatePicker(templates),
-      borderRadius: BorderRadius.circular(AppRadius.field),
-      child: Container(
-        height: 52,
-        padding: const EdgeInsets.symmetric(horizontal: AppSpacing.base),
-        decoration: BoxDecoration(
-          color: AppColors.fieldFill,
-          borderRadius: BorderRadius.circular(AppRadius.field),
-        ),
-        child: Row(
-          children: [
-            const Icon(Icons.qr_code_2, color: AppColors.accent, size: 20),
-            const SizedBox(width: AppSpacing.sm),
-            Expanded(
-              child: Text(
-                selected != null
-                    ? '${selected.name}  ·  ${selected.format}  ·  ${selected.widthMm}×${selected.heightMm}mm'
-                    : 'Select template',
-                style: selected != null
-                    ? AppTypography.fieldText
-                    : AppTypography.fieldHint,
-              ),
-            ),
-            const Icon(Icons.keyboard_arrow_down,
-                color: AppColors.textMuted, size: 20),
-          ],
-        ),
-      ),
-    );
-  }
-
-  void _showTemplatePicker(List<BarcodeTemplate> templates) {
-    showModalBottomSheet(
-      context: context,
-      builder: (ctx) => SafeArea(
-        child: ListView(
-          shrinkWrap: true,
-          children: templates.map((t) {
-            final selected = _templateId == t.id ||
-                (_templateId == null && t.isDefault);
-            return ListTile(
-              leading: const Icon(Icons.qr_code_2, size: 22),
-              title: Text(t.name),
-              subtitle: Text(
-                '${t.format}  ·  ${t.widthMm}×${t.heightMm}mm',
-                style: AppTypography.caption,
-              ),
-              trailing: selected
-                  ? const Icon(Icons.check, color: AppColors.accent)
-                  : null,
-              onTap: () {
-                setState(() => _templateId = t.id);
-                Navigator.of(ctx).pop();
-              },
-            );
-          }).toList(),
-        ),
       ),
     );
   }
@@ -271,65 +225,49 @@ class _ProductQtyRow extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Container(
-      padding: const EdgeInsets.all(AppSpacing.md),
-      decoration: BoxDecoration(
-        color: AppColors.fieldFill,
-        borderRadius: BorderRadius.circular(AppRadius.field),
-      ),
+    final lum = context.lum;
+    return AppCard(
+      padding: const EdgeInsets.all(14),
       child: Row(
         children: [
+          ClayContainer(
+            variant: ClayVariant.soft,
+            color: lum.accentSoft,
+            borderRadius: AppRadius.sm,
+            isDark: lum.isDark,
+            width: 42,
+            height: 42,
+            child: Center(
+              child: Icon(kInvItemIcon, size: 19, color: lum.accent),
+            ),
+          ),
+          const SizedBox(width: 14),
           Expanded(
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Text(
                   product.name,
-                  style: AppTypography.callout.copyWith(fontWeight: FontWeight.w600),
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: AppTypography.headline.copyWith(color: lum.textPrimary),
                 ),
+                const SizedBox(height: 2),
                 Text(
-                  'SKU: ${product.sku}',
-                  style: AppTypography.caption.copyWith(color: AppColors.textMuted),
+                  product.sku,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: AppTypography.monoValue
+                      .copyWith(fontSize: 12, color: lum.g500),
                 ),
               ],
             ),
           ),
-          Container(
-            width: 36,
-            height: 36,
-            decoration: BoxDecoration(
-              color: AppColors.background,
-              borderRadius: BorderRadius.circular(8),
-              border: Border.all(color: AppColors.separator),
-            ),
-            child: InkWell(
-              borderRadius: BorderRadius.circular(8),
-              onTap: () {
-                if (quantity > 1) onChanged(quantity - 1);
-              },
-              child: const Icon(Icons.remove, size: 18, color: AppColors.textMuted),
-            ),
-          ),
-          Padding(
-            padding: const EdgeInsets.symmetric(horizontal: AppSpacing.md),
-            child: Text(
-              '$quantity',
-              style: AppTypography.headline,
-            ),
-          ),
-          Container(
-            width: 36,
-            height: 36,
-            decoration: BoxDecoration(
-              color: AppColors.background,
-              borderRadius: BorderRadius.circular(8),
-              border: Border.all(color: AppColors.separator),
-            ),
-            child: InkWell(
-              borderRadius: BorderRadius.circular(8),
-              onTap: () => onChanged(quantity + 1),
-              child: const Icon(Icons.add, size: 18, color: AppColors.accent),
-            ),
+          const SizedBox(width: 12),
+          AppQtyStepper(
+            value: quantity,
+            min: 1,
+            onChanged: onChanged,
           ),
         ],
       ),

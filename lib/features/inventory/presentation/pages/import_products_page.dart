@@ -6,13 +6,18 @@ import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart' show PlatformException;
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:lucide_icons_flutter/lucide_icons.dart';
 
 import '../../../../core/design/app_colors.dart';
 import '../../../../core/design/app_radius.dart';
-import '../../../../core/design/app_spacing.dart';
 import '../../../../core/design/app_typography.dart';
+import '../../../../core/design/clay.dart';
 import '../../../../core/design/widgets/app_button.dart';
+import '../../../../core/design/widgets/app_card.dart';
+import '../../../../core/design/widgets/app_detail_scaffold.dart';
+import '../../../../core/design/widgets/app_dropdown.dart';
 import '../../../../core/design/widgets/app_inline_banner.dart';
+import '../../../../core/design/widgets/app_section_card.dart';
 import '../../../../core/widgets/permission_gate.dart';
 import '../controllers/products_controller.dart';
 
@@ -201,92 +206,78 @@ class _ImportProductsPageState extends ConsumerState<ImportProductsPage> {
 
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
-      backgroundColor: AppColors.background,
-      appBar: AppBar(
-        backgroundColor: AppColors.background,
-        surfaceTintColor: AppColors.background,
-        leading: IconButton(
-          icon: const Icon(Icons.arrow_back_ios, color: AppColors.accent, size: 20),
-          onPressed: () => Navigator.of(context).pop(),
-        ),
-        title: Text(
-          _done ? 'Import Result' : 'Import Products',
-          style: AppTypography.headline,
-        ),
-      ),
-      body: SafeArea(
-        child: SingleChildScrollView(
-          padding: const EdgeInsets.symmetric(horizontal: AppSpacing.screenPadding),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.stretch,
-            children: [
-              const SizedBox(height: AppSpacing.lg),
-              if (_error != null) ...[
-                AppInlineBanner(message: _error!, type: BannerType.error),
-                const SizedBox(height: AppSpacing.lg),
-              ],
-              if (_done)
-                _buildResult()
-              else if (_picked)
-                _buildMapping()
-              else
-                _buildPickStep(),
-              const SizedBox(height: AppSpacing.xxl),
-            ],
-          ),
-        ),
+    return AppDetailScaffold(
+      eyebrow: 'Inventory',
+      title: _done ? 'Import result' : 'Import products',
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          if (_error != null) ...[
+            AppInlineBanner(message: _error!, type: BannerType.error),
+            const SizedBox(height: 16),
+          ],
+          if (_done)
+            _buildResult()
+          else if (_picked)
+            _buildMapping()
+          else
+            _buildPickStep(),
+        ],
       ),
     );
   }
 
   Widget _buildPickStep() {
+    final lum = context.lum;
     return Column(
       children: [
-        Container(
-          padding: const EdgeInsets.all(AppSpacing.xxxl),
-          decoration: BoxDecoration(
-            color: AppColors.fieldFill,
-            borderRadius: BorderRadius.circular(AppRadius.card),
-            border: Border.all(
-              color: AppColors.separator,
-              width: 1,
-              strokeAlign: BorderSide.strokeAlignInside,
-            ),
-          ),
+        AppCard(
+          padding: const EdgeInsets.all(28),
           child: Column(
             children: [
-              const Icon(Icons.file_upload_outlined, size: 48, color: AppColors.textHint),
-              const SizedBox(height: AppSpacing.lg),
+              ClayContainer(
+                variant: ClayVariant.soft,
+                color: lum.accentSoft,
+                borderRadius: AppRadius.lg,
+                isDark: lum.isDark,
+                width: 64,
+                height: 64,
+                child: Center(
+                  child: Icon(LucideIcons.fileText, size: 28, color: lum.accent),
+                ),
+              ),
+              const SizedBox(height: 16),
               Text(
                 'Select a CSV file',
-                style: AppTypography.subhead.copyWith(color: AppColors.textMuted),
+                style: AppTypography.headline.copyWith(color: lum.textPrimary),
               ),
-              const SizedBox(height: AppSpacing.xs),
+              const SizedBox(height: 4),
               Text(
                 'Columns will be mapped to product fields.',
-                style: AppTypography.footnote.copyWith(color: AppColors.textHint),
+                textAlign: TextAlign.center,
+                style: AppTypography.footnote.copyWith(color: lum.textSecondary),
               ),
-              const SizedBox(height: AppSpacing.xl),
+              const SizedBox(height: 20),
               AppButton(
-                label: 'Choose File',
+                label: 'Choose file',
                 onPressed: _pickFile,
-                icon: Icons.file_open,
+                icon: LucideIcons.upload,
               ),
             ],
           ),
         ),
-        const SizedBox(height: AppSpacing.lg),
+        const SizedBox(height: 14),
         Text(
           'Expected columns: name (required), barcode, category_name, brand_name, cost_price, selling_price, unit_of_measure',
-          style: AppTypography.caption.copyWith(color: AppColors.textHint),
           textAlign: TextAlign.center,
+          style: AppTypography.caption.copyWith(color: lum.textTertiary),
         ),
       ],
     );
   }
 
   Widget _buildMapping() {
+    final lum = context.lum;
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
@@ -295,48 +286,49 @@ class _ImportProductsPageState extends ConsumerState<ImportProductsPage> {
             Expanded(
               child: Text(
                 '$_fileName · $_totalRowCount rows',
-                style: AppTypography.headline,
+                style: AppTypography.headline.copyWith(color: lum.textPrimary),
               ),
             ),
             AppButton(
               label: 'Re-pick',
               variant: AppButtonVariant.plain,
+              size: AppButtonSize.sm,
               onPressed: _pickFile,
             ),
           ],
         ),
-        const SizedBox(height: AppSpacing.md),
-        Text('Column Mapping', style: AppTypography.fieldLabel),
-        const SizedBox(height: AppSpacing.sm),
-        ..._mappings.map((m) => Padding(
-              padding: const EdgeInsets.only(bottom: AppSpacing.sm),
-              child: _MappingRow(
-                sourceName: m.sourceName,
-                value: m.targetField,
-                fields: _targetFields,
-                onChanged: (v) => setState(() => m.targetField = v),
-              ),
-            )),
-        if (!_hasNameMapped)
-          Padding(
-            padding: const EdgeInsets.only(top: AppSpacing.sm),
-            child: Text(
-              'Map at least one column to "name".',
-              style: AppTypography.caption.copyWith(color: AppColors.destructive),
-            ),
+        const SizedBox(height: 16),
+        AppSectionCard(
+          eyebrow: 'Column mapping',
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              for (final m in _mappings)
+                _MappingRow(
+                  sourceName: m.sourceName,
+                  value: m.targetField,
+                  fields: _targetFields,
+                  onChanged: (v) => setState(() => m.targetField = v),
+                ),
+              if (!_hasNameMapped)
+                Text(
+                  'Map at least one column to "name".',
+                  style: AppTypography.caption.copyWith(color: lum.danger),
+                )
+              else
+                Text(
+                  '$_validRowCount valid rows · ${_totalRowCount - _validRowCount} missing name',
+                  style: AppTypography.footnote.copyWith(color: lum.textSecondary),
+                ),
+            ],
           ),
-        if (_hasNameMapped) ...[
-          const SizedBox(height: AppSpacing.md),
-          Text(
-            '$_validRowCount valid rows · ${_totalRowCount - _validRowCount} missing name',
-            style: AppTypography.footnote.copyWith(color: AppColors.textMuted),
-          ),
-        ],
-        const SizedBox(height: AppSpacing.lg),
-        Text('Preview (first ${_previewRows.length} rows)', style: AppTypography.fieldLabel),
-        const SizedBox(height: AppSpacing.sm),
-        _buildPreviewTable(),
-        const SizedBox(height: AppSpacing.xl),
+        ),
+        const SizedBox(height: 12),
+        AppSectionCard(
+          eyebrow: 'Preview (first ${_previewRows.length} rows)',
+          child: _buildPreviewTable(),
+        ),
+        const SizedBox(height: 20),
         PermissionGate(
           module: 'inventory',
           action: 'create',
@@ -345,7 +337,7 @@ class _ImportProductsPageState extends ConsumerState<ImportProductsPage> {
             loading: _importing,
             fullWidth: true,
             onPressed: _hasNameMapped && _validRowCount > 0 ? _import : null,
-            icon: Icons.upload,
+            icon: LucideIcons.upload,
           ),
         ),
       ],
@@ -353,6 +345,7 @@ class _ImportProductsPageState extends ConsumerState<ImportProductsPage> {
   }
 
   Widget _buildPreviewTable() {
+    final lum = context.lum;
     final colMap = <String, int>{};
     for (final m in _mappings) {
       if (m.targetField != null) colMap[m.targetField!] = m.sourceIndex;
@@ -360,19 +353,19 @@ class _ImportProductsPageState extends ConsumerState<ImportProductsPage> {
 
     return Container(
       decoration: BoxDecoration(
-        border: Border.all(color: AppColors.separator, width: 0.5),
-        borderRadius: BorderRadius.circular(AppRadius.field),
+        border: Border.all(color: lum.hairline),
+        borderRadius: BorderRadius.circular(AppRadius.md),
       ),
       clipBehavior: Clip.antiAlias,
       child: SingleChildScrollView(
         scrollDirection: Axis.horizontal,
         child: DataTable(
           headingTextStyle: AppTypography.caption.copyWith(
-            color: AppColors.textMuted,
-            fontWeight: FontWeight.w600,
+            color: lum.textSecondary,
+            fontWeight: FontWeight.w700,
           ),
-          dataTextStyle: AppTypography.caption,
-          columnSpacing: AppSpacing.base,
+          dataTextStyle: AppTypography.caption.copyWith(color: lum.textPrimary),
+          columnSpacing: 16,
           columns: _targetFields.map((f) => DataColumn(label: Text(f))).toList(),
           rows: _previewRows.map((row) {
             return DataRow(
@@ -389,7 +382,7 @@ class _ImportProductsPageState extends ConsumerState<ImportProductsPage> {
                   Text(
                     v,
                     style: v.isEmpty
-                        ? AppTypography.caption.copyWith(color: AppColors.textHint)
+                        ? AppTypography.caption.copyWith(color: lum.textTertiary)
                         : null,
                   ),
                 );
@@ -402,53 +395,72 @@ class _ImportProductsPageState extends ConsumerState<ImportProductsPage> {
   }
 
   Widget _buildResult() {
+    final lum = context.lum;
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
-        Row(
-          children: [
-            Container(
-              width: 48,
-              height: 48,
-              decoration: BoxDecoration(
-                color: AppColors.success.withValues(alpha: 0.12),
-                borderRadius: BorderRadius.circular(12),
-              ),
-              child: const Icon(Icons.check_circle, color: AppColors.success, size: 28),
-            ),
-            const SizedBox(width: AppSpacing.md),
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    'Import complete',
-                    style: AppTypography.headline,
+        AppCard(
+          child: Row(
+            children: [
+              ClayContainer(
+                variant: ClayVariant.soft,
+                color: lum.successSoft,
+                borderRadius: AppRadius.md,
+                isDark: lum.isDark,
+                width: 48,
+                height: 48,
+                child: Center(
+                  child: Icon(
+                    LucideIcons.circleCheckBig,
+                    color: lum.successText,
+                    size: 26,
                   ),
-                  Text(
-                    '$_okCount ok · $_failCount failed',
-                    style: AppTypography.footnote.copyWith(color: AppColors.textMuted),
-                  ),
-                ],
+                ),
               ),
-            ),
-          ],
+              const SizedBox(width: 14),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      'Import complete',
+                      style: AppTypography.headline
+                          .copyWith(color: lum.textPrimary),
+                    ),
+                    const SizedBox(height: 2),
+                    Text(
+                      '$_okCount ok · $_failCount failed',
+                      style: AppTypography.footnote
+                          .copyWith(color: lum.textSecondary),
+                    ),
+                  ],
+                ),
+              ),
+            ],
+          ),
         ),
         if (_importErrors.isNotEmpty) ...[
-          const SizedBox(height: AppSpacing.xl),
-          Text('Errors', style: AppTypography.fieldLabel),
-          const SizedBox(height: AppSpacing.sm),
-          ..._importErrors.take(10).map((e) => Padding(
-                padding: const EdgeInsets.only(bottom: AppSpacing.xs),
-                child: Text(
-                  'Row ${e['row']}: ${e['error']}',
-                  style: AppTypography.caption.copyWith(color: AppColors.destructive),
-                ),
-              )),
+          const SizedBox(height: 12),
+          AppSectionCard(
+            eyebrow: 'Errors',
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                for (final e in _importErrors.take(10))
+                  Padding(
+                    padding: const EdgeInsets.only(bottom: 6),
+                    child: Text(
+                      'Row ${e['row']}: ${e['error']}',
+                      style: AppTypography.caption.copyWith(color: lum.danger),
+                    ),
+                  ),
+              ],
+            ),
+          ),
         ],
-        const SizedBox(height: AppSpacing.xl),
+        const SizedBox(height: 20),
         AppButton(
-          label: 'Import Another',
+          label: 'Import another',
           variant: AppButtonVariant.tinted,
           fullWidth: true,
           onPressed: () {
@@ -484,49 +496,34 @@ class _MappingRow extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: AppSpacing.md),
-      decoration: BoxDecoration(
-        color: AppColors.fieldFill,
-        borderRadius: BorderRadius.circular(AppRadius.field),
-      ),
+    final lum = context.lum;
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 10),
       child: Row(
         children: [
           Expanded(
             child: Text(
               sourceName,
-              style: AppTypography.caption.copyWith(fontWeight: FontWeight.w600),
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              style: AppTypography.subhead.copyWith(
+                color: lum.textPrimary,
+                fontWeight: FontWeight.w600,
+              ),
             ),
           ),
-          const Text('→', style: TextStyle(color: AppColors.textHint, fontSize: 14)),
-          const SizedBox(width: AppSpacing.sm),
-          Container(
-            height: 36,
-            padding: const EdgeInsets.symmetric(horizontal: AppSpacing.sm),
-            decoration: BoxDecoration(
-              color: value != null
-                  ? AppColors.accent.withValues(alpha: 0.1)
-                  : Colors.transparent,
-              borderRadius: BorderRadius.circular(8),
-            ),
-            child: DropdownButton<String?>(
+          const SizedBox(width: 12),
+          SizedBox(
+            width: 156,
+            child: AppDropdown<String?>(
               value: value,
-              underline: const SizedBox.shrink(),
-              hint: Text(
-                'Ignore',
-                style: AppTypography.caption.copyWith(color: AppColors.textHint),
-              ),
-              items: [
-                DropdownMenuItem<String?>(
-                  value: null,
-                  child: Text('Ignore', style: AppTypography.caption),
-                ),
-                ...fields.map((f) => DropdownMenuItem(
-                      value: f,
-                      child: Text(f, style: AppTypography.caption),
-                    )),
+              placeholder: 'Ignore',
+              options: [
+                const AppDropdownOption<String?>(value: null, label: 'Ignore'),
+                for (final f in fields)
+                  AppDropdownOption<String?>(value: f, label: f),
               ],
-              onChanged: onChanged,
+              onSelected: onChanged,
             ),
           ),
         ],
