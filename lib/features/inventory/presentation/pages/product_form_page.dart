@@ -1,13 +1,23 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:lucide_icons_flutter/lucide_icons.dart';
+
 import '../../../../core/design/app_colors.dart';
 import '../../../../core/design/app_radius.dart';
 import '../../../../core/design/app_spacing.dart';
 import '../../../../core/design/app_typography.dart';
+import '../../../../core/design/clay.dart';
 import '../../../../core/design/widgets/app_button.dart';
-import '../../../../core/design/widgets/app_card.dart';
+import '../../../../core/design/widgets/app_confirm_dialog.dart';
+import '../../../../core/design/widgets/app_detail_scaffold.dart';
+import '../../../../core/design/widgets/app_dropdown.dart';
 import '../../../../core/design/widgets/app_inline_banner.dart';
+import '../../../../core/design/widgets/app_section_card.dart';
+import '../../../../core/design/widgets/app_sheet.dart';
+import '../../../../core/design/widgets/app_states.dart';
 import '../../../../core/design/widgets/app_text_field.dart';
+import '../../../../core/design/widgets/app_toast.dart';
+import '../../../../core/design/widgets/app_toggle.dart';
 import '../../../../core/widgets/barcode_scan_page.dart';
 import '../../../../core/widgets/permission_gate.dart';
 import '../../../../core/services/scanner_support.dart';
@@ -172,9 +182,8 @@ class _ProductFormPageState extends ConsumerState<ProductFormPage> {
     setState(() { _saving = false; _hasSavedOnce = true; });
     ref.invalidate(productsProvider);
     if (!_isEditing) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Product saved. You can now add variants, images, and pricing.')),
-      );
+      showAppToast(context,
+          'Product saved. You can now add variants, images and pricing.');
     }
   }
 
@@ -211,21 +220,14 @@ class _ProductFormPageState extends ConsumerState<ProductFormPage> {
   }
 
   Future<void> _confirmDelete() async {
-    final ok = await showDialog<bool>(
-      context: context,
-      builder: (ctx) => AlertDialog(
-        title: const Text('Delete Product'),
-        content: const Text('Delete this product? It will be soft-deleted.'),
-        actions: [
-          TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text('Cancel')),
-          TextButton(
-            onPressed: () => Navigator.pop(ctx, true),
-            child: Text('Delete', style: TextStyle(color: AppColors.destructive)),
-          ),
-        ],
-      ),
+    final ok = await showAppConfirm(
+      context,
+      title: 'Delete product',
+      message: 'Delete this product? It will be soft-deleted.',
+      confirmLabel: 'Delete',
+      destructive: true,
     );
-    if (ok != true) return;
+    if (!ok) return;
     await ref.read(productEditProvider.notifier).deleteProduct();
     ref.invalidate(productsProvider);
     if (mounted) Navigator.of(context).pop();
@@ -233,6 +235,7 @@ class _ProductFormPageState extends ConsumerState<ProductFormPage> {
 
   @override
   Widget build(BuildContext context) {
+    final lum = context.lum;
     ref.listen<AsyncValue<Product?>>(productEditProvider, (prev, next) {
       final p = next.value;
       if (p != null && !_didSeed) {
@@ -241,7 +244,6 @@ class _ProductFormPageState extends ConsumerState<ProductFormPage> {
       }
     });
 
-    final categories = ref.watch(categoriesProvider).value ?? <Category>[];
     final editState = ref.watch(productEditProvider);
     final variants = editState.value != null ? ref.read(productEditProvider.notifier).variantsState.variants : <ProductVariant>[];
     final images = editState.value != null ? ref.read(productEditProvider.notifier).imagesState.images : <ProductImage>[];
@@ -250,19 +252,19 @@ class _ProductFormPageState extends ConsumerState<ProductFormPage> {
     if (_isEditing) {
       if (editState.isLoading) {
         return Scaffold(
-          backgroundColor: AppColors.background,
+          backgroundColor: lum.paper,
           body: const Center(child: CircularProgressIndicator()),
         );
       }
       if (editState.hasError) {
         return Scaffold(
-          backgroundColor: AppColors.background,
-          body: Center(
+          backgroundColor: lum.paper,
+          body: const SafeArea(
             child: Padding(
-              padding: const EdgeInsets.symmetric(horizontal: AppSpacing.screenPadding),
-              child: AppInlineBanner(
-                message: 'Failed to load product.',
-                type: BannerType.error,
+              padding: EdgeInsets.all(24),
+              child: AppErrorState(
+                title: "We couldn't load the product",
+                body: 'Please go back and try again.',
               ),
             ),
           ),
@@ -270,59 +272,74 @@ class _ProductFormPageState extends ConsumerState<ProductFormPage> {
       }
     }
 
-    return Scaffold(
-      backgroundColor: AppColors.background,
-      appBar: AppBar(
-        backgroundColor: AppColors.background,
-        surfaceTintColor: AppColors.background,
-        leading: IconButton(
-          icon: const Icon(Icons.arrow_back_ios, color: AppColors.accent, size: 20),
-          onPressed: () => Navigator.of(context).pop(),
-        ),
-        title: Text(_isEditing ? 'Edit Product' : 'New Product', style: AppTypography.headline),
-        actions: [
-          if (_isEditing)
-            PermissionGate(
-              module: 'inventory',
-              action: 'delete',
-              child: IconButton(
-                icon: const Icon(Icons.delete_outline, color: AppColors.destructive),
-                onPressed: _confirmDelete,
-              ),
+    return AppDetailScaffold(
+      eyebrow: 'Inventory',
+      title: _isEditing ? 'Edit product' : 'New product',
+      actions: [
+        if (_isEditing)
+          PermissionGate(
+            module: 'inventory',
+            action: 'delete',
+            child: AppButton(
+              label: 'Delete',
+              icon: LucideIcons.trash2,
+              variant: AppButtonVariant.destructive,
+              size: AppButtonSize.sm,
+              onPressed: _confirmDelete,
             ),
+          ),
+      ],
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          if (_error != null) ...[
+            AppInlineBanner(message: _error!, type: BannerType.error),
+            const SizedBox(height: 16),
+          ],
+          AppSectionCard(eyebrow: 'Product', child: _buildCoreSection()),
+          const SizedBox(height: 16),
+          _buildSaveRow(),
+          if (!_subSectionsEnabled) ...[
+            const SizedBox(height: 12),
+            _saveHint(lum),
+          ],
+          if (_subSectionsEnabled) ...[
+            const SizedBox(height: 22),
+            _buildVariantsSection(variants),
+            const SizedBox(height: 14),
+            _buildImagesSection(images),
+            const SizedBox(height: 14),
+            _buildPricingSection(tiers),
+          ],
         ],
       ),
-      body: SafeArea(
-        child: SingleChildScrollView(
-          padding: const EdgeInsets.symmetric(horizontal: AppSpacing.screenPadding),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.stretch,
-            children: [
-              const SizedBox(height: AppSpacing.lg),
-              if (_error != null) ...[
-                AppInlineBanner(message: _error!, type: BannerType.error),
-                const SizedBox(height: AppSpacing.lg),
-              ],
-              _buildCoreSection(),
-              const SizedBox(height: AppSpacing.lg),
-              _buildSaveRow(),
-              if (_subSectionsEnabled) ...[
-                const SizedBox(height: AppSpacing.xxl),
-                _buildVariantsSection(variants, categories),
-                const SizedBox(height: AppSpacing.lg),
-                _buildImagesSection(images),
-                const SizedBox(height: AppSpacing.lg),
-                _buildPricingSection(tiers),
-              ],
-              const SizedBox(height: AppSpacing.xxl),
-            ],
+    );
+  }
+
+  Widget _saveHint(LumColors lum) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+      decoration: BoxDecoration(
+        color: lum.accentSoft,
+        borderRadius: BorderRadius.circular(AppRadius.md),
+      ),
+      child: Row(
+        children: [
+          Icon(LucideIcons.info, size: 16, color: lum.accentPress),
+          const SizedBox(width: 10),
+          Expanded(
+            child: Text(
+              'Save the product to add variants, images and pricing tiers.',
+              style: AppTypography.footnote.copyWith(color: lum.accentPress),
+            ),
           ),
-        ),
+        ],
       ),
     );
   }
 
   Widget _buildCoreSection() {
+    final lum = context.lum;
     final categoriesAsync = ref.watch(categoriesProvider);
     final brandsAsync = ref.watch(brandsProvider);
     final categories = categoriesAsync.value ?? <Category>[];
@@ -333,87 +350,147 @@ class _ProductFormPageState extends ConsumerState<ProductFormPage> {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
-        AppTextField(controller: _nameCtrl, label: 'Name', prefixIcon: Icons.inventory_2, hint: 'Product name'),
+        AppTextField(controller: _nameCtrl, label: 'Name', prefixIcon: Icons.inventory_2_outlined, hint: 'Product name'),
         const SizedBox(height: AppSpacing.fieldGap),
         Row(
+          crossAxisAlignment: CrossAxisAlignment.end,
           children: [
             Expanded(
-              child: AppTextField(controller: _barcodeCtrl, label: 'Barcode', prefixIcon: Icons.barcode_reader, hint: 'Optional'),
+              child: AppTextField(controller: _barcodeCtrl, label: 'Barcode', prefixIcon: Icons.qr_code, hint: 'Optional'),
             ),
             if (barcodeScanSupported) ...[
               const SizedBox(width: AppSpacing.sm),
-              IconButton(
-                icon: const Icon(Icons.qr_code_scanner, color: AppColors.accent),
-                onPressed: _scanBarcode,
-                tooltip: 'Scan barcode',
+              Padding(
+                padding: const EdgeInsets.only(bottom: 4),
+                child: _scanButton(lum),
               ),
             ],
           ],
         ),
         const SizedBox(height: AppSpacing.fieldGap),
-        AppTextField(controller: _descriptionCtrl, label: 'Description', prefixIcon: Icons.description, hint: 'Optional'),
+        AppTextField(controller: _descriptionCtrl, label: 'Description', prefixIcon: Icons.notes, hint: 'Optional', maxLines: 3),
         const SizedBox(height: AppSpacing.fieldGap),
-        _DropdownField(label: 'Type', value: _type, items: const ['STANDARD', 'SERIALIZED', 'SERVICE', 'COMPOSITE'], onChanged: (v) => setState(() => _type = v)),
-        const SizedBox(height: AppSpacing.fieldGap),
-        _PickerField(
-          label: 'Category', value: _categoryId,
-          items: categories, display: (c) => c.name, id: (c) => c.id,
-          hint: catsLoading ? 'Loading...' : 'None', enabled: !catsLoading,
-          onChanged: (v) => setState(() => _categoryId = v),
+        _fieldLabel('Type'),
+        AppDropdown<String>(
+          value: _type,
+          options: const [
+            AppDropdownOption(value: 'STANDARD', label: 'Standard'),
+            AppDropdownOption(value: 'SERIALIZED', label: 'Serialized'),
+            AppDropdownOption(value: 'SERVICE', label: 'Service'),
+            AppDropdownOption(value: 'COMPOSITE', label: 'Composite'),
+          ],
+          onSelected: (v) => setState(() => _type = v),
         ),
         const SizedBox(height: AppSpacing.fieldGap),
-        _PickerField(
-          label: 'Brand', value: _brandId,
-          items: brands, display: (b) => b.name, id: (b) => b.id,
-          hint: brandsLoading ? 'Loading...' : 'None', enabled: !brandsLoading,
-          onChanged: (v) => setState(() => _brandId = v),
+        _fieldLabel('Category'),
+        AppDropdown<String?>(
+          value: _categoryId,
+          placeholder: catsLoading ? 'Loading…' : 'None',
+          enabled: !catsLoading,
+          options: [
+            const AppDropdownOption<String?>(value: null, label: 'None'),
+            for (final c in categories)
+              AppDropdownOption<String?>(value: c.id, label: c.name),
+          ],
+          onSelected: (v) => setState(() => _categoryId = v),
         ),
         const SizedBox(height: AppSpacing.fieldGap),
-        AppTextField(controller: _unitCtrl, label: 'Unit of Measure', prefixIcon: Icons.straighten, hint: 'PCS'),
-        const SizedBox(height: AppSpacing.fieldGap),
-        Row(children: [
-          Expanded(child: AppTextField(controller: _costPriceCtrl, label: 'Cost Price', prefixIcon: Icons.attach_money, keyboardType: TextInputType.number)),
-          const SizedBox(width: AppSpacing.md),
-          Expanded(child: AppTextField(controller: _sellingPriceCtrl, label: 'Selling Price', prefixIcon: Icons.sell, keyboardType: TextInputType.number)),
-        ]),
-        const SizedBox(height: AppSpacing.fieldGap),
-        Row(children: [
-          Expanded(child: AppTextField(controller: _minPriceCtrl, label: 'Min Price', prefixIcon: Icons.trending_down, hint: 'Optional', keyboardType: TextInputType.number)),
-          const SizedBox(width: AppSpacing.md),
-          Expanded(child: AppTextField(controller: _wholesalePriceCtrl, label: 'Wholesale', prefixIcon: Icons.store, hint: 'Optional', keyboardType: TextInputType.number)),
-        ]),
-        const SizedBox(height: AppSpacing.fieldGap),
-        Row(children: [
-          Expanded(child: AppTextField(controller: _taxRateCtrl, label: 'Tax Rate %', prefixIcon: Icons.percent, keyboardType: TextInputType.number)),
-          const SizedBox(width: AppSpacing.md),
-          Expanded(child: Padding(
-            padding: const EdgeInsets.only(top: 28),
-            child: SwitchListTile(
-              contentPadding: EdgeInsets.zero,
-              title: Text('Tax inclusive', style: AppTypography.footnote),
-              value: _taxInclusive, activeThumbColor: AppColors.accent,
-              onChanged: (v) => setState(() => _taxInclusive = v),
-            ),
-          )),
-        ]),
-        const SizedBox(height: AppSpacing.sm),
-        Row(children: [
-          Expanded(child: AppTextField(controller: _reorderPointCtrl, label: 'Reorder Point', prefixIcon: Icons.warning_amber, keyboardType: TextInputType.number)),
-          const SizedBox(width: AppSpacing.md),
-          Expanded(child: AppTextField(controller: _reorderQtyCtrl, label: 'Reorder Qty', prefixIcon: Icons.add_shopping_cart, keyboardType: TextInputType.number)),
-        ]),
-        const SizedBox(height: AppSpacing.fieldGap),
-        AppTextField(controller: _weightCtrl, label: 'Weight (kg)', prefixIcon: Icons.monitor_weight, hint: 'Optional', keyboardType: TextInputType.number),
-        const SizedBox(height: AppSpacing.fieldGap),
-        _DropdownField(label: 'Status', value: _status, items: const ['ACTIVE', 'INACTIVE', 'DISCONTINUED'], onChanged: (v) => setState(() => _status = v)),
-        const SizedBox(height: AppSpacing.fieldGap),
-        SwitchListTile(
-          contentPadding: EdgeInsets.zero, title: Text('Active', style: AppTypography.body),
-          value: _isActive, activeThumbColor: AppColors.accent,
-          onChanged: (v) => setState(() => _isActive = v),
+        _fieldLabel('Brand'),
+        AppDropdown<String?>(
+          value: _brandId,
+          placeholder: brandsLoading ? 'Loading…' : 'None',
+          enabled: !brandsLoading,
+          options: [
+            const AppDropdownOption<String?>(value: null, label: 'None'),
+            for (final b in brands)
+              AppDropdownOption<String?>(value: b.id, label: b.name),
+          ],
+          onSelected: (v) => setState(() => _brandId = v),
         ),
         const SizedBox(height: AppSpacing.fieldGap),
-        AppTextField(controller: _tagsCtrl, label: 'Tags', prefixIcon: Icons.label, hint: 'Comma-separated'),
+        AppTextField(controller: _unitCtrl, label: 'Unit of measure', prefixIcon: Icons.straighten, hint: 'PCS'),
+        const SizedBox(height: AppSpacing.fieldGap),
+        Row(children: [
+          Expanded(child: AppTextField(controller: _costPriceCtrl, label: 'Cost price', prefixIcon: Icons.payments_outlined, keyboardType: TextInputType.number)),
+          const SizedBox(width: AppSpacing.md),
+          Expanded(child: AppTextField(controller: _sellingPriceCtrl, label: 'Selling price', prefixIcon: Icons.sell_outlined, keyboardType: TextInputType.number)),
+        ]),
+        const SizedBox(height: AppSpacing.fieldGap),
+        Row(children: [
+          Expanded(child: AppTextField(controller: _minPriceCtrl, label: 'Min price', prefixIcon: Icons.trending_down, hint: 'Optional', keyboardType: TextInputType.number)),
+          const SizedBox(width: AppSpacing.md),
+          Expanded(child: AppTextField(controller: _wholesalePriceCtrl, label: 'Wholesale', prefixIcon: Icons.storefront_outlined, hint: 'Optional', keyboardType: TextInputType.number)),
+        ]),
+        const SizedBox(height: AppSpacing.fieldGap),
+        AppTextField(controller: _taxRateCtrl, label: 'Tax rate %', prefixIcon: Icons.percent, keyboardType: TextInputType.number),
+        const SizedBox(height: 6),
+        _toggleRow('Tax inclusive', _taxInclusive, (v) => setState(() => _taxInclusive = v)),
+        const SizedBox(height: AppSpacing.fieldGap),
+        Row(children: [
+          Expanded(child: AppTextField(controller: _reorderPointCtrl, label: 'Reorder point', prefixIcon: Icons.warning_amber, keyboardType: TextInputType.number)),
+          const SizedBox(width: AppSpacing.md),
+          Expanded(child: AppTextField(controller: _reorderQtyCtrl, label: 'Reorder qty', prefixIcon: Icons.add_shopping_cart, keyboardType: TextInputType.number)),
+        ]),
+        const SizedBox(height: AppSpacing.fieldGap),
+        AppTextField(controller: _weightCtrl, label: 'Weight (kg)', prefixIcon: Icons.monitor_weight_outlined, hint: 'Optional', keyboardType: TextInputType.number),
+        const SizedBox(height: AppSpacing.fieldGap),
+        _fieldLabel('Status'),
+        AppDropdown<String>(
+          value: _status,
+          options: const [
+            AppDropdownOption(value: 'ACTIVE', label: 'Active'),
+            AppDropdownOption(value: 'INACTIVE', label: 'Inactive'),
+            AppDropdownOption(value: 'DISCONTINUED', label: 'Discontinued'),
+          ],
+          onSelected: (v) => setState(() => _status = v),
+        ),
+        const SizedBox(height: 10),
+        _toggleRow('Active', _isActive, (v) => setState(() => _isActive = v)),
+        const SizedBox(height: AppSpacing.fieldGap),
+        AppTextField(controller: _tagsCtrl, label: 'Tags', prefixIcon: Icons.label_outline, hint: 'Comma-separated'),
+      ],
+    );
+  }
+
+  Widget _scanButton(LumColors lum) {
+    return Semantics(
+      button: true,
+      label: 'Scan barcode',
+      child: GestureDetector(
+        behavior: HitTestBehavior.opaque,
+        onTap: _scanBarcode,
+        child: ClayContainer(
+          variant: ClayVariant.soft,
+          color: lum.surface,
+          borderRadius: AppRadius.sm,
+          isDark: lum.isDark,
+          width: 52,
+          height: 52,
+          child: Icon(LucideIcons.scanLine, size: 20, color: lum.g600),
+        ),
+      ),
+    );
+  }
+
+  Widget _fieldLabel(String text) {
+    final lum = context.lum;
+    return Padding(
+      padding: const EdgeInsets.only(left: 4, bottom: 8),
+      child: Text(text,
+          style: AppTypography.footnote
+              .copyWith(fontWeight: FontWeight.w600, color: lum.g700)),
+    );
+  }
+
+  Widget _toggleRow(String label, bool value, ValueChanged<bool> onChanged) {
+    final lum = context.lum;
+    return Row(
+      children: [
+        Expanded(
+          child: Text(label,
+              style: AppTypography.body.copyWith(color: lum.textPrimary)),
+        ),
+        AppToggle(value: value, onChanged: onChanged, semanticLabel: label),
       ],
     );
   }
@@ -428,6 +505,7 @@ class _ProductFormPageState extends ConsumerState<ProductFormPage> {
             child: AppButton(
               label: 'Save',
               loading: _saving,
+              fullWidth: true,
               onPressed: _saveCore,
             ),
           ),
@@ -439,9 +517,10 @@ class _ProductFormPageState extends ConsumerState<ProductFormPage> {
               module: 'inventory',
               action: 'create',
               child: AppButton(
-                label: 'Save & Close',
+                label: 'Save & close',
                 variant: AppButtonVariant.tinted,
                 loading: _saving,
+                fullWidth: true,
                 onPressed: _saveAndClose,
               ),
             ),
@@ -452,25 +531,26 @@ class _ProductFormPageState extends ConsumerState<ProductFormPage> {
   }
 
   // ---- Variants ----
-  Widget _buildVariantsSection(List<ProductVariant> variants, List<Category> categories) {
-    return _CollapsibleSection(
-      title: 'Variants (${variants.length})',
-      initiallyExpanded: variants.isNotEmpty,
-      addLabel: 'Add Variant',
-      onAdd: () => _showVariantDialog(null),
-      child: variants.isEmpty
-          ? _emptyHint('No variants')
-          : Column(
-              children: variants.map((v) => _VariantCard(
-                    variant: v,
-                    onEdit: () => _showVariantDialog(v),
-                    onDelete: () => ref.read(productEditProvider.notifier).deleteVariant(v.id),
-                  )).toList(),
-            ),
+  Widget _buildVariantsSection(List<ProductVariant> variants) {
+    return _SubSection(
+      title: 'Variants',
+      count: variants.length,
+      addLabel: 'Add variant',
+      onAdd: () => _showVariantSheet(null),
+      children: variants
+          .map((v) => _SubRow(
+                title: v.variantName,
+                subtitle:
+                    'SKU ${v.sku} · ${v.sellingPrice.toStringAsFixed(2)}',
+                onEdit: () => _showVariantSheet(v),
+                onDelete: () =>
+                    ref.read(productEditProvider.notifier).deleteVariant(v.id),
+              ))
+          .toList(),
     );
   }
 
-  void _showVariantDialog(ProductVariant? existing) {
+  void _showVariantSheet(ProductVariant? existing) {
     final nameCtrl = TextEditingController(text: existing?.variantName ?? '');
     final skuCtrl = TextEditingController(text: existing?.sku ?? '');
     final barcodeCtrl = TextEditingController(text: existing?.barcode ?? '');
@@ -479,182 +559,145 @@ class _ProductFormPageState extends ConsumerState<ProductFormPage> {
     final weightCtrl = TextEditingController(text: existing?.weight?.toString() ?? '');
     final attrCtrl = TextEditingController(text: existing?.attributes.entries.map((e) => '${e.key}:${e.value}').join(', ') ?? '');
 
-    showDialog(
+    showAppSheet<void>(
       context: context,
-      builder: (ctx) => AlertDialog(
-        title: Text(existing != null ? 'Edit Variant' : 'Add Variant'),
-        content: SingleChildScrollView(
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              TextField(controller: nameCtrl, decoration: const InputDecoration(labelText: 'Name', hintText: 'e.g. 128GB Black')),
-              const SizedBox(height: AppSpacing.sm),
-              TextField(controller: skuCtrl, decoration: const InputDecoration(labelText: 'SKU')),
-              const SizedBox(height: AppSpacing.sm),
-              TextField(controller: barcodeCtrl, decoration: const InputDecoration(labelText: 'Barcode (optional)')),
-              const SizedBox(height: AppSpacing.sm),
-              TextField(controller: costCtrl, decoration: const InputDecoration(labelText: 'Cost Price'), keyboardType: TextInputType.number),
-              const SizedBox(height: AppSpacing.sm),
-              TextField(controller: priceCtrl, decoration: const InputDecoration(labelText: 'Selling Price'), keyboardType: TextInputType.number),
-              const SizedBox(height: AppSpacing.sm),
-              TextField(controller: weightCtrl, decoration: const InputDecoration(labelText: 'Weight (optional)'), keyboardType: TextInputType.number),
-              const SizedBox(height: AppSpacing.sm),
-              TextField(controller: attrCtrl, decoration: const InputDecoration(labelText: 'Attributes', hintText: 'color:Black, storage:128GB')),
-            ],
-          ),
-        ),
-        actions: [
-          TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('Cancel')),
-          FilledButton(
-            onPressed: () async {
-              final attrs = <String, dynamic>{};
-              for (final pair in attrCtrl.text.split(',')) {
-                final parts = pair.split(':');
-                if (parts.length == 2) attrs[parts[0].trim()] = parts[1].trim();
-              }
-              final data = {
-                'product_id': ref.read(productEditProvider.notifier).editingId,
-                'variant_name': nameCtrl.text.trim(),
-                'sku': skuCtrl.text.trim(),
-                'barcode': barcodeCtrl.text.trim().isEmpty ? null : barcodeCtrl.text.trim(),
-                'cost_price': double.tryParse(costCtrl.text) ?? 0,
-                'selling_price': double.tryParse(priceCtrl.text) ?? 0,
-                'weight': weightCtrl.text.isEmpty ? null : double.tryParse(weightCtrl.text),
-                'attributes_json': attrs,
-                'is_active': true,
-              };
-              await ref.read(productEditProvider.notifier).saveVariant(data, id: existing?.id);
-              if (ctx.mounted) Navigator.pop(ctx);
-            },
-            child: const Text('Save'),
-          ),
+      builder: (ctx) => _EditSheet(
+        title: existing != null ? 'Edit variant' : 'Add variant',
+        fields: [
+          AppTextField(controller: nameCtrl, label: 'Name', prefixIcon: Icons.style_outlined, hint: 'e.g. 128GB Black'),
+          AppTextField(controller: skuCtrl, label: 'SKU', prefixIcon: Icons.tag),
+          AppTextField(controller: barcodeCtrl, label: 'Barcode', prefixIcon: Icons.qr_code, hint: 'Optional'),
+          AppTextField(controller: costCtrl, label: 'Cost price', prefixIcon: Icons.payments_outlined, keyboardType: TextInputType.number),
+          AppTextField(controller: priceCtrl, label: 'Selling price', prefixIcon: Icons.sell_outlined, keyboardType: TextInputType.number),
+          AppTextField(controller: weightCtrl, label: 'Weight', prefixIcon: Icons.monitor_weight_outlined, hint: 'Optional', keyboardType: TextInputType.number),
+          AppTextField(controller: attrCtrl, label: 'Attributes', prefixIcon: Icons.data_object, hint: 'color:Black, storage:128GB'),
         ],
+        onSave: () async {
+          final attrs = <String, dynamic>{};
+          for (final pair in attrCtrl.text.split(',')) {
+            final parts = pair.split(':');
+            if (parts.length == 2) attrs[parts[0].trim()] = parts[1].trim();
+          }
+          final data = {
+            'product_id': ref.read(productEditProvider.notifier).editingId,
+            'variant_name': nameCtrl.text.trim(),
+            'sku': skuCtrl.text.trim(),
+            'barcode': barcodeCtrl.text.trim().isEmpty ? null : barcodeCtrl.text.trim(),
+            'cost_price': double.tryParse(costCtrl.text) ?? 0,
+            'selling_price': double.tryParse(priceCtrl.text) ?? 0,
+            'weight': weightCtrl.text.isEmpty ? null : double.tryParse(weightCtrl.text),
+            'attributes_json': attrs,
+            'is_active': true,
+          };
+          await ref.read(productEditProvider.notifier).saveVariant(data, id: existing?.id);
+          if (ctx.mounted) Navigator.pop(ctx);
+        },
       ),
     );
   }
 
   // ---- Images ----
   Widget _buildImagesSection(List<ProductImage> images) {
-    final urlCtrl = TextEditingController();
-    return _CollapsibleSection(
-      title: 'Images (${images.length})',
-      initiallyExpanded: images.isNotEmpty,
-      addLabel: 'Add Image URL',
-      onAdd: () => _showAddImageDialog(urlCtrl),
-      child: images.isEmpty
-          ? _emptyHint('No images')
-          : Column(
-              children: images.map((img) => _ImageCard(
-                    image: img,
-                    onSetPrimary: () => ref.read(productEditProvider.notifier).setPrimaryImage(img.id),
-                    onDelete: () => ref.read(productEditProvider.notifier).deleteImage(img.id),
-                  )).toList(),
-            ),
+    return _SubSection(
+      title: 'Images',
+      count: images.length,
+      addLabel: 'Add image URL',
+      onAdd: _showAddImageSheet,
+      children: images
+          .map((img) => _SubRow(
+                leading: Icons.image_outlined,
+                title: img.url,
+                subtitle: img.isPrimary ? 'Primary' : null,
+                subtitleIsAccent: img.isPrimary,
+                onEdit: img.isPrimary
+                    ? null
+                    : () => ref
+                        .read(productEditProvider.notifier)
+                        .setPrimaryImage(img.id),
+                editIcon: LucideIcons.star,
+                onDelete: () =>
+                    ref.read(productEditProvider.notifier).deleteImage(img.id),
+              ))
+          .toList(),
     );
   }
 
-  void _showAddImageDialog(TextEditingController urlCtrl) {
-    showDialog(
+  void _showAddImageSheet() {
+    final urlCtrl = TextEditingController();
+    showAppSheet<void>(
       context: context,
-      builder: (ctx) => AlertDialog(
-        title: const Text('Add Image'),
-        content: TextField(
-          controller: urlCtrl,
-          decoration: const InputDecoration(labelText: 'Image URL', hintText: 'https://...'),
-        ),
-        actions: [
-          TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('Cancel')),
-          FilledButton(
-            onPressed: () async {
-              final data = {
-                'product_id': ref.read(productEditProvider.notifier).editingId,
-                'url': urlCtrl.text.trim(),
-                'sort_order': 0,
-                'is_primary': false,
-              };
-              await ref.read(productEditProvider.notifier).addImage(data);
-              if (ctx.mounted) Navigator.pop(ctx);
-            },
-            child: const Text('Add'),
-          ),
+      builder: (ctx) => _EditSheet(
+        title: 'Add image',
+        fields: [
+          AppTextField(controller: urlCtrl, label: 'Image URL', prefixIcon: Icons.link, hint: 'https://…'),
         ],
+        onSave: () async {
+          final data = {
+            'product_id': ref.read(productEditProvider.notifier).editingId,
+            'url': urlCtrl.text.trim(),
+            'sort_order': 0,
+            'is_primary': false,
+          };
+          await ref.read(productEditProvider.notifier).addImage(data);
+          if (ctx.mounted) Navigator.pop(ctx);
+        },
       ),
     );
   }
 
   // ---- Pricing ----
   Widget _buildPricingSection(List<PricingTier> tiers) {
-    return _CollapsibleSection(
-      title: 'Pricing Tiers (${tiers.length})',
-      initiallyExpanded: tiers.isNotEmpty,
-      addLabel: 'Add Tier',
-      onAdd: () => _showPricingDialog(null),
-      child: tiers.isEmpty
-          ? _emptyHint('No pricing tiers')
-          : Column(
-              children: tiers.map((t) => _PricingCard(
-                    tier: t,
-                    onEdit: () => _showPricingDialog(t),
-                    onDelete: () => ref.read(productEditProvider.notifier).deletePricingTier(t.id),
-                  )).toList(),
-            ),
+    return _SubSection(
+      title: 'Pricing tiers',
+      count: tiers.length,
+      addLabel: 'Add tier',
+      onAdd: () => _showPricingSheet(null),
+      children: tiers
+          .map((t) => _SubRow(
+                title: t.tierName,
+                subtitle:
+                    'Qty ${t.minQty}${t.maxQty != null ? '-${t.maxQty}' : '+'} · ${t.unitPrice.toStringAsFixed(2)}',
+                onEdit: () => _showPricingSheet(t),
+                onDelete: () => ref
+                    .read(productEditProvider.notifier)
+                    .deletePricingTier(t.id),
+              ))
+          .toList(),
     );
   }
 
-  void _showPricingDialog(PricingTier? existing) {
+  void _showPricingSheet(PricingTier? existing) {
     final nameCtrl = TextEditingController(text: existing?.tierName ?? '');
     final minCtrl = TextEditingController(text: existing?.minQty.toString() ?? '1');
     final maxCtrl = TextEditingController(text: existing?.maxQty?.toString() ?? '');
     final priceCtrl = TextEditingController(text: existing?.unitPrice.toString() ?? '');
     final discCtrl = TextEditingController(text: existing?.discountPct?.toString() ?? '');
 
-    showDialog(
+    showAppSheet<void>(
       context: context,
-      builder: (ctx) => AlertDialog(
-        title: Text(existing != null ? 'Edit Tier' : 'Add Tier'),
-        content: SingleChildScrollView(
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              TextField(controller: nameCtrl, decoration: const InputDecoration(labelText: 'Tier Name', hintText: 'e.g. Wholesale')),
-              const SizedBox(height: AppSpacing.sm),
-              TextField(controller: minCtrl, decoration: const InputDecoration(labelText: 'Min Qty'), keyboardType: TextInputType.number),
-              const SizedBox(height: AppSpacing.sm),
-              TextField(controller: maxCtrl, decoration: const InputDecoration(labelText: 'Max Qty (optional)'), keyboardType: TextInputType.number),
-              const SizedBox(height: AppSpacing.sm),
-              TextField(controller: priceCtrl, decoration: const InputDecoration(labelText: 'Unit Price'), keyboardType: TextInputType.number),
-              const SizedBox(height: AppSpacing.sm),
-              TextField(controller: discCtrl, decoration: const InputDecoration(labelText: 'Discount % (optional)'), keyboardType: TextInputType.number),
-            ],
-          ),
-        ),
-        actions: [
-          TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('Cancel')),
-          FilledButton(
-            onPressed: () async {
-              final data = <String, dynamic>{
-                'product_id': ref.read(productEditProvider.notifier).editingId,
-                'tier_name': nameCtrl.text.trim(),
-                'min_qty': int.tryParse(minCtrl.text) ?? 1,
-                'max_qty': maxCtrl.text.isEmpty ? null : int.tryParse(maxCtrl.text),
-                'unit_price': double.tryParse(priceCtrl.text) ?? 0,
-                'discount_pct': discCtrl.text.isEmpty ? null : double.tryParse(discCtrl.text),
-                'is_active': true,
-              };
-              await ref.read(productEditProvider.notifier).savePricingTier(data, id: existing?.id);
-              if (ctx.mounted) Navigator.pop(ctx);
-            },
-            child: const Text('Save'),
-          ),
+      builder: (ctx) => _EditSheet(
+        title: existing != null ? 'Edit tier' : 'Add tier',
+        fields: [
+          AppTextField(controller: nameCtrl, label: 'Tier name', prefixIcon: Icons.layers_outlined, hint: 'e.g. Wholesale'),
+          AppTextField(controller: minCtrl, label: 'Min qty', prefixIcon: Icons.numbers, keyboardType: TextInputType.number),
+          AppTextField(controller: maxCtrl, label: 'Max qty', prefixIcon: Icons.numbers, hint: 'Optional', keyboardType: TextInputType.number),
+          AppTextField(controller: priceCtrl, label: 'Unit price', prefixIcon: Icons.payments_outlined, keyboardType: TextInputType.number),
+          AppTextField(controller: discCtrl, label: 'Discount %', prefixIcon: Icons.percent, hint: 'Optional', keyboardType: TextInputType.number),
         ],
+        onSave: () async {
+          final data = <String, dynamic>{
+            'product_id': ref.read(productEditProvider.notifier).editingId,
+            'tier_name': nameCtrl.text.trim(),
+            'min_qty': int.tryParse(minCtrl.text) ?? 1,
+            'max_qty': maxCtrl.text.isEmpty ? null : int.tryParse(maxCtrl.text),
+            'unit_price': double.tryParse(priceCtrl.text) ?? 0,
+            'discount_pct': discCtrl.text.isEmpty ? null : double.tryParse(discCtrl.text),
+            'is_active': true,
+          };
+          await ref.read(productEditProvider.notifier).savePricingTier(data, id: existing?.id);
+          if (ctx.mounted) Navigator.pop(ctx);
+        },
       ),
-    );
-  }
-
-  Widget _emptyHint(String text) {
-    return Padding(
-      padding: const EdgeInsets.symmetric(vertical: AppSpacing.md),
-      child: Text(text, textAlign: TextAlign.center, style: AppTypography.footnote.copyWith(color: AppColors.textHint)),
     );
   }
 
@@ -678,180 +721,146 @@ class _ProductFormPageState extends ConsumerState<ProductFormPage> {
 
 // ---- Shared widgets ----
 
-class _DropdownField extends StatelessWidget {
-  const _DropdownField({required this.label, required this.value, required this.items, required this.onChanged});
-  final String label, value;
-  final List<String> items;
-  final ValueChanged<String> onChanged;
+class _SubSection extends StatelessWidget {
+  const _SubSection({
+    required this.title,
+    required this.count,
+    required this.addLabel,
+    required this.onAdd,
+    required this.children,
+  });
 
-  @override
-  Widget build(BuildContext context) {
-    return Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-      Padding(padding: const EdgeInsets.only(left: 4, bottom: 8), child: Text(label, style: AppTypography.fieldLabel)),
-      Container(
-        height: 52, padding: const EdgeInsets.symmetric(horizontal: 16),
-        decoration: BoxDecoration(color: AppColors.fieldFill, borderRadius: BorderRadius.circular(12)),
-        child: DropdownButtonHideUnderline(
-          child: DropdownButton<String>(
-            value: value, isExpanded: true,
-            icon: const Icon(Icons.keyboard_arrow_down, color: AppColors.textMuted),
-            items: items.map((i) => DropdownMenuItem(value: i, child: Text(i))).toList(),
-            onChanged: (v) { if (v != null) onChanged(v); },
-          ),
-        ),
-      ),
-    ]);
-  }
-}
-
-class _PickerField<T> extends StatelessWidget {
-  const _PickerField({required this.label, required this.value, required this.items, required this.display, required this.id, required this.hint, required this.onChanged, this.enabled = true});
-  final String label;
-  final String? value;
-  final List<T> items;
-  final String Function(T) display;
-  final String Function(T) id;
-  final String hint;
-  final ValueChanged<String?> onChanged;
-  final bool enabled;
-
-  @override
-  Widget build(BuildContext context) {
-    return Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-      Padding(padding: const EdgeInsets.only(left: 4, bottom: 8), child: Text(label, style: AppTypography.fieldLabel)),
-      Container(
-        height: 52, padding: const EdgeInsets.symmetric(horizontal: 16),
-        decoration: BoxDecoration(color: AppColors.fieldFill, borderRadius: BorderRadius.circular(12)),
-        child: DropdownButtonHideUnderline(
-          child: DropdownButton<String?>(
-            value: value, isExpanded: true,
-            icon: const Icon(Icons.keyboard_arrow_down, color: AppColors.textMuted),
-            hint: Text(hint, style: AppTypography.fieldHint),
-            items: [
-              DropdownMenuItem<String?>(value: null, child: Text(hint)),
-              ...items.map((i) => DropdownMenuItem<String?>(value: id(i), child: Text(display(i)))),
-            ],
-            onChanged: onChanged,
-          ),
-        ),
-      ),
-    ]);
-  }
-}
-
-class _CollapsibleSection extends StatefulWidget {
-  const _CollapsibleSection({required this.title, required this.addLabel, required this.onAdd, required this.child, this.initiallyExpanded = false});
-  final String title, addLabel;
+  final String title;
+  final int count;
+  final String addLabel;
   final VoidCallback onAdd;
-  final Widget child;
-  final bool initiallyExpanded;
-
-  @override
-  State<_CollapsibleSection> createState() => _CollapsibleSectionState();
-}
-
-class _CollapsibleSectionState extends State<_CollapsibleSection> {
-  late bool _expanded;
-
-  @override
-  void initState() { super.initState(); _expanded = widget.initiallyExpanded; }
+  final List<Widget> children;
 
   @override
   Widget build(BuildContext context) {
-    return AppCard(
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.stretch,
-        children: [
-          Row(children: [
-            Expanded(child: Text(widget.title, style: AppTypography.headline)),
-            TextButton(
-              onPressed: widget.onAdd,
-              child: Text(widget.addLabel, style: AppTypography.callout.copyWith(color: AppColors.accent)),
+    return AppSectionCard(
+      eyebrow: '$title ($count)',
+      trailing: AppButton(
+        label: addLabel,
+        icon: LucideIcons.plus,
+        variant: AppButtonVariant.plain,
+        size: AppButtonSize.sm,
+        onPressed: onAdd,
+      ),
+      child: children.isEmpty
+          ? Padding(
+              padding: const EdgeInsets.symmetric(vertical: 8),
+              child: Text('Nothing added yet.',
+                  style: AppTypography.footnote
+                      .copyWith(color: context.lum.g400)),
+            )
+          : Column(children: children),
+    );
+  }
+}
+
+class _SubRow extends StatelessWidget {
+  const _SubRow({
+    required this.title,
+    this.subtitle,
+    this.leading,
+    this.onEdit,
+    this.onDelete,
+    this.editIcon = LucideIcons.pencil,
+    this.subtitleIsAccent = false,
+  });
+
+  final String title;
+  final String? subtitle;
+  final IconData? leading;
+  final VoidCallback? onEdit;
+  final VoidCallback? onDelete;
+  final IconData editIcon;
+  final bool subtitleIsAccent;
+
+  @override
+  Widget build(BuildContext context) {
+    final lum = context.lum;
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 8),
+      child: ClayContainer(
+        variant: ClayVariant.inset,
+        color: lum.surface2,
+        borderRadius: AppRadius.md,
+        isDark: lum.isDark,
+        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+        child: Row(
+          children: [
+            if (leading != null) ...[
+              Icon(leading, size: 20, color: lum.g500),
+              const SizedBox(width: 10),
+            ],
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(title,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: AppTypography.callout
+                          .copyWith(fontWeight: FontWeight.w600, color: lum.textPrimary)),
+                  if (subtitle != null)
+                    Text(subtitle!,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: AppTypography.footnote.copyWith(
+                            color: subtitleIsAccent
+                                ? lum.successText
+                                : lum.g500)),
+                ],
+              ),
             ),
-            IconButton(
-              icon: Icon(_expanded ? Icons.keyboard_arrow_up : Icons.keyboard_arrow_down, color: AppColors.textMuted),
-              onPressed: () => setState(() => _expanded = !_expanded),
-            ),
-          ]),
-          if (_expanded) widget.child,
-        ],
+            if (onEdit != null)
+              IconButton(
+                icon: Icon(editIcon, size: 18, color: lum.accent),
+                onPressed: onEdit,
+              ),
+            if (onDelete != null)
+              IconButton(
+                icon: Icon(LucideIcons.x, size: 18, color: lum.dangerText),
+                onPressed: onDelete,
+              ),
+          ],
+        ),
       ),
     );
   }
 }
 
-class _VariantCard extends StatelessWidget {
-  const _VariantCard({required this.variant, required this.onEdit, required this.onDelete});
-  final ProductVariant variant;
-  final VoidCallback onEdit, onDelete;
+class _EditSheet extends StatelessWidget {
+  const _EditSheet({
+    required this.title,
+    required this.fields,
+    required this.onSave,
+  });
+
+  final String title;
+  final List<Widget> fields;
+  final Future<void> Function() onSave;
 
   @override
   Widget build(BuildContext context) {
     return Padding(
-      padding: const EdgeInsets.only(bottom: AppSpacing.sm),
-      child: Container(
-        padding: const EdgeInsets.all(AppSpacing.md),
-        decoration: BoxDecoration(color: AppColors.fieldFill, borderRadius: BorderRadius.circular(AppRadius.field)),
-        child: Row(children: [
-          Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-            Text(variant.variantName, style: AppTypography.callout.copyWith(fontWeight: FontWeight.w600)),
-            Text('SKU: ${variant.sku} · ${variant.sellingPrice.toStringAsFixed(2)}', style: AppTypography.footnote.copyWith(color: AppColors.textMuted)),
-          ])),
-          IconButton(icon: const Icon(Icons.edit, size: 18, color: AppColors.accent), onPressed: onEdit),
-          IconButton(icon: const Icon(Icons.close, size: 18, color: AppColors.destructive), onPressed: onDelete),
-        ]),
-      ),
-    );
-  }
-}
-
-class _ImageCard extends StatelessWidget {
-  const _ImageCard({required this.image, required this.onSetPrimary, required this.onDelete});
-  final ProductImage image;
-  final VoidCallback onSetPrimary, onDelete;
-
-  @override
-  Widget build(BuildContext context) {
-    return Padding(
-      padding: const EdgeInsets.only(bottom: AppSpacing.sm),
-      child: Container(
-        padding: const EdgeInsets.all(AppSpacing.md),
-        decoration: BoxDecoration(color: AppColors.fieldFill, borderRadius: BorderRadius.circular(AppRadius.field)),
-        child: Row(children: [
-          Container(width: 48, height: 48, decoration: BoxDecoration(color: AppColors.separator, borderRadius: BorderRadius.circular(8)), child: const Icon(Icons.image, color: AppColors.textMuted, size: 24)),
-          const SizedBox(width: AppSpacing.md),
-          Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-            Text(image.url, maxLines: 1, overflow: TextOverflow.ellipsis, style: AppTypography.footnote),
-            if (image.isPrimary) Text('Primary', style: AppTypography.caption.copyWith(color: AppColors.success)),
-          ])),
-          if (!image.isPrimary) IconButton(icon: const Icon(Icons.star_outline, size: 18, color: AppColors.textMuted), onPressed: onSetPrimary, tooltip: 'Set as primary'),
-          IconButton(icon: const Icon(Icons.close, size: 18, color: AppColors.destructive), onPressed: onDelete),
-        ]),
-      ),
-    );
-  }
-}
-
-class _PricingCard extends StatelessWidget {
-  const _PricingCard({required this.tier, required this.onEdit, required this.onDelete});
-  final PricingTier tier;
-  final VoidCallback onEdit, onDelete;
-
-  @override
-  Widget build(BuildContext context) {
-    return Padding(
-      padding: const EdgeInsets.only(bottom: AppSpacing.sm),
-      child: Container(
-        padding: const EdgeInsets.all(AppSpacing.md),
-        decoration: BoxDecoration(color: AppColors.fieldFill, borderRadius: BorderRadius.circular(AppRadius.field)),
-        child: Row(children: [
-          Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-            Text(tier.tierName, style: AppTypography.callout.copyWith(fontWeight: FontWeight.w600)),
-            Text('Qty ${tier.minQty}${tier.maxQty != null ? '-${tier.maxQty}' : '+'} · ${tier.unitPrice.toStringAsFixed(2)}', style: AppTypography.footnote.copyWith(color: AppColors.textMuted)),
-          ])),
-          IconButton(icon: const Icon(Icons.edit, size: 18, color: AppColors.accent), onPressed: onEdit),
-          IconButton(icon: const Icon(Icons.close, size: 18, color: AppColors.destructive), onPressed: onDelete),
-        ]),
+      padding: EdgeInsets.only(bottom: MediaQuery.viewInsetsOf(context).bottom),
+      child: SingleChildScrollView(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            AppSheetHeader(title: title),
+            for (final f in fields) ...[
+              f,
+              const SizedBox(height: AppSpacing.fieldGap),
+            ],
+            const SizedBox(height: 4),
+            AppButton(label: 'Save', fullWidth: true, onPressed: onSave),
+            const SizedBox(height: 8),
+          ],
+        ),
       ),
     );
   }
