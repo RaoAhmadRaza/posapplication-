@@ -1,17 +1,25 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:lucide_icons_flutter/lucide_icons.dart';
+
 import '../../../../core/design/app_colors.dart';
 import '../../../../core/design/app_radius.dart';
-import '../../../../core/design/app_spacing.dart';
 import '../../../../core/design/app_typography.dart';
+import '../../../../core/design/clay.dart';
 import '../../../../core/design/widgets/app_button.dart';
 import '../../../../core/design/widgets/app_card.dart';
-import '../../../../core/design/widgets/app_text_field.dart';
+import '../../../../core/design/widgets/app_list_skeleton.dart';
+import '../../../../core/design/widgets/app_money_text.dart';
+import '../../../../core/design/widgets/app_pill.dart';
+import '../../../../core/design/widgets/app_search_field.dart';
+import '../../../../core/design/widgets/app_states.dart';
 import '../../../../core/services/scanner_support.dart';
 import '../../../../core/widgets/barcode_scan_page.dart';
 import '../../domain/entities/imei_record.dart';
-import '../../domain/entities/imei_status.dart';
+import '../../domain/entities/product.dart';
 import '../controllers/imei_controller.dart';
+import '../controllers/products_controller.dart';
+import '../widgets/inventory_ui.dart';
 
 class ImeiLookupPage extends ConsumerStatefulWidget {
   const ImeiLookupPage({super.key});
@@ -24,6 +32,8 @@ class _ImeiLookupPageState extends ConsumerState<ImeiLookupPage> {
   final _searchController = TextEditingController();
   List<ImeiRecord> _results = [];
   bool _searching = false;
+  bool _searched = false;
+  bool _error = false;
 
   @override
   void dispose() {
@@ -34,12 +44,35 @@ class _ImeiLookupPageState extends ConsumerState<ImeiLookupPage> {
   Future<void> _search() async {
     final q = _searchController.text.trim();
     if (q.isEmpty) return;
-    setState(() => _searching = true);
+    setState(() {
+      _searching = true;
+      _error = false;
+    });
     await ref.read(imeiProvider.notifier).load();
     if (!mounted) return;
-    final all = ref.read(imeiProvider).value ?? <ImeiRecord>[];
+    final snapshot = ref.read(imeiProvider);
+    final all = snapshot.value ?? <ImeiRecord>[];
     setState(() {
-      _results = all.where((r) => r.imei.toLowerCase().contains(q.toLowerCase())).toList();
+      _results =
+          all.where((r) => r.imei.toLowerCase().contains(q.toLowerCase())).toList();
+      _searched = true;
+      _error = snapshot.hasError;
+      _searching = false;
+    });
+  }
+
+  Future<void> _loadAll() async {
+    setState(() {
+      _searching = true;
+      _error = false;
+    });
+    await ref.read(imeiProvider.notifier).load();
+    if (!mounted) return;
+    final snapshot = ref.read(imeiProvider);
+    setState(() {
+      _results = snapshot.value ?? <ImeiRecord>[];
+      _searched = true;
+      _error = snapshot.hasError;
       _searching = false;
     });
   }
@@ -53,175 +86,306 @@ class _ImeiLookupPageState extends ConsumerState<ImeiLookupPage> {
 
   @override
   Widget build(BuildContext context) {
+    final lum = context.lum;
+
     return Scaffold(
-      backgroundColor: AppColors.background,
-      appBar: AppBar(
-        backgroundColor: AppColors.background,
-        surfaceTintColor: AppColors.background,
-        leading: IconButton(
-          icon: const Icon(Icons.arrow_back_ios, color: AppColors.accent, size: 20),
-          onPressed: () => Navigator.of(context).pop(),
-        ),
-        title: Text('IMEI Lookup', style: AppTypography.headline),
-      ),
-      body: Padding(
-        padding: const EdgeInsets.symmetric(horizontal: AppSpacing.screenPadding),
+      backgroundColor: lum.paper,
+      body: SafeArea(
         child: Column(
           children: [
-            const SizedBox(height: AppSpacing.md),
-            AppTextField(
-              controller: _searchController,
-              label: 'IMEI / Serial Number',
-              prefixIcon: Icons.search,
-              hint: 'Enter IMEI to lookup',
-            ),
-            const SizedBox(height: AppSpacing.md),
-            Row(
-              children: [
-                AppButton(label: 'Search', onPressed: _search),
-                const Spacer(),
-                if (barcodeScanSupported) ...[
-                  AppButton(
-                    label: 'Scan',
-                    variant: AppButtonVariant.tinted,
-                    onPressed: _scanImei,
-                    icon: Icons.qr_code_scanner,
+            _header(lum),
+            Padding(
+              padding: const EdgeInsets.fromLTRB(16, 4, 16, 12),
+              child: Column(
+                children: [
+                  Row(
+                    children: [
+                      Expanded(
+                        child: AppSearchField(
+                          controller: _searchController,
+                          hint: 'Enter IMEI or serial',
+                          onSubmitted: (_) => _search(),
+                        ),
+                      ),
+                      if (barcodeScanSupported) ...[
+                        const SizedBox(width: 10),
+                        _ToolIcon(
+                          icon: LucideIcons.scanLine,
+                          tooltip: 'Scan IMEI',
+                          onTap: _scanImei,
+                        ),
+                      ],
+                    ],
                   ),
-                  const SizedBox(width: AppSpacing.sm),
+                  const SizedBox(height: 12),
+                  Row(
+                    children: [
+                      Expanded(
+                        child: AppButton(
+                          label: 'Search',
+                          icon: LucideIcons.search,
+                          onPressed: _search,
+                        ),
+                      ),
+                      const SizedBox(width: 10),
+                      AppButton(
+                        label: 'Load all',
+                        variant: AppButtonVariant.tinted,
+                        onPressed: _loadAll,
+                      ),
+                    ],
+                  ),
                 ],
-                AppButton(
-                  label: 'Load All',
-                  variant: AppButtonVariant.plain,
-                  onPressed: () async {
-                    await ref.read(imeiProvider.notifier).load();
-                    if (mounted) setState(() => _results = ref.read(imeiProvider).value ?? []);
-                  },
+              ),
+            ),
+            Expanded(child: _buildBody(lum)),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _header(LumColors lum) {
+    final back = Semantics(
+      button: true,
+      label: 'Back',
+      child: GestureDetector(
+        behavior: HitTestBehavior.opaque,
+        onTap: () => Navigator.of(context).maybePop(),
+        child: ClayContainer(
+          variant: ClayVariant.soft,
+          color: lum.surface,
+          borderRadius: AppRadius.sm,
+          isDark: lum.isDark,
+          width: 44,
+          height: 44,
+          child: Icon(LucideIcons.arrowLeft, size: 20, color: lum.g600),
+        ),
+      ),
+    );
+
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(16, 12, 16, 8),
+      child: Row(
+        children: [
+          back,
+          const SizedBox(width: 14),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Text(
+                  'INVENTORY',
+                  style: AppTypography.caption.copyWith(
+                    fontWeight: FontWeight.w600,
+                    letterSpacing: 0.7,
+                    color: lum.g400,
+                  ),
+                ),
+                const SizedBox(height: 2),
+                Text(
+                  'IMEI lookup',
+                  style: AppTypography.title1
+                      .copyWith(fontSize: 23, color: lum.textPrimary),
                 ),
               ],
             ),
-            const SizedBox(height: AppSpacing.lg),
-            Expanded(
-              child: _searching
-                  ? const Center(child: CircularProgressIndicator())
-                  : _results.isEmpty
-                      ? Center(
-                          child: Column(
-                            mainAxisSize: MainAxisSize.min,
-                            children: [
-                              Icon(Icons.search_off, size: 48, color: AppColors.textHint),
-                              const SizedBox(height: AppSpacing.md),
-                              Text('No results', style: AppTypography.subhead.copyWith(color: AppColors.textMuted)),
-                              Text('Enter an IMEI to search or load all.', style: AppTypography.footnote.copyWith(color: AppColors.textHint)),
-                            ],
-                          ),
-                        )
-                      : ListView.builder(
-                          itemCount: _results.length,
-                          itemBuilder: (_, i) => Padding(
-                            padding: EdgeInsets.only(bottom: i < _results.length - 1 ? AppSpacing.sm : 0),
-                            child: _ImeiCard(record: _results[i]),
-                          ),
-                        ),
-            ),
-          ],
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildBody(LumColors lum) {
+    if (_searching) {
+      return const Padding(
+        padding: EdgeInsets.symmetric(horizontal: 16),
+        child: AppListSkeleton(),
+      );
+    }
+    if (_error) {
+      return AppErrorState(
+        title: "We couldn't run the lookup",
+        body: 'We couldn\'t reach the server. Your data is safe — '
+            'try again in a moment.',
+        onRetry: _searchController.text.trim().isEmpty ? _loadAll : _search,
+      );
+    }
+    if (_results.isEmpty) {
+      return AppEmptyState(
+        icon: LucideIcons.searchCode,
+        title: _searched ? 'No matches' : 'Search for a device',
+        body: _searched
+            ? 'No IMEI or serial matches that search. Check the number '
+                'and try again.'
+            : 'Enter an IMEI or serial number, or load all to browse '
+                'registered devices.',
+      );
+    }
+    return ListView.builder(
+      padding: const EdgeInsets.fromLTRB(16, 4, 16, 24),
+      itemCount: _results.length,
+      itemBuilder: (_, i) => Padding(
+        padding: EdgeInsets.only(bottom: i < _results.length - 1 ? 10 : 0),
+        child: _ImeiCard(record: _results[i]),
+      ),
+    );
+  }
+}
+
+class _ToolIcon extends StatelessWidget {
+  const _ToolIcon({required this.icon, required this.onTap, this.tooltip});
+
+  final IconData icon;
+  final VoidCallback onTap;
+  final String? tooltip;
+
+  @override
+  Widget build(BuildContext context) {
+    final lum = context.lum;
+    return Tooltip(
+      message: tooltip ?? '',
+      child: Semantics(
+        button: true,
+        label: tooltip,
+        child: GestureDetector(
+          behavior: HitTestBehavior.opaque,
+          onTap: onTap,
+          child: ClayContainer(
+            variant: ClayVariant.soft,
+            color: lum.surface,
+            borderRadius: AppRadius.sm,
+            isDark: lum.isDark,
+            width: 44,
+            height: 44,
+            child: Icon(icon, size: 19, color: lum.g600),
+          ),
         ),
       ),
     );
   }
 }
 
-class _ImeiCard extends StatelessWidget {
+class _ImeiCard extends ConsumerWidget {
   const _ImeiCard({required this.record});
+
   final ImeiRecord record;
 
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context, WidgetRef ref) {
+    final lum = context.lum;
+    final products = ref.watch(productsProvider).value ?? <Product>[];
+    final productName =
+        products.where((p) => p.id == record.productId).firstOrNull?.name;
+    final (tone, label) = imeiStatusPill(record.status);
+
     return AppCard(
-      child: Padding(
-        padding: const EdgeInsets.all(AppSpacing.lg),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Row(
-              children: [
-                Container(
-                  width: 40, height: 40,
-                  decoration: BoxDecoration(
-                    color: AppColors.accent.withValues(alpha: 0.1),
-                    borderRadius: BorderRadius.circular(10),
-                  ),
-                  child: const Center(child: Icon(Icons.qr_code, color: AppColors.accent, size: 20)),
-                ),
-                const SizedBox(width: AppSpacing.md),
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(record.imei, style: AppTypography.headline),
-                      const SizedBox(height: 2),
-                      Text(record.sourceType, style: AppTypography.caption.copyWith(color: AppColors.textMuted)),
+      padding: const EdgeInsets.all(14),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              ClayContainer(
+                variant: ClayVariant.inset,
+                color: lum.g100,
+                borderRadius: AppRadius.sm,
+                isDark: lum.isDark,
+                width: 46,
+                height: 46,
+                child: Icon(kInvItemIcon, size: 21, color: lum.g500),
+              ),
+              const SizedBox(width: 14),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      record.imei,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: AppTypography.monoValue.copyWith(
+                        fontSize: 16,
+                        fontWeight: FontWeight.w600,
+                        color: lum.textPrimary,
+                      ),
+                    ),
+                    if (productName != null && productName.isNotEmpty) ...[
+                      const SizedBox(height: 3),
+                      Text(
+                        productName,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: AppTypography.caption
+                            .copyWith(color: lum.g500, fontSize: 12.5),
+                      ),
                     ],
-                  ),
+                  ],
                 ),
-                _ImeiStatusChip(status: record.status),
-              ],
-            ),
-            const Divider(color: AppColors.separator, height: AppSpacing.lg),
-            Row(
-              children: [
-                _DetailItem(label: 'Branch', value: record.branchId.substring(0, 8)),
-                const SizedBox(width: AppSpacing.xl),
-                _DetailItem(label: 'Cost', value: record.costPrice.toStringAsFixed(2)),
-                const SizedBox(width: AppSpacing.xl),
-                _DetailItem(label: 'Registered', value: _format(record.createdAt)),
-              ],
-            ),
-          ],
-        ),
+              ),
+              const SizedBox(width: 12),
+              AppPill(label: label, tone: tone),
+            ],
+          ),
+          const SizedBox(height: 12),
+          Container(height: 1, color: lum.hairline),
+          const SizedBox(height: 12),
+          Wrap(
+            spacing: 22,
+            runSpacing: 12,
+            children: [
+              _metaCell(
+                lum,
+                'Branch',
+                Text(
+                  record.branchId.length >= 8
+                      ? record.branchId.substring(0, 8)
+                      : record.branchId,
+                  style: AppTypography.monoValue
+                      .copyWith(fontSize: 13, color: lum.g600),
+                ),
+              ),
+              _metaCell(
+                lum,
+                'Source',
+                Text(
+                  record.sourceType,
+                  style: AppTypography.footnote.copyWith(color: lum.g600),
+                ),
+              ),
+              _metaCell(
+                lum,
+                'Since',
+                Text(
+                  ymd(record.createdAt),
+                  style: AppTypography.monoValue
+                      .copyWith(fontSize: 13, color: lum.g600),
+                ),
+              ),
+              _metaCell(lum, 'Cost', AppMoneyText(record.costPrice, size: 15)),
+            ],
+          ),
+        ],
       ),
     );
   }
 
-  String _format(DateTime dt) => '${dt.year}-${dt.month.toString().padLeft(2, '0')}-${dt.day.toString().padLeft(2, '0')}';
-}
-
-class _ImeiStatusChip extends StatelessWidget {
-  const _ImeiStatusChip({required this.status});
-  final ImeiStatus status;
-
-  @override
-  Widget build(BuildContext context) {
-    Color color;
-    switch (status) {
-      case ImeiStatus.available: color = AppColors.success; break;
-      case ImeiStatus.sold: color = AppColors.textPrimary; break;
-      case ImeiStatus.returned: color = AppColors.warning; break;
-      case ImeiStatus.transferred: color = AppColors.accent; break;
-      case ImeiStatus.scrapped: color = AppColors.destructive; break;
-      case ImeiStatus.reserved: color = AppColors.accent; break;
-      case ImeiStatus.inTransit: color = AppColors.warning; break;
-    }
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: AppSpacing.sm, vertical: 4),
-      decoration: BoxDecoration(color: color.withValues(alpha: 0.12), borderRadius: BorderRadius.circular(AppRadius.chip)),
-      child: Text(status.dbValue, style: AppTypography.caption.copyWith(color: color, fontWeight: FontWeight.w600)),
-    );
-  }
-}
-
-class _DetailItem extends StatelessWidget {
-  const _DetailItem({required this.label, required this.value});
-  final String label, value;
-
-  @override
-  Widget build(BuildContext context) {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Text(label, style: AppTypography.caption.copyWith(color: AppColors.textHint)),
-        const SizedBox(height: 2),
-        Text(value, style: AppTypography.footnote),
-      ],
-    );
-  }
+  Widget _metaCell(LumColors lum, String label, Widget value) => Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Text(
+            label.toUpperCase(),
+            style: AppTypography.caption.copyWith(
+              fontSize: 10.5,
+              letterSpacing: 0.5,
+              fontWeight: FontWeight.w600,
+              color: lum.g400,
+            ),
+          ),
+          const SizedBox(height: 3),
+          value,
+        ],
+      );
 }
