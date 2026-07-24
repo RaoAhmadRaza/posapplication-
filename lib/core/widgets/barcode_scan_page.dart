@@ -1,6 +1,8 @@
 import 'dart:async';
 
+import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart' show PlatformException;
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:mobile_scanner/mobile_scanner.dart';
 
@@ -13,6 +15,40 @@ import '../design/widgets/app_inline_banner.dart';
 import '../services/scanner_support.dart';
 
 const _manualEntrySentinel = '__BARCODE_SCAN_MANUAL__';
+const _noCodeFoundSentinel = '__BARCODE_NO_CODE__';
+
+/// Returned by [scanBarcodeFromImage] when the picked image had no readable
+/// barcode/QR (distinct from null = the user cancelled the picker).
+const barcodeNoCodeFoundSentinel = _noCodeFoundSentinel;
+
+/// Let the user pick an image (file/gallery) and decode a barcode/QR from it.
+/// This is the scan path on desktop, where live camera scanning is unavailable.
+/// Returns the decoded value, [barcodeNoCodeFoundSentinel] if none was found,
+/// or null if the user cancelled or the picker was refused.
+Future<String?> scanBarcodeFromImage() async {
+  FilePickerResult? result;
+  try {
+    result = await FilePicker.pickFiles(type: FileType.image);
+  } on PlatformException {
+    return null;
+  }
+  if (result == null || result.files.isEmpty) return null;
+  final path = result.files.first.path;
+  if (path == null) return null;
+
+  final controller = MobileScannerController();
+  try {
+    final capture = await controller.analyzeImage(path);
+    final barcode = capture?.barcodes.firstOrNull;
+    final code = barcode?.rawValue ?? barcode?.displayValue;
+    if (code == null || code.isEmpty) return _noCodeFoundSentinel;
+    return code;
+  } on Exception {
+    return _noCodeFoundSentinel;
+  } finally {
+    await controller.dispose();
+  }
+}
 
 Future<String?> scanBarcode(
   BuildContext context, {

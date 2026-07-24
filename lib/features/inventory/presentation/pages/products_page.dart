@@ -16,7 +16,9 @@ import '../../../../core/design/widgets/app_money_text.dart';
 import '../../../../core/design/widgets/app_pill.dart';
 import '../../../../core/design/widgets/app_search_field.dart';
 import '../../../../core/design/widgets/app_sheet.dart';
+import '../../../../core/design/widgets/app_inline_banner.dart';
 import '../../../../core/design/widgets/app_states.dart';
+import '../../../../core/design/widgets/app_toast.dart';
 import '../../../../core/services/scanner_support.dart';
 import '../../../../core/services/voice_input_service.dart';
 import '../../../../core/services/voice_support.dart';
@@ -25,6 +27,7 @@ import '../../../../core/widgets/permission_gate.dart';
 import '../../domain/entities/brand.dart';
 import '../../domain/entities/category.dart';
 import '../../domain/entities/product.dart';
+import '../../domain/usecases/search_products.dart';
 import '../controllers/brands_controller.dart';
 import '../controllers/categories_controller.dart';
 import '../controllers/products_controller.dart';
@@ -119,12 +122,64 @@ class _ProductsPageState extends ConsumerState<ProductsPage> {
     _applyFilters();
   }
 
-  Future<void> _scanForSearch() async {
+  /// Scan icon tap. Mobile has both camera + image; offer a chooser. Desktop
+  /// (macOS) has only image decoding, so go straight to the picker.
+  Future<void> _onScanTap() async {
+    if (barcodeScanSupported && barcodeImageScanSupported) {
+      final choice = await showAppSheet<String>(
+        context: context,
+        builder: (_) => const _ScanSourceSheet(),
+      );
+      if (choice == 'camera') await _scanWithCamera();
+      if (choice == 'image') await _scanFromImage();
+    } else if (barcodeScanSupported) {
+      await _scanWithCamera();
+    } else {
+      await _scanFromImage();
+    }
+  }
+
+  Future<void> _scanWithCamera() async {
     final code = await scanBarcode(context, title: 'Scan Product');
     if (code == null || code == BarcodeScanPage.manualEntrySentinel) return;
+    await _handleScannedCode(code);
+  }
+
+  Future<void> _scanFromImage() async {
+    final code = await scanBarcodeFromImage();
+    if (!mounted || code == null) return;
+    if (code == barcodeNoCodeFoundSentinel) {
+      showAppToast(context, 'No barcode or QR found in that image',
+          type: BannerType.warning);
+      return;
+    }
+    await _handleScannedCode(code);
+  }
+
+  /// Look up a scanned/decoded code and, on a single exact barcode/SKU match,
+  /// jump straight to that product (same target as tapping its card).
+  /// Otherwise fall back to the normal filtered search.
+  Future<void> _handleScannedCode(String code) async {
+    final (results, failure) =
+        await ref.read(searchProductsUseCaseProvider).call(code);
+    if (!mounted) return;
+
+    if (failure == null) {
+      final exact =
+          results.where((p) => p.barcode == code || p.sku == code).toList();
+      if (exact.length == 1) {
+        context.push('/inventory/stock/${exact.first.id}');
+        return;
+      }
+    }
+
     _searchController.text = code;
     setState(() => _isSearching = true);
     _applyFilters();
+    if (failure == null && results.isEmpty) {
+      showAppToast(context, 'No product matches that code',
+          type: BannerType.warning);
+    }
   }
 
   Future<void> _startVoiceSearch() async {
@@ -208,12 +263,15 @@ class _ProductsPageState extends ConsumerState<ProductsPage> {
                               hint: 'Search name, SKU or barcode',
                             ),
                           ),
-                          if (barcodeScanSupported) ...[
+                          if (barcodeScanSupported ||
+                              barcodeImageScanSupported) ...[
                             const SizedBox(width: 10),
                             _ToolIcon(
                               icon: LucideIcons.scanLine,
-                              tooltip: 'Scan barcode',
-                              onTap: _scanForSearch,
+                              tooltip: barcodeScanSupported
+                                  ? 'Scan product'
+                                  : 'Scan product from image',
+                              onTap: _onScanTap,
                             ),
                           ],
                           if (voiceSearchSupported) ...[
@@ -512,6 +570,48 @@ class _ToolIcon extends StatelessWidget {
             child: Icon(icon,
                 size: 19, color: active ? lum.accentPress : lum.g600),
           ),
+        ),
+      ),
+    );
+  }
+}
+
+class _ScanSourceSheet extends StatelessWidget {
+  const _ScanSourceSheet();
+
+  @override
+  Widget build(BuildContext context) {
+    final lum = context.lum;
+    return Column(
+      mainAxisSize: MainAxisSize.min,
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        Padding(
+          padding: const EdgeInsets.fromLTRB(4, 4, 4, 12),
+          child: Text('Scan product',
+              style: AppTypography.title3.copyWith(color: lum.textPrimary)),
+        ),
+        _row(context, lum, LucideIcons.camera, 'Use camera', 'camera'),
+        const SizedBox(height: 8),
+        _row(context, lum, LucideIcons.image, 'From an image', 'image'),
+      ],
+    );
+  }
+
+  Widget _row(BuildContext context, LumColors lum, IconData icon, String label,
+      String value) {
+    return InkWell(
+      onTap: () => Navigator.of(context).pop(value),
+      borderRadius: BorderRadius.circular(AppRadius.md),
+      child: Padding(
+        padding: const EdgeInsets.symmetric(vertical: 14, horizontal: 8),
+        child: Row(
+          children: [
+            Icon(icon, size: 20, color: lum.accent),
+            const SizedBox(width: 14),
+            Text(label,
+                style: AppTypography.body.copyWith(color: lum.textPrimary)),
+          ],
         ),
       ),
     );
