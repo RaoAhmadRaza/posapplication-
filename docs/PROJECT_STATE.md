@@ -624,10 +624,12 @@ date. Coverage: auth/RBAC → catalog/stock → sales/returns → dashboard → 
 (7 money paths) → M08 reporting → M09 repair → M11 notifications → security (Phase 1).
 
 ## Peripheral features — COMPLETE (detail in DECISIONS.md)
-Barcode scanning (mobile_scanner: live camera on mobile via scanBarcode; decode-from-image via scanBarcodeFromImage +
-analyzeImage on desktop/macOS+mobile — the products_page scan icon offers a camera/image chooser where both work, image-only
-on macOS; both paths do exact barcode/SKU lookup → jump to stock detail on single match, else filtered search);
-label printing (LabelPdfService/LabelPrintPage);
+Barcode scanning (unified via scanProductCode() in barcode_scan_page): live camera on mobile (mobile_scanner) + decode-from-
+image on ALL platforms — mobile_scanner.analyzeImage on iOS/Android/macOS, pure-Dart zxing2 QR decode on Windows/Linux (where
+mobile_scanner has no plugin; QR/DataMatrix only, not 1D). barcodeImageScanSupported = !kIsWeb. Three entry points, same exact
+barcode/SKU lookup: products_page scan icon → jump to stock detail; POS terminal HEADER scan action (ModuleHeader actions) →
+add to cart on exact match (else fill search); dashboard HEADER scan button (DashboardAppBar) → jump to stock detail. label
+printing (LabelPdfService/LabelPrintPage);
 notifications (+prefs, trg_low_stock_notify, hub bell badge); bulk CSV import (bulk_import_products); voice search (speech_to_text).
 
 ## Known Issues
