@@ -2,15 +2,21 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
+import 'package:lucide_icons_flutter/lucide_icons.dart';
+
 import '../../../../core/design/app_colors.dart';
-import '../../../../core/design/format.dart';
 import '../../../../core/design/app_radius.dart';
-import '../../../../core/design/app_spacing.dart';
 import '../../../../core/design/app_typography.dart';
+import '../../../../core/design/clay.dart';
 import '../../../../core/design/widgets/app_button.dart';
 import '../../../../core/design/widgets/app_card.dart';
-import '../../../../core/design/widgets/app_inline_banner.dart';
-import '../../../../core/design/widgets/app_text_field.dart';
+import '../../../../core/design/widgets/app_checkbox.dart';
+import '../../../../core/design/widgets/app_list_skeleton.dart';
+import '../../../../core/design/widgets/app_money_text.dart';
+import '../../../../core/design/widgets/app_pill.dart';
+import '../../../../core/design/widgets/app_search_field.dart';
+import '../../../../core/design/widgets/app_sheet.dart';
+import '../../../../core/design/widgets/app_states.dart';
 import '../../../../core/services/scanner_support.dart';
 import '../../../../core/services/voice_input_service.dart';
 import '../../../../core/services/voice_support.dart';
@@ -22,6 +28,7 @@ import '../../domain/entities/product.dart';
 import '../controllers/brands_controller.dart';
 import '../controllers/categories_controller.dart';
 import '../controllers/products_controller.dart';
+import '../widgets/inventory_ui.dart';
 
 class ProductsPage extends ConsumerStatefulWidget {
   const ProductsPage({super.key});
@@ -176,160 +183,201 @@ class _ProductsPageState extends ConsumerState<ProductsPage> {
 
   @override
   Widget build(BuildContext context) {
+    final lum = context.lum;
     final state = ref.watch(productsProvider);
     final categories = ref.watch(categoriesProvider).value ?? <Category>[];
     final brands = ref.watch(brandsProvider).value ?? <Brand>[];
 
     return Scaffold(
-      backgroundColor: AppColors.background,
-      appBar: AppBar(
-        backgroundColor: AppColors.background,
-        surfaceTintColor: AppColors.background,
-        leading: _selectionMode
-            ? IconButton(
-                icon: const Icon(Icons.close, color: AppColors.accent, size: 20),
-                onPressed: _toggleSelectionMode,
-              )
-            : IconButton(
-                icon: const Icon(Icons.arrow_back_ios, color: AppColors.accent, size: 20),
-                onPressed: () => Navigator.of(context).pop(),
+      backgroundColor: lum.paper,
+      body: SafeArea(
+        child: Stack(
+          children: [
+            Column(
+              children: [
+                _header(lum),
+                Padding(
+                  padding: const EdgeInsets.fromLTRB(16, 4, 16, 0),
+                  child: Column(
+                    children: [
+                      Row(
+                        children: [
+                          Expanded(
+                            child: AppSearchField(
+                              controller: _searchController,
+                              hint: 'Search name, SKU or barcode',
+                            ),
+                          ),
+                          if (barcodeScanSupported) ...[
+                            const SizedBox(width: 10),
+                            _ToolIcon(
+                              icon: LucideIcons.scanLine,
+                              tooltip: 'Scan barcode',
+                              onTap: _scanForSearch,
+                            ),
+                          ],
+                          if (voiceSearchSupported) ...[
+                            const SizedBox(width: 8),
+                            _ToolIcon(
+                              icon: _voiceListening
+                                  ? LucideIcons.mic
+                                  : LucideIcons.micOff,
+                              tooltip: 'Voice search',
+                              active: _voiceListening,
+                              onTap: _startVoiceSearch,
+                            ),
+                          ],
+                        ],
+                      ),
+                      if (_voiceListening)
+                        Padding(
+                          padding: const EdgeInsets.only(top: 10),
+                          child: Container(
+                            padding: const EdgeInsets.symmetric(
+                                horizontal: 14, vertical: 9),
+                            decoration: BoxDecoration(
+                              color: lum.accentSoft,
+                              borderRadius:
+                                  BorderRadius.circular(AppRadius.md),
+                            ),
+                            child: Row(
+                              children: [
+                                Icon(LucideIcons.mic,
+                                    size: 16, color: lum.accentPress),
+                                const SizedBox(width: 9),
+                                Expanded(
+                                  child: Text(
+                                    _voicePartial.isNotEmpty
+                                        ? 'Listening… "$_voicePartial"'
+                                        : 'Listening…',
+                                    maxLines: 1,
+                                    overflow: TextOverflow.ellipsis,
+                                    style: AppTypography.footnote.copyWith(
+                                      color: lum.accentPress,
+                                      fontWeight: FontWeight.w500,
+                                    ),
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
+                        ),
+                      const SizedBox(height: 12),
+                      _FilterRow(
+                        categories: categories,
+                        brands: brands,
+                        selectedCategoryId: _filterCategoryId,
+                        selectedBrandId: _filterBrandId,
+                        selectedStatus: _filterStatus,
+                        onChanged: _onFilterChanged,
+                      ),
+                      const SizedBox(height: 12),
+                    ],
+                  ),
+                ),
+                Expanded(child: _buildBody(state)),
+              ],
+            ),
+            if (_selectionMode && _selectedIds.isNotEmpty)
+              Positioned(
+                left: 0,
+                right: 0,
+                bottom: 0,
+                child: _buildSelectionBar(lum),
               ),
-        title: _selectionMode
-            ? Text('${_selectedIds.length} selected', style: AppTypography.headline)
-            : Text('Products', style: AppTypography.headline),
-        actions: [
-          if (_selectionMode)
-            PermissionGate(
-              module: 'inventory',
-              action: 'create',
-              child: IconButton(
-                icon: const Icon(Icons.add, color: AppColors.accent),
-                onPressed: () => context.push('/inventory/products/create'),
-              ),
-            )
-          else ...[
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _header(LumColors lum) {
+    final back = Semantics(
+      button: true,
+      label: _selectionMode ? 'Cancel selection' : 'Back',
+      child: GestureDetector(
+        behavior: HitTestBehavior.opaque,
+        onTap: _selectionMode
+            ? _toggleSelectionMode
+            : () => Navigator.of(context).maybePop(),
+        child: ClayContainer(
+          variant: ClayVariant.soft,
+          color: lum.surface,
+          borderRadius: AppRadius.sm,
+          isDark: lum.isDark,
+          width: 44,
+          height: 44,
+          child: Icon(
+            _selectionMode ? LucideIcons.x : LucideIcons.arrowLeft,
+            size: 20,
+            color: lum.g600,
+          ),
+        ),
+      ),
+    );
+
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(16, 12, 16, 8),
+      child: Row(
+        children: [
+          back,
+          const SizedBox(width: 14),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Text(
+                  'INVENTORY',
+                  style: AppTypography.caption.copyWith(
+                    fontWeight: FontWeight.w600,
+                    letterSpacing: 0.7,
+                    color: lum.g400,
+                  ),
+                ),
+                const SizedBox(height: 2),
+                Text(
+                  _selectionMode
+                      ? '${_selectedIds.length} selected'
+                      : 'Products',
+                  style: AppTypography.title1
+                      .copyWith(fontSize: 23, color: lum.textPrimary),
+                ),
+              ],
+            ),
+          ),
+          if (!_selectionMode) ...[
             PermissionGate(
               module: 'inventory',
               action: 'export',
-              child: IconButton(
-                icon: const Icon(Icons.local_printshop_outlined, color: AppColors.accent),
-                onPressed: _toggleSelectionMode,
-                tooltip: 'Print Labels',
+              child: _ToolIcon(
+                icon: LucideIcons.printer,
+                tooltip: 'Print labels',
+                onTap: _toggleSelectionMode,
               ),
             ),
+            const SizedBox(width: 8),
             PermissionGate(
               module: 'inventory',
               action: 'create',
-              child: IconButton(
-                icon: const Icon(Icons.add, color: AppColors.accent),
+              child: _ToolIcon(
+                icon: LucideIcons.upload,
+                tooltip: 'Import products',
+                onTap: () => context.push('/inventory/import'),
+              ),
+            ),
+            const SizedBox(width: 8),
+            PermissionGate(
+              module: 'inventory',
+              action: 'create',
+              child: AppButton(
+                label: 'Add',
+                icon: LucideIcons.plus,
+                size: AppButtonSize.sm,
                 onPressed: () => context.push('/inventory/products/create'),
               ),
             ),
-            PermissionGate(
-              module: 'inventory',
-              action: 'create',
-              child: IconButton(
-                icon: const Icon(Icons.upload_file, color: AppColors.accent),
-                onPressed: () => context.push('/inventory/import'),
-                tooltip: 'Import Products',
-              ),
-            ),
           ],
-        ],
-      ),
-      body: Stack(
-        children: [
-          Column(
-            children: [
-              Padding(
-                padding: const EdgeInsets.symmetric(horizontal: AppSpacing.screenPadding),
-                child: Column(
-                  children: [
-                    const SizedBox(height: AppSpacing.md),
-                    Row(
-                      children: [
-                        Expanded(
-                          child: AppTextField(
-                            controller: _searchController,
-                            label: 'Search',
-                            prefixIcon: Icons.search,
-                            hint: 'Name, SKU, or barcode',
-                          ),
-                        ),
-                    if (barcodeScanSupported) ...[
-                      const SizedBox(width: AppSpacing.sm),
-                      IconButton(
-                        icon: const Icon(Icons.qr_code_scanner, color: AppColors.accent),
-                        onPressed: _scanForSearch,
-                        tooltip: 'Scan barcode',
-                      ),
-                    ],
-                    if (voiceSearchSupported) ...[
-                      const SizedBox(width: AppSpacing.xs),
-                      IconButton(
-                        icon: Icon(
-                          _voiceListening ? Icons.mic : Icons.mic_none,
-                          color: _voiceListening ? AppColors.destructive : AppColors.accent,
-                        ),
-                        onPressed: _startVoiceSearch,
-                        tooltip: 'Voice search',
-                      ),
-                    ],
-                  ],
-                ),
-                if (_voiceListening)
-                  Padding(
-                    padding: const EdgeInsets.only(top: AppSpacing.xs),
-                    child: Row(
-                      children: [
-                        const SizedBox(
-                          width: 12,
-                          height: 12,
-                          child: CircularProgressIndicator(
-                            strokeWidth: 1.5,
-                            color: AppColors.accent,
-                          ),
-                        ),
-                        const SizedBox(width: AppSpacing.sm),
-                        Expanded(
-                          child: Text(
-                            _voicePartial.isNotEmpty
-                                ? 'Listening… "$_voicePartial"'
-                                : 'Listening…',
-                            style: AppTypography.caption.copyWith(
-                              color: AppColors.accent,
-                              fontStyle: FontStyle.italic,
-                            ),
-                            maxLines: 1,
-                            overflow: TextOverflow.ellipsis,
-                          ),
-                        ),
-                      ],
-                    ),
-                  ),
-                    const SizedBox(height: AppSpacing.sm),
-                    _FilterRow(
-                      categories: categories,
-                      brands: brands,
-                      selectedCategoryId: _filterCategoryId,
-                      selectedBrandId: _filterBrandId,
-                      selectedStatus: _filterStatus,
-                      onChanged: _onFilterChanged,
-                    ),
-                  ],
-                ),
-              ),
-              const SizedBox(height: AppSpacing.sm),
-              Expanded(child: _buildBody(state)),
-            ],
-          ),
-          if (_selectionMode && _selectedIds.isNotEmpty)
-            Positioned(
-              left: 0,
-              right: 0,
-              bottom: 0,
-              child: _buildSelectionBar(),
-            ),
         ],
       ),
     );
@@ -337,92 +385,59 @@ class _ProductsPageState extends ConsumerState<ProductsPage> {
 
   Widget _buildBody(AsyncValue<List<Product>> state) {
     return state.when(
-      loading: () => const Center(child: CircularProgressIndicator()),
-      error: (e, _) => Center(
-        child: Padding(
-          padding: const EdgeInsets.symmetric(horizontal: AppSpacing.screenPadding),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              AppInlineBanner(
-                message: 'Could not load products.',
-                type: BannerType.error,
-              ),
-              const SizedBox(height: AppSpacing.md),
-              AppButton(
-                label: 'Retry',
-                onPressed: _applyFilters,
-              ),
-            ],
-          ),
-        ),
+      loading: () => const Padding(
+        padding: EdgeInsets.symmetric(horizontal: 16),
+        child: AppListSkeleton(),
+      ),
+      error: (e, _) => AppErrorState(
+        title: "We couldn't load products",
+        body: 'We couldn\'t reach the server. Your data is safe — '
+            'try again in a moment.',
+        onRetry: _applyFilters,
       ),
       data: (products) {
         if (products.isEmpty) {
-          return Center(
-            child: Padding(
-              padding: const EdgeInsets.symmetric(horizontal: AppSpacing.screenPadding),
-              child: Column(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  Icon(
-                    _isSearching ? Icons.search_off : Icons.inventory_2_outlined,
-                    size: 48,
-                    color: AppColors.textHint,
-                  ),
-                  const SizedBox(height: AppSpacing.md),
-                  Text(
-                    _isSearching ? 'No products match' : 'No products yet',
-                    style: AppTypography.subhead.copyWith(color: AppColors.textMuted),
-                  ),
-                  const SizedBox(height: AppSpacing.xs),
-                  Text(
-                    _isSearching
-                        ? 'Try a different search term or clear filters.'
-                        : 'Add your first product to get started.',
-                    textAlign: TextAlign.center,
-                    style: AppTypography.footnote.copyWith(color: AppColors.textHint),
-                  ),
-                  if (!_isSearching) ...[
-                    const SizedBox(height: AppSpacing.xl),
-                    PermissionGate(
-                      module: 'inventory',
-                      action: 'create',
-                      child: AppButton(
-                        label: 'Add Product',
-                        onPressed: () => context.push('/inventory/products/create'),
-                      ),
+          return AppEmptyState(
+            icon: _isSearching ? LucideIcons.searchX : LucideIcons.boxes,
+            title: _isSearching ? 'No products match' : 'No products yet',
+            body: _isSearching
+                ? 'Try a different search term or clear filters.'
+                : 'Your catalog is empty. Add your first product to '
+                    'start selling.',
+            action: _isSearching
+                ? null
+                : PermissionGate(
+                    module: 'inventory',
+                    action: 'create',
+                    child: AppButton(
+                      label: 'Add product',
+                      icon: LucideIcons.plus,
+                      onPressed: () =>
+                          context.push('/inventory/products/create'),
                     ),
-                  ],
-                ],
-              ),
-            ),
+                  ),
           );
         }
         return ListView.builder(
           controller: _scrollController,
-          padding: const EdgeInsets.symmetric(
-            horizontal: AppSpacing.screenPadding,
-            vertical: AppSpacing.md,
-          ),
+          padding: EdgeInsets.fromLTRB(
+              16, 4, 16, _selectionMode && _selectedIds.isNotEmpty ? 96 : 24),
           itemCount: products.length + (_loadingMore ? 1 : 0),
           itemBuilder: (_, i) {
             if (i >= products.length) {
               return const Padding(
-                padding: EdgeInsets.symmetric(vertical: AppSpacing.md),
+                padding: EdgeInsets.symmetric(vertical: 16),
                 child: Center(child: CircularProgressIndicator()),
               );
             }
+            final p = products[i];
             return Padding(
-              padding: EdgeInsets.only(
-                bottom: i < products.length - 1 ? AppSpacing.md : 0,
-              ),
+              padding: EdgeInsets.only(bottom: i < products.length - 1 ? 10 : 0),
               child: _ProductCard(
-                product: products[i],
-                selected: _selectedIds.contains(products[i].id),
-                onToggle: _selectionMode
-                    ? () => _toggleProduct(products[i].id)
-                    : null,
+                product: p,
+                selectionMode: _selectionMode,
+                selected: _selectedIds.contains(p.id),
+                onToggle: _selectionMode ? () => _toggleProduct(p.id) : null,
               ),
             );
           },
@@ -431,35 +446,72 @@ class _ProductsPageState extends ConsumerState<ProductsPage> {
     );
   }
 
-  Widget _buildSelectionBar() {
+  Widget _buildSelectionBar(LumColors lum) {
     return SafeArea(
-      child: Container(
-        padding: const EdgeInsets.symmetric(
-          horizontal: AppSpacing.screenPadding,
-          vertical: AppSpacing.md,
-        ),
-        decoration: BoxDecoration(
-          color: AppColors.background,
-          border: Border(
-            top: BorderSide(color: AppColors.separator, width: 0.5),
+      child: Padding(
+        padding: const EdgeInsets.fromLTRB(16, 0, 16, 12),
+        child: ClayContainer(
+          variant: ClayVariant.raised,
+          color: lum.ink,
+          borderRadius: AppRadius.lg,
+          isDark: lum.isDark,
+          padding: const EdgeInsets.fromLTRB(18, 12, 12, 12),
+          child: Row(
+            children: [
+              Text(
+                '${_selectedIds.length} item${_selectedIds.length == 1 ? '' : 's'}',
+                style: AppTypography.headline.copyWith(color: lum.paper),
+              ),
+              const Spacer(),
+              AppButton(
+                label: 'Choose template',
+                icon: LucideIcons.arrowRight,
+                size: AppButtonSize.sm,
+                onPressed: () => context.push('/inventory/labels',
+                    extra: _selectedIds.toList()),
+              ),
+            ],
           ),
         ),
-        child: Row(
-          children: [
-            Text(
-              '${_selectedIds.length} item${_selectedIds.length == 1 ? '' : 's'}',
-              style: AppTypography.headline,
-            ),
-            const Spacer(),
-            AppButton(
-              label: 'Choose Template',
-              onPressed: () {
-                context.push('/inventory/labels',
-                  extra: _selectedIds.toList());
-              },
-              icon: Icons.arrow_forward,
-            ),
-          ],
+      ),
+    );
+  }
+}
+
+class _ToolIcon extends StatelessWidget {
+  const _ToolIcon({
+    required this.icon,
+    required this.onTap,
+    this.tooltip,
+    this.active = false,
+  });
+
+  final IconData icon;
+  final VoidCallback onTap;
+  final String? tooltip;
+  final bool active;
+
+  @override
+  Widget build(BuildContext context) {
+    final lum = context.lum;
+    return Tooltip(
+      message: tooltip ?? '',
+      child: Semantics(
+        button: true,
+        label: tooltip,
+        child: GestureDetector(
+          behavior: HitTestBehavior.opaque,
+          onTap: onTap,
+          child: ClayContainer(
+            variant: ClayVariant.soft,
+            color: active ? lum.accentSoft : lum.surface,
+            borderRadius: AppRadius.sm,
+            isDark: lum.isDark,
+            width: 44,
+            height: 44,
+            child: Icon(icon,
+                size: 19, color: active ? lum.accentPress : lum.g600),
+          ),
         ),
       ),
     );
@@ -481,43 +533,64 @@ class _FilterRow extends StatelessWidget {
   final String? selectedCategoryId;
   final String? selectedBrandId;
   final String? selectedStatus;
-  final void Function({String? categoryId, String? brandId, String? status}) onChanged;
+  final void Function({String? categoryId, String? brandId, String? status})
+      onChanged;
 
   @override
   Widget build(BuildContext context) {
-    return Wrap(
-      spacing: AppSpacing.sm,
-      runSpacing: AppSpacing.sm,
-      children: [
-        _DropdownChip(
-          label: selectedCategoryId != null
-              ? categories.where((c) => c.id == selectedCategoryId).firstOrNull?.name ?? 'Category'
-              : 'Category',
-          active: selectedCategoryId != null,
-          onClear: selectedCategoryId != null
-              ? () => onChanged(categoryId: null, brandId: selectedBrandId, status: selectedStatus)
-              : null,
-          onTap: () => _showCategoryPicker(context),
-        ),
-        _DropdownChip(
-          label: selectedBrandId != null
-              ? brands.where((b) => b.id == selectedBrandId).firstOrNull?.name ?? 'Brand'
-              : 'Brand',
-          active: selectedBrandId != null,
-          onClear: selectedBrandId != null
-              ? () => onChanged(categoryId: selectedCategoryId, brandId: null, status: selectedStatus)
-              : null,
-          onTap: () => _showBrandPicker(context),
-        ),
-        _DropdownChip(
-          label: _statusLabel(selectedStatus),
-          active: selectedStatus != null,
-          onClear: selectedStatus != null
-              ? () => onChanged(categoryId: selectedCategoryId, brandId: selectedBrandId, status: null)
-              : null,
-          onTap: () => _showStatusPicker(context),
-        ),
-      ],
+    return Align(
+      alignment: Alignment.centerLeft,
+      child: Wrap(
+        spacing: 8,
+        runSpacing: 8,
+        children: [
+          _DropdownChip(
+            label: selectedCategoryId != null
+                ? categories
+                        .where((c) => c.id == selectedCategoryId)
+                        .firstOrNull
+                        ?.name ??
+                    'Category'
+                : 'Category',
+            active: selectedCategoryId != null,
+            onClear: selectedCategoryId != null
+                ? () => onChanged(
+                    categoryId: null,
+                    brandId: selectedBrandId,
+                    status: selectedStatus)
+                : null,
+            onTap: () => _showCategoryPicker(context),
+          ),
+          _DropdownChip(
+            label: selectedBrandId != null
+                ? brands
+                        .where((b) => b.id == selectedBrandId)
+                        .firstOrNull
+                        ?.name ??
+                    'Brand'
+                : 'Brand',
+            active: selectedBrandId != null,
+            onClear: selectedBrandId != null
+                ? () => onChanged(
+                    categoryId: selectedCategoryId,
+                    brandId: null,
+                    status: selectedStatus)
+                : null,
+            onTap: () => _showBrandPicker(context),
+          ),
+          _DropdownChip(
+            label: _statusLabel(selectedStatus),
+            active: selectedStatus != null,
+            onClear: selectedStatus != null
+                ? () => onChanged(
+                    categoryId: selectedCategoryId,
+                    brandId: selectedBrandId,
+                    status: null)
+                : null,
+            onTap: () => _showStatusPicker(context),
+          ),
+        ],
+      ),
     );
   }
 
@@ -535,97 +608,155 @@ class _FilterRow extends StatelessWidget {
   }
 
   void _showCategoryPicker(BuildContext context) {
-    showModalBottomSheet(
+    showAppSheet<void>(
       context: context,
-      builder: (ctx) => SafeArea(
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            ListTile(
-              title: const Text('All Categories'),
+      builder: (ctx) => _PickerSheet(
+        title: 'Category',
+        allLabel: 'All categories',
+        onAll: () {
+          Navigator.of(ctx).pop();
+          onChanged(
+              categoryId: null,
+              brandId: selectedBrandId,
+              status: selectedStatus);
+        },
+        options: [
+          for (final c in categories)
+            _PickerOption(
+              label: c.name,
+              selected: c.id == selectedCategoryId,
               onTap: () {
                 Navigator.of(ctx).pop();
-                onChanged(categoryId: null, brandId: selectedBrandId, status: selectedStatus);
+                onChanged(
+                    categoryId: c.id,
+                    brandId: selectedBrandId,
+                    status: selectedStatus);
               },
             ),
-            Flexible(
-              child: ListView(
-                shrinkWrap: true,
-                children: categories
-                    .map((c) => ListTile(
-                          title: Text(c.name),
-                          onTap: () {
-                            Navigator.of(ctx).pop();
-                            onChanged(categoryId: c.id, brandId: selectedBrandId, status: selectedStatus);
-                          },
-                        ))
-                    .toList(),
-              ),
-            ),
-          ],
-        ),
+        ],
       ),
     );
   }
 
   void _showBrandPicker(BuildContext context) {
-    showModalBottomSheet(
+    showAppSheet<void>(
       context: context,
-      builder: (ctx) => SafeArea(
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            ListTile(
-              title: const Text('All Brands'),
+      builder: (ctx) => _PickerSheet(
+        title: 'Brand',
+        allLabel: 'All brands',
+        onAll: () {
+          Navigator.of(ctx).pop();
+          onChanged(
+              categoryId: selectedCategoryId,
+              brandId: null,
+              status: selectedStatus);
+        },
+        options: [
+          for (final b in brands)
+            _PickerOption(
+              label: b.name,
+              selected: b.id == selectedBrandId,
               onTap: () {
                 Navigator.of(ctx).pop();
-                onChanged(categoryId: selectedCategoryId, brandId: null, status: selectedStatus);
+                onChanged(
+                    categoryId: selectedCategoryId,
+                    brandId: b.id,
+                    status: selectedStatus);
               },
             ),
-            Flexible(
-              child: ListView(
-                shrinkWrap: true,
-                children: brands
-                    .map((b) => ListTile(
-                          title: Text(b.name),
-                          onTap: () {
-                            Navigator.of(ctx).pop();
-                            onChanged(categoryId: selectedCategoryId, brandId: b.id, status: selectedStatus);
-                          },
-                        ))
-                    .toList(),
-              ),
-            ),
-          ],
-        ),
+        ],
       ),
     );
   }
 
   void _showStatusPicker(BuildContext context) {
-    showModalBottomSheet(
+    showAppSheet<void>(
       context: context,
-      builder: (ctx) => SafeArea(
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            ListTile(
-              title: const Text('All'),
+      builder: (ctx) => _PickerSheet(
+        title: 'Status',
+        allLabel: 'All',
+        onAll: () {
+          Navigator.of(ctx).pop();
+          onChanged(
+              categoryId: selectedCategoryId,
+              brandId: selectedBrandId,
+              status: null);
+        },
+        options: [
+          for (final s in const ['ACTIVE', 'INACTIVE', 'DISCONTINUED'])
+            _PickerOption(
+              label: _statusLabel(s),
+              selected: s == selectedStatus,
               onTap: () {
                 Navigator.of(ctx).pop();
-                onChanged(categoryId: selectedCategoryId, brandId: selectedBrandId, status: null);
+                onChanged(
+                    categoryId: selectedCategoryId,
+                    brandId: selectedBrandId,
+                    status: s);
               },
             ),
-            ...['ACTIVE', 'INACTIVE', 'DISCONTINUED'].map((s) => ListTile(
-                  title: Text(_statusLabel(s)),
-                  onTap: () {
-                    Navigator.of(ctx).pop();
-                    onChanged(categoryId: selectedCategoryId, brandId: selectedBrandId, status: s);
-                  },
-                )),
-          ],
-        ),
+        ],
       ),
+    );
+  }
+}
+
+class _PickerOption {
+  const _PickerOption(
+      {required this.label, required this.selected, required this.onTap});
+  final String label;
+  final bool selected;
+  final VoidCallback onTap;
+}
+
+class _PickerSheet extends StatelessWidget {
+  const _PickerSheet({
+    required this.title,
+    required this.allLabel,
+    required this.onAll,
+    required this.options,
+  });
+
+  final String title;
+  final String allLabel;
+  final VoidCallback onAll;
+  final List<_PickerOption> options;
+
+  @override
+  Widget build(BuildContext context) {
+    final lum = context.lum;
+    Widget row(String label, bool selected, VoidCallback onTap) => InkWell(
+          onTap: onTap,
+          borderRadius: BorderRadius.circular(AppRadius.md),
+          child: Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 14),
+            child: Row(
+              children: [
+                Expanded(
+                  child: Text(
+                    label,
+                    style: AppTypography.body.copyWith(
+                      color: lum.textPrimary,
+                      fontWeight:
+                          selected ? FontWeight.w600 : FontWeight.w400,
+                    ),
+                  ),
+                ),
+                if (selected)
+                  Icon(LucideIcons.check, size: 18, color: lum.accent),
+              ],
+            ),
+          ),
+        );
+
+    return Column(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        AppSheetHeader(title: title),
+        row(allLabel, options.every((o) => !o.selected), onAll),
+        for (final o in options) row(o.label, o.selected, o.onTap),
+        const SizedBox(height: 8),
+      ],
     );
   }
 }
@@ -645,35 +776,35 @@ class _DropdownChip extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return InkWell(
+    final lum = context.lum;
+    return GestureDetector(
+      behavior: HitTestBehavior.opaque,
       onTap: onTap,
-      borderRadius: BorderRadius.circular(AppRadius.chip),
-      child: Container(
-        height: 40,
-        padding: const EdgeInsets.symmetric(horizontal: AppSpacing.md),
-        decoration: BoxDecoration(
-          color: active ? AppColors.accent.withValues(alpha: 0.1) : AppColors.fieldFill,
-          borderRadius: BorderRadius.circular(AppRadius.chip),
-          border: active ? Border.all(color: AppColors.accent, width: 1) : null,
-        ),
+      child: ClayContainer(
+        variant: ClayVariant.soft,
+        color: active ? lum.accentSoft : lum.surface,
+        borderRadius: AppRadius.pill,
+        isDark: lum.isDark,
+        height: 36,
+        padding: const EdgeInsets.symmetric(horizontal: 14),
         child: Row(
           mainAxisSize: MainAxisSize.min,
           children: [
             Text(
               label,
               style: AppTypography.footnote.copyWith(
-                color: active ? AppColors.accent : AppColors.textMuted,
+                fontWeight: FontWeight.w600,
+                color: active ? lum.accentPress : lum.g600,
               ),
             ),
-            if (onClear != null) ...[
-              const SizedBox(width: 4),
+            const SizedBox(width: 4),
+            if (active && onClear != null)
               GestureDetector(
                 onTap: onClear,
-                child: Icon(Icons.close, size: 16, color: AppColors.accent),
-              ),
-            ],
-            const Spacer(),
-            Icon(Icons.keyboard_arrow_down, size: 18, color: AppColors.textMuted),
+                child: Icon(LucideIcons.x, size: 15, color: lum.accentPress),
+              )
+            else
+              Icon(LucideIcons.chevronDown, size: 15, color: lum.g500),
           ],
         ),
       ),
@@ -682,163 +813,93 @@ class _DropdownChip extends StatelessWidget {
 }
 
 class _ProductCard extends ConsumerWidget {
-  const _ProductCard({required this.product, this.selected = false, this.onToggle});
+  const _ProductCard({
+    required this.product,
+    required this.selectionMode,
+    this.selected = false,
+    this.onToggle,
+  });
+
   final Product product;
+  final bool selectionMode;
   final bool selected;
   final VoidCallback? onToggle;
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    final categories = ref.watch(categoriesProvider).value ?? <Category>[];
-    final categoryName = categories
-        .where((c) => c.id == product.categoryId)
-        .firstOrNull
-        ?.name;
+    final lum = context.lum;
+    final brands = ref.watch(brandsProvider).value ?? <Brand>[];
+    final brandName =
+        brands.where((b) => b.id == product.brandId).firstOrNull?.name;
+    final (tone, label) =
+        stockStatusPill(product.qtyOnHand, product.reorderPoint, product.type);
 
     return AppCard(
-      child: InkWell(
-        onTap: selected
-            ? onToggle
-            : () => context.push('/inventory/products/${product.id}'),
-        borderRadius: BorderRadius.circular(AppRadius.card),
-        child: Padding(
-          padding: const EdgeInsets.all(AppSpacing.xl),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
+      onTap: selectionMode
+          ? onToggle
+          : () => context.push('/inventory/stock/${product.id}'),
+      padding: const EdgeInsets.all(14),
+      child: Row(
+        children: [
+          if (selectionMode) ...[
+            AppCheckbox(
+              value: selected,
+              onChanged: (_) => onToggle?.call(),
+            ),
+            const SizedBox(width: 12),
+          ],
+          ClayContainer(
+            variant: ClayVariant.inset,
+            color: lum.g100,
+            borderRadius: AppRadius.sm,
+            isDark: lum.isDark,
+            width: 46,
+            height: 46,
+            child: Icon(kInvItemIcon, size: 21, color: lum.g500),
+          ),
+          const SizedBox(width: 14),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  product.name,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style:
+                      AppTypography.headline.copyWith(color: lum.textPrimary),
+                ),
+                const SizedBox(height: 3),
+                Text(
+                  _meta(brandName),
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: AppTypography.caption
+                      .copyWith(color: lum.g500, fontSize: 12.5),
+                ),
+              ],
+            ),
+          ),
+          const SizedBox(width: 12),
+          Column(
+            crossAxisAlignment: CrossAxisAlignment.end,
             children: [
-              Row(
-                children: [
-                  if (onToggle != null) ...[
-                    SizedBox(
-                      width: 24,
-                      height: 24,
-                      child: Checkbox(
-                        value: selected,
-                        onChanged: (_) => onToggle!(),
-                        activeColor: AppColors.accent,
-                        materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
-                        visualDensity: VisualDensity.compact,
-                      ),
-                    ),
-                    const SizedBox(width: AppSpacing.sm),
-                  ],
-                  Container(
-                    width: 40,
-                    height: 40,
-                    decoration: BoxDecoration(
-                      color: AppColors.accent.withValues(alpha: 0.1),
-                      borderRadius: BorderRadius.circular(10),
-                    ),
-                    child: Center(
-                      child: Text(
-                        product.name.isNotEmpty ? product.name[0].toUpperCase() : '?',
-                        style: AppTypography.headline.copyWith(color: AppColors.accent),
-                      ),
-                    ),
-                  ),
-                  const SizedBox(width: AppSpacing.md),
-                  Expanded(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text(product.name, style: AppTypography.headline),
-                        const SizedBox(height: 2),
-                        Text(
-                          _buildSubtitle(categoryName),
-                          style: AppTypography.footnote.copyWith(color: AppColors.textMuted),
-                        ),
-                      ],
-                    ),
-                  ),
-                  _ProductStatusChip(product: product),
-                ],
-              ),
-              const Divider(color: AppColors.separator, height: AppSpacing.xl),
-              Row(
-                children: [
-                  Text(
-                    formatPkr(product.sellingPrice),
-                    style: AppTypography.headline.copyWith(color: AppColors.accent),
-                  ),
-                  const Spacer(),
-                  _StockLabel(product: product),
-                ],
-              ),
+              AppMoneyText(product.sellingPrice, size: 16),
+              const SizedBox(height: 6),
+              AppPill(label: label, tone: tone),
             ],
           ),
-        ),
+        ],
       ),
     );
   }
 
-  String _buildSubtitle(String? categoryName) {
-    final parts = <String>[];
-    if (product.sku.isNotEmpty) parts.add('SKU: ${product.sku}');
-    if (product.barcode != null && product.barcode!.isNotEmpty) {
-      parts.add('Barcode: ${product.barcode}');
-    }
-    if (categoryName != null) parts.add(categoryName);
+  String _meta(String? brandName) {
+    final parts = <String>[
+      product.sku,
+      if (brandName != null && brandName.isNotEmpty) brandName,
+      productTypeLabel(product.type),
+    ];
     return parts.join(' · ');
-  }
-}
-
-class _StockLabel extends StatelessWidget {
-  const _StockLabel({required this.product});
-  final Product product;
-
-  @override
-  Widget build(BuildContext context) {
-    final qty = product.qtyOnHand;
-    if (qty == null) {
-      return Text(
-        'Stock: —',
-        style: AppTypography.footnote.copyWith(color: AppColors.textHint),
-      );
-    }
-    if (qty <= 0) {
-      return Text(
-        'Stock: Out',
-        style: AppTypography.footnote.copyWith(color: AppColors.destructive, fontWeight: FontWeight.w600),
-      );
-    }
-    if (qty <= product.reorderPoint) {
-      return Text(
-        'Stock: Low (${qty.toStringAsFixed(0)})',
-        style: AppTypography.footnote.copyWith(color: AppColors.warning, fontWeight: FontWeight.w600),
-      );
-    }
-    return Text(
-      'Stock: ${qty.toStringAsFixed(0)}',
-      style: AppTypography.footnote.copyWith(color: AppColors.textMuted),
-    );
-  }
-}
-
-class _ProductStatusChip extends StatelessWidget {
-  const _ProductStatusChip({required this.product});
-  final Product product;
-
-  @override
-  Widget build(BuildContext context) {
-    final (color, label) = switch (product.status) {
-      ProductStatus.active => (AppColors.success, 'Active'),
-      ProductStatus.inactive => (AppColors.textMuted, 'Inactive'),
-      ProductStatus.discontinued => (AppColors.warning, 'Disc.'),
-    };
-
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: AppSpacing.sm, vertical: 4),
-      decoration: BoxDecoration(
-        color: color.withValues(alpha: 0.12),
-        borderRadius: BorderRadius.circular(AppRadius.chip),
-      ),
-      child: Text(
-        label,
-        style: AppTypography.caption.copyWith(
-          color: color,
-          fontWeight: FontWeight.w600,
-        ),
-      ),
-    );
   }
 }
