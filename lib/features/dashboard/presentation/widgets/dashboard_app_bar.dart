@@ -6,6 +6,9 @@ import '../../../../core/design/app_colors.dart';
 import '../../../../core/design/app_radius.dart';
 import '../../../../core/design/app_typography.dart';
 import '../../../../core/services/scanner_support.dart';
+import '../../../../core/services/voice_input_service.dart';
+import '../../../../core/services/voice_support.dart';
+import '../../../../core/services/voxa_stt_service.dart';
 import '../../../../core/widgets/barcode_scan_page.dart';
 import '../../../inventory/domain/usecases/search_products.dart';
 import '../../../notifications/presentation/widgets/notification_bell.dart';
@@ -56,6 +59,7 @@ class DashboardAppBar extends ConsumerWidget implements PreferredSizeWidget {
             GlobalSearchField(key: searchFieldKey),
             const SizedBox(width: 16),
           ],
+          if (isWide && voiceSearchSupported) const _DashboardVoiceButton(),
           if (barcodeScanSupported || barcodeImageScanSupported)
             HeaderIconButton(
               icon: LucideIcons.qrCode,
@@ -232,4 +236,74 @@ Future<void> _scanAndJump(BuildContext context, WidgetRef ref) async {
   ScaffoldMessenger.of(context).showSnackBar(
     const SnackBar(content: Text('No product matches that code')),
   );
+}
+
+/// Header voice search (native speech_to_text): dictates into the global search
+/// field. Shown only when wide (where the search field is mounted) and voice is
+/// natively supported.
+class _DashboardVoiceButton extends StatefulWidget {
+  const _DashboardVoiceButton();
+
+  @override
+  State<_DashboardVoiceButton> createState() => _DashboardVoiceButtonState();
+}
+
+class _DashboardVoiceButtonState extends State<_DashboardVoiceButton> {
+  final _voice = VoiceInputService();
+  bool _listening = false;
+
+  @override
+  void dispose() {
+    _voice.cancel();
+    super.dispose();
+  }
+
+  Future<void> _toggle() async {
+    // Windows/Linux: record → Voxa transcribe on the second tap.
+    if (voiceSearchCloudSupported) {
+      if (VoxaStt.instance.isRecording) {
+        final text = await VoxaStt.instance.stopAndTranscribe();
+        if (!mounted) return;
+        setState(() => _listening = false);
+        if (text != null) {
+          searchFieldKey.currentState?.setQuery(text);
+        } else {
+          ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
+            content: Text('Voice service unavailable — is Voxa running?'),
+          ));
+        }
+        return;
+      }
+      final ok = await VoxaStt.instance.startRecording();
+      if (!mounted) return;
+      setState(() => _listening = ok);
+      return;
+    }
+    if (_listening) {
+      _voice.cancel();
+      setState(() => _listening = false);
+      return;
+    }
+    setState(() => _listening = true);
+    final result = await _voice.listen(
+      onPartial: (p) {
+        if (mounted) searchFieldKey.currentState?.setQuery(p);
+      },
+    );
+    if (!mounted) return;
+    setState(() => _listening = false);
+    if (result != null && result.isNotEmpty) {
+      searchFieldKey.currentState?.setQuery(result);
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return HeaderIconButton(
+      icon: _listening ? LucideIcons.mic : LucideIcons.micOff,
+      tooltip: 'Voice search',
+      active: _listening,
+      onPressed: _toggle,
+    );
+  }
 }
