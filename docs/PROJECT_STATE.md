@@ -500,6 +500,45 @@ static-colour refs across the module, works in Counter mode.
   cancel-with-reason), GRN + IMEI, invoice match + variance, payment, returns form/detail (IMEI pills),
   reorder → create PO, and a screenshot diff vs the 13 reference renders.
 
+## UI Redesign — inventory module (DONE 2026-07-23; detail in DECISIONS)
+Sixteenth design export ("Inventory desktop and mobile screens", `Inventory.dc.html`), SAME
+design-system UUID (5cd3f8f0-…) → tokens/theme/clay untouched; consumer-side reskin of all 24
+inventory pages. Inventory was the LAST major module on light-only static `AppColors` — now **zero**
+static-colour refs across the module, works in Counter mode.
+- **Sub-routes promoted into the branch** (user-approved router edit, mirrors purchasing). The 25
+  in-branch `/inventory/*` routes moved from top-level GoRoutes INTO the existing inventory
+  `StatefulShellBranch` (index 1, ungated — kept ungated) on `pageBuilder`+`_fadePage`, so the rail/
+  bottom-bar persist on every inventory screen. **Two documented exceptions:** `/inventory/products/
+  :productId` (product edit) and `/inventory/stock/:productId` (stock detail) stay TOP-LEVEL — they are
+  pushed from ABOVE the shell (dashboard drilldown, notifications, global search, sync centre), and are
+  declared AFTER the shell so the in-branch `products/create` + `stock/movement` literal leaves win the
+  path match. `bottom_nav_shell.dart` untouched; no inbound push/go call site changed.
+- **Chrome**: hub = `ModuleScaffold` (branch root, no back) + width-derived clay tile grid (Catalog +
+  Stock groups, static honest descriptors — no fabricated counts). Lists = `AppDetailScaffold` + clay
+  rows / `AppSearchField` / `AppFilterChips` / `AppPill` (via `inventory_ui.dart` tone maps) / `AppMoneyText`
+  / `app_states`. products = bespoke clay shell (fixed toolbar + real search/scan/voice-search +
+  filter-sheet chips + pagination + selection→labels bar). Detail/forms = `AppSectionCard` + `AppDropdown`/
+  `AppToggle`/`AppMoneyField`/`AppQtyStepper`/`showAppSheet` pickers/`showAppConfirm`/`showAppToast`.
+- **Honest data**: product detail on-hand-by-warehouse uses REAL `StockBalance` per warehouse (never the
+  mock's synthetic 60/30/10 split); margin is derived (cost/price); ledger = real `StockLedgerEntry`;
+  warehouses meta ("N locations · current: …") derived from the list. **Omissions** (no backing field):
+  category/brand "N products" counts (bare-list controllers) → generic icon instead; transfer "N items"
+  (header has no line count); IMEI source shows `sourceType` alone (no friendly ref); transfers list +
+  transfer-receive show truncated branch/product ids where no name lookup exists (pre-existing).
+  Decorative ⌘K header search omitted.
+- **New**: `presentation/widgets/inventory_ui.dart` (stock/adjustment/transfer/count/imei → AppPillTone +
+  label maps, generic `kInvItemIcon`, `ymd`). 24 pages reskinned (2 refs by hand — products + product
+  detail; the rest fanned to parallel subagents against a shared spec, each analyze-clean). All provider/
+  controller/usecase/route-param/`extra`/`PermissionGate` (inventory create/update/delete/approve/export)
+  bindings byte-identical. Side effect: pull-to-refresh dropped on the AppDetailScaffold detail lists.
+- GATE: `flutter analyze` **8 issues, 0 new** (baseline 8). macOS build + screenshot diff VERIFY OWED.
+- **VERIFY OWED (on-device eyeball)** — agent env can't screenshot: all 24 screens light + dark, rail
+  persists on every inventory screen EXCEPT the 2 top-level detail routes, the 4 external deep-links
+  (drilldown/notifications/search/sync) still resolve, hub tiles, product search/scan/voice + filters +
+  label selection, product form two-phase save (variants/images/tiers) + delete, stock detail per-wh +
+  ledger, adjustments approve, transfers dispatch/receive/cancel, count session, imei lookup, CSV import,
+  and a screenshot diff vs the 12 reference renders.
+
 ## Auth UX pass — Phases 1–4 DONE (2026-07-20)
 Interaction/UX depth pass on top of the LUMINA reskin (plan: friction→feedback→flow→a11y; delight
 Phase 5 deferred). Frontend + minimal flow/routing (user-approved exception to UI-only guardrail).
