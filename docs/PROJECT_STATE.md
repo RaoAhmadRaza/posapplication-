@@ -624,7 +624,10 @@ date. Coverage: auth/RBAC → catalog/stock → sales/returns → dashboard → 
 (7 money paths) → M08 reporting → M09 repair → M11 notifications → security (Phase 1).
 
 ## Peripheral features — COMPLETE (detail in DECISIONS.md)
-Barcode scanning (mobile_scanner, shared scanBarcode/BarcodeScanPage); label printing (LabelPdfService/LabelPrintPage);
+Barcode scanning (mobile_scanner: live camera on mobile via scanBarcode; decode-from-image via scanBarcodeFromImage +
+analyzeImage on desktop/macOS+mobile — the products_page scan icon offers a camera/image chooser where both work, image-only
+on macOS; both paths do exact barcode/SKU lookup → jump to stock detail on single match, else filtered search);
+label printing (LabelPdfService/LabelPrintPage);
 notifications (+prefs, trg_low_stock_notify, hub bell badge); bulk CSV import (bulk_import_products); voice search (speech_to_text).
 
 ## Known Issues
@@ -662,9 +665,25 @@ notifications (+prefs, trg_low_stock_notify, hub bell badge); bulk CSV import (b
   anti-enumeration. Device/runtime gate-proves still owed (manual TC-AUTH, hardware biometric, 2-device sessions,
   realtime propagation, guard-through-UI); RUNBOOK 0.9 publication/isolation re-check owed.
 
+## WhatsApp PDF Receipts — CODE COMPLETE, NOT PUSHED (2026-07-24; detail in DECISIONS)
+After every sale with a customer phone, send the customer a branded PDF receipt on WhatsApp.
+Server-side (covers online + walk-in + offline-synced uniformly). 6 migrations
+(`20260724130000`–`130500`) + new `supabase/functions/receipt-sender/` (index.ts + pdf.ts, pdf-lib)
++ `notification-sender` edit (excludes SALE_RECEIPT + freshness window).
+- Flow: `create_sale` best-effort enqueues a `communication_logs` WHATSAPP/SALE_RECEIPT row → pg_cron
+  (*/2 min, pg_net + Vault key) → `receipt-sender`: `receipt_render_data(invoice_id)` → pdf-lib PDF →
+  private `receipts` bucket → 300s signed URL → Twilio WhatsApp document.
+- Also REVIVES repair-status SMS/email + report deliveries (dead since built — sender was never triggered).
+- **BLOCKED on go-live ops** (external): Twilio WhatsApp Business sender + approved UTILITY SALE_RECEIPT
+  document template (ContentSid) + secrets (TWILIO_*, SALE_RECEIPT_CONTENT_SID) + Vault `service_role_key`
+  (created out-of-band, never in a migration). Then `supabase db push` + `functions deploy receipt-sender`.
+- Limitation: pdf-lib does no Urdu/Arabic shaping — Latin receipt fields in v1 (Urdu header = future image).
+- No Flutter changes; on-device ReceiptPage/ReceiptPdfService unchanged. `flutter analyze` clean (baseline 8).
+
 ## Tenant Provisioning — COMPLETE (creation-time, gate-proven; full detail in DECISIONS.md)
-`provision_tenant()` seeds the golden set (20 CoA / 10 number_series / 4 tax / OPEN fiscal / 3+3 templates /
-REPAIR-SERVICE sentinel / Main Warehouse / 7 payment methods) idempotently; `verify_tenant_provisioning()` gates it
+`provision_tenant()` seeds the golden set (20 CoA / 10 number_series / 4 tax / OPEN fiscal / 3+3 comms templates /
+3 barcode label templates CODE128+EAN13+QR / REPAIR-SERVICE sentinel / Main Warehouse / 7 payment methods)
+idempotently; `verify_tenant_provisioning()` gates it
 (`complete`). handle_new_user calls it in the signup txn (failure rolls signup back atomically). Phase 1 hardened it:
 revoked from public/anon + ERR_FORBIDDEN_TENANT guard (signup path exempt via auth.uid()=NULL). Ops: cron
 verify_provisioning_daily alerts admins on any complete=false; fiscal reuses current_fiscal_period (MONTHLY).
