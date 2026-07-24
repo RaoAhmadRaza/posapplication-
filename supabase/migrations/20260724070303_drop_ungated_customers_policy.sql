@@ -1,0 +1,17 @@
+-- Fix: the original customers RLS policy `customers_tenant` (created in
+-- 20260618114258_sales_foundation.sql) has NO `for` clause, so it applies to
+-- ALL commands (select/insert/update/delete) with tenant isolation but NO
+-- permission check. 20260710134809_customers_mutation_permissions.sql later
+-- added four permission-gated policies ("customers tenant insert",
+-- "customers gated update", "customers gated delete") but never dropped the
+-- original. Postgres OR's permissive policies for the same command, so the
+-- ungated `customers_tenant` still permits INSERT/UPDATE/DELETE for any
+-- authenticated tenant user regardless of the customers:create/update/delete
+-- permission — neutering the CASHIER-can't-edit gate that DECISIONS.md (§193)
+-- claims is enforced at the DB.
+--
+-- Forward migration (additive convention — do NOT edit the old file): drop the
+-- ungated policy. The gated policies from 20260710134809 remain and become the
+-- sole authority: SELECT via "customers tenant read" (tenant-scoped),
+-- INSERT/UPDATE/DELETE each gated on the matching customers permission.
+drop policy if exists customers_tenant on public.customers;

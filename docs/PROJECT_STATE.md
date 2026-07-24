@@ -628,6 +628,22 @@ Barcode scanning (mobile_scanner, shared scanBarcode/BarcodeScanPage); label pri
 notifications (+prefs, trg_low_stock_notify, hub bell badge); bulk CSV import (bulk_import_products); voice search (speech_to_text).
 
 ## Known Issues
+- ✓ FIXED 2026-07-24 (customer-module audit, DECISIONS): (a) customer RLS gate was DEAD — the ungated
+  `customers_tenant` ALL-command policy (20260618114258) was never dropped when the gated policies were added
+  (20260710134809), so OR'd permissive policies let any tenant user UPDATE/DELETE customers regardless of
+  permission; migration 20260724070303 drops it (gate now real: UPDATE→customers:update, DELETE→customers:delete;
+  INSERT still customers:create so POS quick-add unaffected). (b) customer_ledger() never emitted `outstanding`
+  → always 0 in the model → Collect-payment CTA never showed + POS credit chip always 0; migration 20260724070304
+  adds it (= greatest(sum open invoices.balance,0)). Both APPLIED to remote 2026-07-24 (20260724070303/070304).
+- ✓ FIXED 2026-07-24: duplicate migration version 20260723140000 (two files: fix_trial_balance_asof +
+  recon_adjustment_not_bank_account). Remote applied fix_trial_balance_asof under that version; recon_adjustment
+  (a P0-MONEY guard: reject reconciliation contra == bank's own chart account) was stranded unapplied and collided
+  on schema_migrations PK. Renamed to 20260724070302 (git mv) → applied clean. Its create-or-replace of
+  complete_bank_reconciliation is order-independent (nothing after 130000 re-touches it).
+- OPEN (not fixed, flagged): sales/ duplicates customer list/create against the customers table
+  (sales_remote_datasource.dart:131-150 + own usecase/repo/controller) instead of reusing CustomersRepository —
+  DRY violation vs the one-datasource convention; repair/ reuses customers providers correctly. Cross-cutting
+  refactor (touches POS picker/history/returns/invoice-detail), deferred as risky cleanup, not a bug.
 - Profile loaded once (no pull-to-refresh); IMEI section not yet in product edit form (SERIALIZED)
 - ✓ FIXED (DECISIONS): number_series landmine (D1); cron reproducibility (D5); next_number NULL entry_number on null-branch post (bank-account creation, migration 20260723110000). BUILD: macOS+Android OK; file_picker pinned 12.0.0-beta.7 (D4), withData/bytes→readAsBytes() still pending.
 - Auth test-diagnosis fixes (docs/AUTH_TEST_DIAGNOSIS.md; branch fix/auth-runbook-v1, DB migrations pushed to
