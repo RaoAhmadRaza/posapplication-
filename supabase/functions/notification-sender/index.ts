@@ -122,6 +122,10 @@ async function dispatch(channel: string, to: string, subject: string, body: stri
 async function drain(sb: any) {
   let sent = 0, failed = 0, skipped = 0;
   const now = () => new Date().toISOString();
+  // Freshness window: never send rows older than this. Defense-in-depth against a stale backlog
+  // (the queues were never drained before this sender was wired). Quarantine migration handles
+  // the historical rows; this stops any future gap/backfill from blasting old messages.
+  const cutoff = new Date(Date.now() - 30 * 60_000).toISOString();
 
   // 1) user-directed notifications (PUSH has no transport yet — excluded)
   const { data: notifs } = await sb.from("notifications")
@@ -172,8 +176,13 @@ async function drain(sb: any) {
   // 2) communication_logs (customer notices)  3) report_deliveries (report emails)
   // Same shape: channel + recipient + payload; error column is `error` on both.
   for (const tbl of ["communication_logs", "report_deliveries"]) {
-    const { data: rows } = await sb.from(tbl)
-      .select("id, channel, recipient, payload").eq("status", "PENDING").limit(BATCH);
+    let q = sb.from(tbl)
+      .select("id, channel, recipient, payload")
+      .eq("status", "PENDING").gte("created_at", cutoff);
+    // SALE_RECEIPT rows are WhatsApp PDF receipts owned by the receipt-sender function — this generic
+    // sender must NOT touch them (it would send JSON.stringify(payload) as garbage text). Exclude them.
+    if (tbl === "communication_logs") q = q.neq("template_code", "SALE_RECEIPT");
+    const { data: rows } = await q.limit(BATCH);
     for (const row of rows ?? []) {
       try {
         const channel = row.channel ?? "EMAIL";

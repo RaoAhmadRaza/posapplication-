@@ -27,3 +27,9 @@ enabled = true
 verify_jwt = false
 import_map = "./functions/notification-sender/deno.json"
 entrypoint = "./functions/notification-sender/index.ts"
+
+[functions.receipt-sender]
+enabled = true
+verify_jwt = false
+import_map = "./functions/receipt-sender/deno.json"
+entrypoint = "./functions/receipt-sender/index.ts"
