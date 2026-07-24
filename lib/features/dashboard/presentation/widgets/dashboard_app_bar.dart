@@ -1,9 +1,13 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:go_router/go_router.dart';
 import 'package:lucide_icons_flutter/lucide_icons.dart';
 import '../../../../core/design/app_colors.dart';
 import '../../../../core/design/app_radius.dart';
 import '../../../../core/design/app_typography.dart';
+import '../../../../core/services/scanner_support.dart';
+import '../../../../core/widgets/barcode_scan_page.dart';
+import '../../../inventory/domain/usecases/search_products.dart';
 import '../../../notifications/presentation/widgets/notification_bell.dart';
 import '../../../search/presentation/widgets/global_search_field.dart';
 import '../../../sync/presentation/widgets/sync_status_widget.dart';
@@ -52,6 +56,13 @@ class DashboardAppBar extends ConsumerWidget implements PreferredSizeWidget {
             GlobalSearchField(key: searchFieldKey),
             const SizedBox(width: 16),
           ],
+          if (barcodeScanSupported || barcodeImageScanSupported)
+            HeaderIconButton(
+              icon: LucideIcons.qrCode,
+              iconSize: isWide ? 20 : 21,
+              tooltip: 'Scan product',
+              onPressed: () => _scanAndJump(context, ref),
+            ),
           HeaderIconButton(
             icon: editing ? LucideIcons.check : LucideIcons.slidersHorizontal,
             iconSize: isWide ? 20 : 21,
@@ -194,4 +205,31 @@ class _RefreshButtonState extends State<_RefreshButton>
       spin: _controller,
     );
   }
+}
+
+/// Dashboard header scan: decode a product code (camera/image), then jump to
+/// that product's stock detail on a single exact match, else report no match.
+Future<void> _scanAndJump(BuildContext context, WidgetRef ref) async {
+  final code = await scanProductCode(context);
+  if (!context.mounted || code == null) return;
+  if (code == barcodeNoCodeFoundSentinel) {
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(content: Text('No barcode or QR found in that image')),
+    );
+    return;
+  }
+  final (results, failure) =
+      await ref.read(searchProductsUseCaseProvider).call(code);
+  if (!context.mounted) return;
+  if (failure == null) {
+    final exact =
+        results.where((p) => p.barcode == code || p.sku == code).toList();
+    if (exact.length == 1) {
+      context.push('/inventory/stock/${exact.first.id}');
+      return;
+    }
+  }
+  ScaffoldMessenger.of(context).showSnackBar(
+    const SnackBar(content: Text('No product matches that code')),
+  );
 }

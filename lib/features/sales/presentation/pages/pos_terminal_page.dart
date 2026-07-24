@@ -5,6 +5,7 @@ import 'package:go_router/go_router.dart';
 import 'package:lucide_icons_flutter/lucide_icons.dart';
 import '../../../../core/design/app_colors.dart';
 import '../../../../core/design/widgets/app_filter_chips.dart';
+import '../../../../core/services/scanner_support.dart';
 import '../../../../core/widgets/barcode_scan_page.dart';
 import '../../../../core/widgets/no_access_scaffold.dart';
 import '../../../../core/widgets/permission_gate.dart';
@@ -14,6 +15,7 @@ import '../../../sync/presentation/controllers/offline_products_controller.dart'
 import '../../../sync/presentation/controllers/sync_controller.dart';
 import '../../../inventory/presentation/controllers/categories_controller.dart';
 import '../../../inventory/presentation/controllers/products_controller.dart';
+import '../../../inventory/domain/usecases/search_products.dart';
 import '../../../inventory/presentation/controllers/stock_levels_controller.dart';
 import '../../../inventory/domain/entities/category.dart';
 import '../../../inventory/domain/entities/product.dart';
@@ -129,10 +131,41 @@ class _PosTerminalPageState extends ConsumerState<PosTerminalPage>
   }
 
   Future<void> _scanBarcode() async {
-    final code = await scanBarcode(context, title: 'Scan Product');
-    if (code == null || code == BarcodeScanPage.manualEntrySentinel) return;
-    _searchCtrl.text = code;
-    ref.read(productsProvider.notifier).search(code);
+    final code = await scanProductCode(context, title: 'Scan Product');
+    if (!mounted || code == null) return;
+    if (code == barcodeNoCodeFoundSentinel) {
+      _snack('No barcode or QR found in that image');
+      return;
+    }
+
+    // Exact barcode/SKU match → add to the cart immediately (POS "beep & add").
+    // Otherwise fall back to filling the search so the user can pick.
+    final online = ref
+        .read(connectivityProvider)
+        .maybeWhen(data: (v) => v, orElse: () => true);
+    List<Product> results;
+    if (online) {
+      final (rows, failure) =
+          await ref.read(searchProductsUseCaseProvider).call(code);
+      results = failure == null ? rows : const [];
+    } else {
+      results = await ref.read(offlineProductSearchProvider(code).future);
+    }
+    if (!mounted) return;
+
+    final exact =
+        results.where((p) => p.barcode == code || p.sku == code).toList();
+    if (exact.length == 1) {
+      _addLine(exact.first);
+      _snack('Added ${exact.first.name}');
+      return;
+    }
+    _searchCtrl.text = code; // listener runs the filtered search
+  }
+
+  void _snack(String msg) {
+    ScaffoldMessenger.of(context)
+        .showSnackBar(SnackBar(content: Text(msg)));
   }
 
   void _addLine(Product product) {
@@ -269,7 +302,17 @@ class _PosTerminalPageState extends ConsumerState<PosTerminalPage>
       backgroundColor: lum.paper,
       body: Column(
         children: [
-          const SalesHeader(title: 'Point of sale'),
+          SalesHeader(
+            title: 'Point of sale',
+            actions: [
+              if (barcodeScanSupported || barcodeImageScanSupported)
+                IconButton(
+                  icon: const Icon(LucideIcons.qrCode, size: 22),
+                  tooltip: 'Scan product',
+                  onPressed: _scanBarcode,
+                ),
+            ],
+          ),
           if (session != null) PosSessionBanner(session: session),
           if (_showAutoSavedNote)
             PosAutoSavedNote(
