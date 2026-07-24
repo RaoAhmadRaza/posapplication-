@@ -1,11 +1,18 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:lucide_icons_flutter/lucide_icons.dart';
 import '../../../../core/design/app_colors.dart';
-import '../../../../core/design/app_spacing.dart';
+import '../../../../core/design/app_radius.dart';
 import '../../../../core/design/app_typography.dart';
+import '../../../../core/design/clay.dart';
 import '../../../../core/design/widgets/app_button.dart';
+import '../../../../core/design/widgets/app_detail_scaffold.dart';
 import '../../../../core/design/widgets/app_inline_banner.dart';
+import '../../../../core/design/widgets/app_money_field.dart';
+import '../../../../core/design/widgets/app_section_card.dart';
+import '../../../../core/design/widgets/app_sheet.dart';
 import '../../../../core/design/widgets/app_text_field.dart';
+import '../../../../core/design/widgets/app_toast.dart';
 import '../../../auth/presentation/controllers/branch_controller.dart';
 import '../../domain/entities/product.dart';
 import '../../domain/entities/stock_movement_type.dart';
@@ -14,6 +21,7 @@ import '../../domain/usecases/post_stock_movement.dart';
 import '../../domain/usecases/load_stock_balances.dart';
 import '../controllers/products_controller.dart';
 import '../controllers/stock_levels_controller.dart';
+import '../widgets/inventory_ui.dart';
 
 class StockMovementFormPage extends ConsumerStatefulWidget {
   const StockMovementFormPage({super.key, this.productId});
@@ -156,7 +164,10 @@ class _StockMovementFormPageState
     }
 
     ref.invalidate(stockLevelsProvider);
-    if (mounted) Navigator.of(context).pop();
+    if (mounted) {
+      showAppToast(context, 'Opening stock set.', type: BannerType.success);
+      Navigator.of(context).pop();
+    }
   }
 
   @override
@@ -170,95 +181,219 @@ class _StockMovementFormPageState
         .where((p) => p.id == _selectedProductId)
         .firstOrNull;
 
-    return Scaffold(
-      backgroundColor: AppColors.background,
-      appBar: AppBar(
-        backgroundColor: AppColors.background,
-        surfaceTintColor: AppColors.background,
-        leading: IconButton(
-          icon: const Icon(Icons.arrow_back_ios, color: AppColors.accent, size: 20),
-          onPressed: () => Navigator.of(context).pop(),
-        ),
-        title: Text('Set Opening Stock', style: AppTypography.headline),
-      ),
-      body: SafeArea(
-        child: SingleChildScrollView(
-          padding: const EdgeInsets.symmetric(
-            horizontal: AppSpacing.screenPadding,
+    return AppDetailScaffold(
+      eyebrow: 'Inventory',
+      title: 'Set opening stock',
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          if (_error != null) ...[
+            AppInlineBanner(message: _error!, type: BannerType.error),
+            const SizedBox(height: 16),
+          ],
+          AppSectionCard(
+            eyebrow: 'Product',
+            child: _ProductField(
+              selected: selectedProduct,
+              // Preset via constructor → locked read-only display.
+              locked: widget.productId != null,
+              onPick: () => _pickProduct(activeProducts),
+            ),
           ),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.stretch,
-            children: [
-              const SizedBox(height: AppSpacing.lg),
-              if (_error != null) ...[
-                AppInlineBanner(message: _error!, type: BannerType.error),
-                const SizedBox(height: AppSpacing.lg),
-              ],
-              _ProductPicker(
-                products: activeProducts,
-                selected: selectedProduct,
-                onChanged: (p) {
-                  setState(() {
-                    _selectedProductId = p.id;
-                    _currentOnHand = 0;
-                    _error = null;
-                  });
-                  _loadCurrentBalance();
-                },
-              ),
-              const SizedBox(height: AppSpacing.fieldGap),
-              if (_loadingBalance)
-                const Padding(
-                  padding: EdgeInsets.symmetric(vertical: AppSpacing.md),
-                  child: Center(child: SizedBox(
-                    width: 20, height: 20,
-                    child: CircularProgressIndicator(strokeWidth: 2),
-                  )),
-                )
-              else ...[
-                _CurrentBalanceLabel(onHand: _currentOnHand),
-                const SizedBox(height: AppSpacing.fieldGap),
-              ],
-              AppTextField(
-                controller: _targetQtyController,
-                label: 'Target Quantity',
-                prefixIcon: Icons.flag,
-                hint: 'Desired on-hand after adjustment',
-                keyboardType: const TextInputType.numberWithOptions(decimal: true),
-              ),
-              const SizedBox(height: AppSpacing.fieldGap),
-              AppTextField(
-                controller: _unitCostController,
-                label: 'Unit Cost',
-                prefixIcon: Icons.attach_money,
-                hint: '0',
-                keyboardType: const TextInputType.numberWithOptions(decimal: true),
-              ),
-              const SizedBox(height: AppSpacing.fieldGap),
-              AppTextField(
-                controller: _notesController,
-                label: 'Note',
-                prefixIcon: Icons.edit_note,
-                hint: 'Optional',
-              ),
-              const SizedBox(height: AppSpacing.xs),
-              if (_selectedProductId != null && !_loadingBalance) ...[
-                Padding(
-                  padding: const EdgeInsets.only(top: AppSpacing.sm),
-                  child: _DeltaPreview(
+          const SizedBox(height: 16),
+          AppSectionCard(
+            eyebrow: 'Opening stock',
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                if (_loadingBalance)
+                  const Padding(
+                    padding: EdgeInsets.symmetric(vertical: 12),
+                    child: Center(
+                      child: SizedBox(
+                        width: 20,
+                        height: 20,
+                        child: CircularProgressIndicator(strokeWidth: 2),
+                      ),
+                    ),
+                  )
+                else ...[
+                  _CurrentBalanceRow(onHand: _currentOnHand),
+                  const SizedBox(height: 16),
+                ],
+                AppTextField(
+                  controller: _targetQtyController,
+                  label: 'Target quantity',
+                  prefixIcon: LucideIcons.flag,
+                  hint: 'Desired on-hand after adjustment',
+                  keyboardType:
+                      const TextInputType.numberWithOptions(decimal: true),
+                  onChanged: (_) => setState(() {}),
+                ),
+                if (_selectedProductId != null && !_loadingBalance) ...[
+                  const SizedBox(height: 12),
+                  _DeltaPreview(
                     current: _currentOnHand,
                     targetText: _targetQtyController.text.trim(),
                   ),
+                ],
+                const SizedBox(height: 16),
+                AppMoneyField(
+                  controller: _unitCostController,
+                  label: 'Unit cost',
+                ),
+                const SizedBox(height: 16),
+                AppTextField(
+                  controller: _notesController,
+                  label: 'Note',
+                  prefixIcon: LucideIcons.pencilLine,
+                  hint: 'Optional',
                 ),
               ],
-              const SizedBox(height: AppSpacing.xxl),
-              AppButton(
-                label: 'Set Opening Stock',
-                loading: _posting,
-                onPressed: _post,
-                fullWidth: true,
+            ),
+          ),
+          const SizedBox(height: 22),
+          AppButton(
+            label: 'Set opening stock',
+            loading: _posting,
+            onPressed: _post,
+            fullWidth: true,
+          ),
+        ],
+      ),
+    );
+  }
+
+  void _pickProduct(List<Product> products) {
+    showAppSheet<void>(
+      context: context,
+      builder: (sheetContext) => Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          const AppSheetHeader(
+            title: 'Select product',
+            subtitle: 'Pick the item to set opening stock for.',
+          ),
+          for (final p in products) ...[
+            _ProductOption(
+              product: p,
+              onTap: () {
+                Navigator.of(sheetContext).pop();
+                setState(() {
+                  _selectedProductId = p.id;
+                  _currentOnHand = 0;
+                  _error = null;
+                });
+                _loadCurrentBalance();
+              },
+            ),
+            if (p != products.last) const SizedBox(height: 8),
+          ],
+        ],
+      ),
+    );
+  }
+}
+
+/// Product row inside the form: a clay well showing the chosen item. Tappable to
+/// open the picker sheet unless [locked] (the product was preset by the caller).
+class _ProductField extends StatelessWidget {
+  const _ProductField({
+    required this.selected,
+    required this.locked,
+    required this.onPick,
+  });
+
+  final Product? selected;
+  final bool locked;
+  final VoidCallback onPick;
+
+  @override
+  Widget build(BuildContext context) {
+    final lum = context.lum;
+    final label = selected?.name ?? (locked ? 'Loading…' : 'Select a product');
+
+    final well = ClayContainer(
+      variant: ClayVariant.inset,
+      color: lum.surface2,
+      borderRadius: AppRadius.md,
+      isDark: lum.isDark,
+      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 14),
+      child: Row(
+        children: [
+          Icon(kInvItemIcon, size: 18, color: lum.accent),
+          const SizedBox(width: 12),
+          Expanded(
+            child: Text(
+              label,
+              style: AppTypography.body.copyWith(
+                color: selected != null ? lum.textPrimary : lum.g400,
               ),
-              const SizedBox(height: AppSpacing.xxl),
+            ),
+          ),
+          if (!locked)
+            Icon(LucideIcons.chevronDown, size: 18, color: lum.g400),
+        ],
+      ),
+    );
+
+    if (locked) return well;
+
+    return Semantics(
+      button: true,
+      label: 'Select product',
+      child: InkWell(
+        onTap: onPick,
+        borderRadius: BorderRadius.circular(AppRadius.md),
+        child: well,
+      ),
+    );
+  }
+}
+
+/// A single product row in the picker sheet.
+class _ProductOption extends StatelessWidget {
+  const _ProductOption({required this.product, required this.onTap});
+  final Product product;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    final lum = context.lum;
+    return Semantics(
+      button: true,
+      label: product.name,
+      child: InkWell(
+        onTap: onTap,
+        borderRadius: BorderRadius.circular(AppRadius.md),
+        child: ClayContainer(
+          variant: ClayVariant.soft,
+          color: lum.surface2,
+          borderRadius: AppRadius.md,
+          isDark: lum.isDark,
+          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+          child: Row(
+            children: [
+              Icon(kInvItemIcon, size: 18, color: lum.accent),
+              const SizedBox(width: 12),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      product.name,
+                      style: AppTypography.body.copyWith(color: lum.textPrimary),
+                    ),
+                    const SizedBox(height: 2),
+                    Text(
+                      'SKU: ${product.sku}',
+                      style: AppTypography.caption.copyWith(color: lum.g400),
+                    ),
+                  ],
+                ),
+              ),
+              Icon(LucideIcons.chevronRight, size: 18, color: lum.g400),
             ],
           ),
         ),
@@ -267,28 +402,35 @@ class _StockMovementFormPageState
   }
 }
 
-class _CurrentBalanceLabel extends StatelessWidget {
-  const _CurrentBalanceLabel({required this.onHand});
+/// The current on-hand line above the target field.
+class _CurrentBalanceRow extends StatelessWidget {
+  const _CurrentBalanceRow({required this.onHand});
   final double onHand;
 
   @override
   Widget build(BuildContext context) {
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: AppSpacing.lg, vertical: AppSpacing.md),
-      decoration: BoxDecoration(
-        color: AppColors.fieldFill,
-        borderRadius: BorderRadius.circular(12),
-      ),
+    final lum = context.lum;
+    final positive = onHand > 0;
+    return ClayContainer(
+      variant: ClayVariant.soft,
+      color: lum.surface2,
+      borderRadius: AppRadius.md,
+      isDark: lum.isDark,
+      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 14),
       child: Row(
         children: [
-          Icon(Icons.inventory_2, size: 18, color: AppColors.textMuted),
-          const SizedBox(width: AppSpacing.sm),
-          Text('Current on-hand', style: AppTypography.footnote.copyWith(color: AppColors.textMuted)),
-          const Spacer(),
+          Icon(LucideIcons.package, size: 18, color: lum.g400),
+          const SizedBox(width: 10),
+          Expanded(
+            child: Text(
+              'Current on-hand',
+              style: AppTypography.footnote.copyWith(color: lum.g500),
+            ),
+          ),
           Text(
-            onHand.toStringAsFixed(onHand == onHand.roundToDouble() ? 0 : 1),
+            qtyLabel(onHand),
             style: AppTypography.headline.copyWith(
-              color: onHand > 0 ? AppColors.success : AppColors.textMuted,
+              color: positive ? lum.successText : lum.g400,
             ),
           ),
         ],
@@ -297,6 +439,7 @@ class _CurrentBalanceLabel extends StatelessWidget {
   }
 }
 
+/// Live delta banner: how many units this adjustment adds or removes.
 class _DeltaPreview extends StatelessWidget {
   const _DeltaPreview({required this.current, required this.targetText});
   final double current;
@@ -304,152 +447,41 @@ class _DeltaPreview extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final lum = context.lum;
     final target = double.tryParse(targetText);
-    if (target == null) {
-      return const SizedBox.shrink();
-    }
+    if (target == null) return const SizedBox.shrink();
     final delta = target - current;
     if (delta == 0) return const SizedBox.shrink();
     final isPositive = delta > 0;
 
+    final tone = isPositive ? lum.successText : lum.dangerText;
+    final fill = isPositive ? lum.successSoft : lum.dangerSoft;
+
     return Container(
-      padding: const EdgeInsets.symmetric(horizontal: AppSpacing.lg, vertical: AppSpacing.md),
+      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
       decoration: BoxDecoration(
-        color: isPositive
-            ? AppColors.success.withValues(alpha: 0.08)
-            : AppColors.destructive.withValues(alpha: 0.08),
-        borderRadius: BorderRadius.circular(12),
+        color: fill,
+        borderRadius: BorderRadius.circular(AppRadius.md),
       ),
       child: Row(
         children: [
           Icon(
-            isPositive ? Icons.arrow_upward : Icons.arrow_downward,
+            isPositive ? LucideIcons.arrowUp : LucideIcons.arrowDown,
             size: 18,
-            color: isPositive ? AppColors.success : AppColors.destructive,
+            color: tone,
           ),
-          const SizedBox(width: AppSpacing.sm),
-          Text(
-            isPositive ? 'Adding' : 'Reducing',
-            style: AppTypography.footnote.copyWith(
-              color: isPositive ? AppColors.success : AppColors.destructive,
+          const SizedBox(width: 10),
+          Expanded(
+            child: Text(
+              isPositive ? 'Adding' : 'Reducing',
+              style: AppTypography.footnote.copyWith(color: tone),
             ),
           ),
-          const Spacer(),
           Text(
-            isPositive ? '+$delta' : '$delta',
-            style: AppTypography.headline.copyWith(
-              color: isPositive ? AppColors.success : AppColors.destructive,
-            ),
+            '${isPositive ? '+' : ''}${qtyLabel(delta)}',
+            style: AppTypography.headline.copyWith(color: tone),
           ),
         ],
-      ),
-    );
-  }
-}
-
-class _ProductPicker extends StatelessWidget {
-  const _ProductPicker({
-    required this.products,
-    required this.selected,
-    required this.onChanged,
-  });
-
-  final List<Product> products;
-  final Product? selected;
-  final ValueChanged<Product> onChanged;
-
-  @override
-  Widget build(BuildContext context) {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Padding(
-          padding: const EdgeInsets.only(left: 4, bottom: 8),
-          child: Text('Product', style: AppTypography.fieldLabel),
-        ),
-        InkWell(
-          onTap: () => _showPicker(context),
-          borderRadius: BorderRadius.circular(12),
-          child: Container(
-            height: 52,
-            padding: const EdgeInsets.symmetric(horizontal: 16),
-            decoration: BoxDecoration(
-              color: AppColors.fieldFill,
-              borderRadius: BorderRadius.circular(12),
-            ),
-            child: Row(
-              children: [
-                Icon(Icons.inventory_2, size: 20, color: AppColors.textMuted),
-                const SizedBox(width: 12),
-                Expanded(
-                  child: Text(
-                    selected?.name ?? 'Select a product',
-                    style: selected != null
-                        ? AppTypography.body
-                        : AppTypography.fieldHint,
-                  ),
-                ),
-                Icon(Icons.keyboard_arrow_down, color: AppColors.textMuted),
-              ],
-            ),
-          ),
-        ),
-      ],
-    );
-  }
-
-  void _showPicker(BuildContext context) {
-    showModalBottomSheet(
-      context: context,
-      isScrollControlled: true,
-      builder: (ctx) => DraggableScrollableSheet(
-        initialChildSize: 0.6,
-        minChildSize: 0.3,
-        maxChildSize: 0.85,
-        expand: false,
-        builder: (_, scrollController) => Column(
-          children: [
-            const SizedBox(height: 12),
-            Container(
-              width: 36, height: 5,
-              decoration: BoxDecoration(
-                color: AppColors.separator,
-                borderRadius: BorderRadius.circular(2.5),
-              ),
-            ),
-            const SizedBox(height: 12),
-            Padding(
-              padding: const EdgeInsets.symmetric(horizontal: AppSpacing.screenPadding),
-              child: Text('Select Product', style: AppTypography.subhead),
-            ),
-            const SizedBox(height: AppSpacing.sm),
-            Expanded(
-              child: ListView.builder(
-                controller: scrollController,
-                itemCount: products.length,
-                itemBuilder: (_, i) {
-                  final p = products[i];
-                  return ListTile(
-                    leading: CircleAvatar(
-                      backgroundColor: AppColors.accent.withValues(alpha: 0.1),
-                      child: Text(
-                        p.name.isNotEmpty ? p.name[0].toUpperCase() : '?',
-                        style: AppTypography.body.copyWith(color: AppColors.accent),
-                      ),
-                    ),
-                    title: Text(p.name, style: AppTypography.body),
-                    subtitle: Text('SKU: ${p.sku}', style: AppTypography.caption),
-                    selected: selected?.id == p.id,
-                    onTap: () {
-                      Navigator.of(ctx).pop();
-                      onChanged(p);
-                    },
-                  );
-                },
-              ),
-            ),
-          ],
-        ),
       ),
     );
   }

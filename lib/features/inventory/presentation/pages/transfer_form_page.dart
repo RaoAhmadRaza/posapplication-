@@ -1,12 +1,18 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:lucide_icons_flutter/lucide_icons.dart';
 import '../../../../core/design/app_colors.dart';
 import '../../../../core/design/app_radius.dart';
-import '../../../../core/design/app_spacing.dart';
 import '../../../../core/design/app_typography.dart';
+import '../../../../core/design/clay.dart';
 import '../../../../core/design/widgets/app_button.dart';
+import '../../../../core/design/widgets/app_detail_scaffold.dart';
+import '../../../../core/design/widgets/app_dropdown.dart';
 import '../../../../core/design/widgets/app_inline_banner.dart';
+import '../../../../core/design/widgets/app_section_card.dart';
+import '../../../../core/design/widgets/app_sheet.dart';
 import '../../../../core/design/widgets/app_text_field.dart';
+import '../../../../core/design/widgets/app_toast.dart';
 import '../../../auth/domain/entities/branch.dart';
 import '../../../auth/presentation/controllers/branch_controller.dart';
 import '../../domain/entities/product.dart';
@@ -91,16 +97,77 @@ class _TransferFormPageState extends ConsumerState<TransferFormPage> {
       return;
     }
 
-    if (mounted) Navigator.of(context).pop();
+    showAppToast(context, 'Transfer created');
+    Navigator.of(context).pop();
   }
 
-  void _addItem() {
-    showDialog(
+  Future<void> _addItem() async {
+    final item = await showAppSheet<_LineItem>(
       context: context,
-      builder: (ctx) => _AddItemDialog(onAdd: (item) {
-        setState(() => _items.add(item));
-        _error = null;
-      }),
+      builder: (_) => const _AddItemSheet(),
+    );
+    if (item == null || !mounted) return;
+    setState(() {
+      _items.add(item);
+      _error = null;
+    });
+  }
+
+  Future<void> _pickBranch(List<Branch> branches) async {
+    if (branches.isEmpty) return;
+    await showAppSheet<void>(
+      context: context,
+      builder: (_) => _PickerSheet(
+        title: 'Destination branch',
+        rows: [
+          for (final b in branches)
+            _PickerRow(
+              icon: LucideIcons.building2,
+              title: b.name,
+              subtitle: b.code,
+              selected: b.id == _toBranchId,
+              onTap: () => setState(() { _toBranchId = b.id; _error = null; }),
+            ),
+        ],
+      ),
+    );
+  }
+
+  Future<void> _pickWarehouse(
+    List<Warehouse> warehouses, {
+    required bool isSource,
+  }) async {
+    final active = warehouses.where((w) => w.isActive).toList();
+    final selectedId = isSource ? _fromWarehouseId : _toWarehouseId;
+    void select(String? id) => setState(() {
+          if (isSource) {
+            _fromWarehouseId = id;
+          } else {
+            _toWarehouseId = id;
+          }
+          _error = null;
+        });
+    await showAppSheet<void>(
+      context: context,
+      builder: (_) => _PickerSheet(
+        title: isSource ? 'Source warehouse' : 'Destination warehouse',
+        rows: [
+          _PickerRow(
+            icon: LucideIcons.building2,
+            title: 'None (branch default)',
+            selected: selectedId == null,
+            onTap: () => select(null),
+          ),
+          for (final w in active)
+            _PickerRow(
+              icon: LucideIcons.warehouse,
+              title: w.name,
+              subtitle: w.code,
+              selected: w.id == selectedId,
+              onTap: () => select(w.id),
+            ),
+        ],
+      ),
     );
   }
 
@@ -114,91 +181,97 @@ class _TransferFormPageState extends ConsumerState<TransferFormPage> {
     final selectedFromWh = warehouses.where((w) => w.id == _fromWarehouseId).firstOrNull;
     final selectedToWh = warehouses.where((w) => w.id == _toWarehouseId).firstOrNull;
 
-    return Scaffold(
-      backgroundColor: AppColors.background,
-      appBar: AppBar(
-        backgroundColor: AppColors.background,
-        surfaceTintColor: AppColors.background,
-        leading: IconButton(
-          icon: const Icon(Icons.arrow_back_ios, color: AppColors.accent, size: 20),
-          onPressed: () => Navigator.of(context).pop(),
-        ),
-        title: Text('New Transfer', style: AppTypography.headline),
-      ),
-      body: SafeArea(
-        child: SingleChildScrollView(
-          padding: const EdgeInsets.symmetric(horizontal: AppSpacing.screenPadding),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.stretch,
-            children: [
-              const SizedBox(height: AppSpacing.lg),
-              if (_error != null) ...[
-                AppInlineBanner(message: _error!, type: BannerType.error),
-                const SizedBox(height: AppSpacing.lg),
+    final canCreate = _toBranchId != null && _items.isNotEmpty;
+
+    return AppDetailScaffold(
+      eyebrow: 'Inventory',
+      title: 'New transfer',
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          AppSectionCard(
+            eyebrow: 'Transfer details',
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                _PickerField(
+                  label: 'Destination branch',
+                  icon: LucideIcons.building2,
+                  value: selectedToBranch?.name ??
+                      (destBranches.isEmpty
+                          ? 'No other branches available'
+                          : 'Select branch'),
+                  placeholder: selectedToBranch == null,
+                  onTap: destBranches.isEmpty
+                      ? null
+                      : () => _pickBranch(destBranches),
+                ),
+                const SizedBox(height: 14),
+                _PickerField(
+                  label: 'Source warehouse (optional)',
+                  icon: LucideIcons.warehouse,
+                  value: selectedFromWh?.name ?? 'None (branch default)',
+                  placeholder: selectedFromWh == null,
+                  onTap: () => _pickWarehouse(warehouses, isSource: true),
+                ),
+                const SizedBox(height: 14),
+                _PickerField(
+                  label: 'Destination warehouse (optional)',
+                  icon: LucideIcons.warehouse,
+                  value: selectedToWh?.name ?? 'None (branch default)',
+                  placeholder: selectedToWh == null,
+                  onTap: () => _pickWarehouse(warehouses, isSource: false),
+                ),
+                const SizedBox(height: 14),
+                AppTextField(
+                  controller: _notesController,
+                  label: 'Notes',
+                  prefixIcon: LucideIcons.messageSquare,
+                  hint: 'Optional',
+                  maxLines: 3,
+                ),
               ],
-              _BranchPicker(
-                branches: destBranches,
-                selected: selectedToBranch,
-                label: 'Destination Branch',
-                icon: Icons.business,
-                emptyLabel: 'No other branches available',
-                onChanged: (b) => setState(() { _toBranchId = b?.id; _error = null; }),
-              ),
-              const SizedBox(height: AppSpacing.fieldGap),
-              _WarehousePicker(
-                warehouses: warehouses,
-                selected: selectedFromWh,
-                label: 'Source Warehouse (optional)',
-                onChanged: (w) => setState(() { _fromWarehouseId = w?.id; _error = null; }),
-              ),
-              const SizedBox(height: AppSpacing.fieldGap),
-              _WarehousePicker(
-                warehouses: warehouses,
-                selected: selectedToWh,
-                label: 'Destination Warehouse (optional)',
-                onChanged: (w) => setState(() { _toWarehouseId = w?.id; _error = null; }),
-              ),
-              const SizedBox(height: AppSpacing.fieldGap),
-              AppTextField(
-                controller: _notesController,
-                label: 'Notes',
-                prefixIcon: Icons.edit_note,
-                hint: 'Optional',
-              ),
-              const SizedBox(height: AppSpacing.xl),
-              Row(
-                children: [
-                  Text('Line Items', style: AppTypography.subhead),
-                  const Spacer(),
-                  AppButton(label: 'Add Item', onPressed: _addItem, variant: AppButtonVariant.tinted),
-                ],
-              ),
-              const SizedBox(height: AppSpacing.sm),
-              if (_items.isEmpty)
-                Padding(
-                  padding: const EdgeInsets.symmetric(vertical: AppSpacing.lg),
-                  child: Text('No items added.', style: AppTypography.footnote.copyWith(color: AppColors.textHint), textAlign: TextAlign.center),
-                )
-              else
-                ..._items.asMap().entries.map((e) => Padding(
-                  padding: const EdgeInsets.only(bottom: AppSpacing.sm),
-                  child: _LineItemCard(
-                    index: e.key,
-                    item: e.value,
-                    onRemove: () => setState(() => _items.removeAt(e.key)),
-                  ),
-                )),
-              const SizedBox(height: AppSpacing.xxl),
-              AppButton(
-                label: 'Create Transfer',
-                loading: _saving,
-                onPressed: _save,
-                fullWidth: true,
-              ),
-              const SizedBox(height: AppSpacing.xxl),
-            ],
+            ),
           ),
-        ),
+          const SizedBox(height: 14),
+          AppSectionCard(
+            eyebrow: 'Line items',
+            trailing: AppButton(
+              label: 'Add item',
+              variant: AppButtonVariant.tinted,
+              size: AppButtonSize.sm,
+              icon: LucideIcons.plus,
+              onPressed: _addItem,
+            ),
+            child: _items.isEmpty
+                ? _EmptyItems()
+                : Column(
+                    crossAxisAlignment: CrossAxisAlignment.stretch,
+                    children: [
+                      for (final entry in _items.asMap().entries) ...[
+                        _LineItemCard(
+                          item: entry.value,
+                          onRemove: () =>
+                              setState(() => _items.removeAt(entry.key)),
+                        ),
+                        if (entry.key != _items.length - 1)
+                          const SizedBox(height: 10),
+                      ],
+                    ],
+                  ),
+          ),
+          if (_error != null) ...[
+            const SizedBox(height: 14),
+            AppInlineBanner(message: _error!, type: BannerType.error),
+          ],
+          const SizedBox(height: 14),
+          AppButton(
+            label: 'Create transfer',
+            loading: _saving,
+            fullWidth: true,
+            onPressed: canCreate ? _save : null,
+          ),
+        ],
       ),
     );
   }
@@ -212,53 +285,100 @@ class _LineItem {
   const _LineItem({required this.productId, required this.productName, required this.qty, required this.costPrice});
 }
 
+class _EmptyItems extends StatelessWidget {
+  @override
+  Widget build(BuildContext context) {
+    final lum = context.lum;
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 10),
+      child: Text(
+        'No items yet.',
+        textAlign: TextAlign.center,
+        style: AppTypography.footnote.copyWith(color: lum.g500),
+      ),
+    );
+  }
+}
+
 class _LineItemCard extends StatelessWidget {
-  const _LineItemCard({required this.index, required this.item, required this.onRemove});
-  final int index;
+  const _LineItemCard({required this.item, required this.onRemove});
   final _LineItem item;
   final VoidCallback onRemove;
 
   @override
   Widget build(BuildContext context) {
-    return Container(
-      padding: const EdgeInsets.all(AppSpacing.lg),
-      decoration: BoxDecoration(
-        color: AppColors.fieldFill,
-        borderRadius: BorderRadius.circular(AppRadius.card),
-      ),
+    final lum = context.lum;
+    final qty = item.qty == item.qty.roundToDouble()
+        ? item.qty.toInt().toString()
+        : item.qty.toStringAsFixed(2);
+    return ClayContainer(
+      variant: ClayVariant.inset,
+      color: lum.surface2,
+      borderRadius: AppRadius.md,
+      isDark: lum.isDark,
+      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
       child: Row(
         children: [
-          CircleAvatar(
-            backgroundColor: AppColors.accent.withValues(alpha: 0.1),
-            radius: 16,
-            child: Text('${index + 1}', style: AppTypography.caption.copyWith(color: AppColors.accent)),
+          ClayContainer(
+            variant: ClayVariant.soft,
+            color: lum.accentSoft,
+            borderRadius: AppRadius.sm,
+            isDark: lum.isDark,
+            width: 38,
+            height: 38,
+            child: Center(
+              child: Icon(LucideIcons.package, size: 18, color: lum.accentPress),
+            ),
           ),
-          const SizedBox(width: AppSpacing.md),
+          const SizedBox(width: 12),
           Expanded(
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Text(item.productName, style: AppTypography.body, maxLines: 1, overflow: TextOverflow.ellipsis),
-                Text('${item.qty} × ${item.costPrice.toStringAsFixed(2)}', style: AppTypography.footnote.copyWith(color: AppColors.textMuted)),
+                Text(
+                  item.productName,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: AppTypography.headline.copyWith(color: lum.textPrimary),
+                ),
+                const SizedBox(height: 2),
+                Text(
+                  '$qty × ${item.costPrice.toStringAsFixed(2)}',
+                  style: AppTypography.caption.copyWith(color: lum.g500),
+                ),
               ],
             ),
           ),
-          IconButton(icon: const Icon(Icons.close, size: 18, color: AppColors.destructive), onPressed: onRemove),
+          const SizedBox(width: 8),
+          Semantics(
+            button: true,
+            label: 'Remove item',
+            child: GestureDetector(
+              behavior: HitTestBehavior.opaque,
+              onTap: onRemove,
+              child: SizedBox(
+                width: 40,
+                height: 40,
+                child: Icon(LucideIcons.x, size: 18, color: lum.g500),
+              ),
+            ),
+          ),
         ],
       ),
     );
   }
 }
 
-class _AddItemDialog extends ConsumerStatefulWidget {
-  const _AddItemDialog({required this.onAdd});
-  final void Function(_LineItem) onAdd;
+/// Bottom-sheet/dialog to build one transfer line: pick a product, enter a
+/// quantity and cost per unit. Pops the assembled [_LineItem] on Add.
+class _AddItemSheet extends ConsumerStatefulWidget {
+  const _AddItemSheet();
 
   @override
-  ConsumerState<_AddItemDialog> createState() => _AddItemDialogState();
+  ConsumerState<_AddItemSheet> createState() => _AddItemSheetState();
 }
 
-class _AddItemDialogState extends ConsumerState<_AddItemDialog> {
+class _AddItemSheetState extends ConsumerState<_AddItemSheet> {
   String? _productId;
   final _qtyCtrl = TextEditingController(text: '1');
   final _costCtrl = TextEditingController(text: '0');
@@ -266,202 +386,265 @@ class _AddItemDialogState extends ConsumerState<_AddItemDialog> {
   @override
   void dispose() { _qtyCtrl.dispose(); _costCtrl.dispose(); super.dispose(); }
 
+  void _add(List<Product> active) {
+    final qty = double.tryParse(_qtyCtrl.text) ?? 0;
+    if (_productId == null || qty <= 0) return;
+    final selectedProduct = active.where((p) => p.id == _productId).firstOrNull;
+    Navigator.of(context).pop(_LineItem(
+      productId: _productId!,
+      productName: selectedProduct?.name ?? '',
+      qty: qty,
+      costPrice: double.tryParse(_costCtrl.text) ?? 0,
+    ));
+  }
+
   @override
   Widget build(BuildContext context) {
     final products = ref.watch(productsProvider).value ?? <Product>[];
     // SERVICE products are non-stock — exclude from the transfer picker.
     final active =
         products.where((p) => p.isActive && p.type != ProductType.service).toList();
-    final selectedProduct = active.where((p) => p.id == _productId).firstOrNull;
 
-    return AlertDialog(
-      title: const Text('Add Line Item'),
-      content: Column(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          InkWell(
-            onTap: () => _showProductPicker(context, active),
-            child: Container(
-              height: 48,
-              padding: const EdgeInsets.symmetric(horizontal: 12),
-              decoration: BoxDecoration(color: AppColors.fieldFill, borderRadius: BorderRadius.circular(12)),
-              child: Row(
-                children: [
-                  Icon(Icons.inventory_2, size: 20, color: AppColors.textMuted),
-                  const SizedBox(width: 8),
-                  Expanded(child: Text(selectedProduct?.name ?? 'Select product', style: selectedProduct != null ? AppTypography.body : AppTypography.fieldHint)),
-                  Icon(Icons.keyboard_arrow_down, color: AppColors.textMuted),
-                ],
-              ),
-            ),
-          ),
-          const SizedBox(height: AppSpacing.fieldGap),
-          AppTextField(controller: _qtyCtrl, label: 'Quantity', prefixIcon: Icons.numbers, keyboardType: TextInputType.number, hint: '1'),
-          const SizedBox(height: AppSpacing.fieldGap),
-          AppTextField(controller: _costCtrl, label: 'Cost per Unit', prefixIcon: Icons.attach_money, keyboardType: const TextInputType.numberWithOptions(decimal: true), hint: '0'),
-        ],
-      ),
-      actions: [
-        TextButton(onPressed: () => Navigator.pop(context), child: const Text('Cancel')),
-        FilledButton(onPressed: () {
-          final qty = double.tryParse(_qtyCtrl.text) ?? 0;
-          if (_productId == null || qty <= 0) return;
-          widget.onAdd(_LineItem(
-            productId: _productId!,
-            productName: selectedProduct?.name ?? '',
-            qty: qty,
-            costPrice: double.tryParse(_costCtrl.text) ?? 0,
-          ));
-          Navigator.pop(context);
-        }, child: const Text('Add')),
-      ],
-    );
-  }
-
-  void _showProductPicker(BuildContext context, List<Product> products) {
-    showModalBottomSheet(
-      context: context,
-      isScrollControlled: true,
-      builder: (ctx) => DraggableScrollableSheet(
-        initialChildSize: 0.6, minChildSize: 0.3, maxChildSize: 0.85, expand: false,
-        builder: (_, scrollController) => Column(
-          children: [
-            const SizedBox(height: 12),
-            Container(width: 36, height: 5, decoration: BoxDecoration(color: AppColors.separator, borderRadius: BorderRadius.circular(2.5))),
-            const SizedBox(height: 12),
-            Padding(padding: const EdgeInsets.symmetric(horizontal: AppSpacing.screenPadding), child: Text('Select Product', style: AppTypography.subhead)),
-            const SizedBox(height: AppSpacing.sm),
-            Expanded(
-              child: ListView.builder(
-                controller: scrollController,
-                itemCount: products.length,
-                itemBuilder: (_, i) {
-                  final p = products[i];
-                  return ListTile(
-                    leading: CircleAvatar(backgroundColor: AppColors.accent.withValues(alpha: 0.1), child: Text(p.name[0].toUpperCase(), style: AppTypography.body.copyWith(color: AppColors.accent))),
-                    title: Text(p.name, style: AppTypography.body),
-                    subtitle: Text('SKU: ${p.sku}', style: AppTypography.caption),
-                    onTap: () { setState(() => _productId = p.id); Navigator.pop(ctx); },
-                  );
-                },
-              ),
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-}
-
-class _BranchPicker extends StatelessWidget {
-  const _BranchPicker({required this.branches, required this.selected, required this.label, required this.icon, required this.emptyLabel, this.onChanged});
-  final List<Branch> branches;
-  final Branch? selected;
-  final String label, emptyLabel;
-  final IconData icon;
-  final ValueChanged<Branch?>? onChanged;
-
-  @override
-  Widget build(BuildContext context) {
     return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
+      mainAxisSize: MainAxisSize.min,
+      crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
-        Padding(padding: const EdgeInsets.only(left: 4, bottom: 8), child: Text(label, style: AppTypography.fieldLabel)),
-        InkWell(
-          onTap: branches.isEmpty ? null : () => _showPicker(context),
-          borderRadius: BorderRadius.circular(12),
-          child: Container(
-            height: 52,
-            padding: const EdgeInsets.symmetric(horizontal: 16),
-            decoration: BoxDecoration(color: AppColors.fieldFill, borderRadius: BorderRadius.circular(12)),
-            child: Row(
-              children: [
-                Icon(icon, size: 20, color: branches.isEmpty ? AppColors.textHint : AppColors.textMuted),
-                const SizedBox(width: 12),
-                Expanded(child: Text(
-                  selected?.name ?? (branches.isEmpty ? emptyLabel : 'Select branch'),
-                  style: selected != null ? AppTypography.body : AppTypography.fieldHint,
-                )),
-                if (branches.isNotEmpty) Icon(Icons.keyboard_arrow_down, color: AppColors.textMuted),
-              ],
-            ),
+        AppSheetHeader(title: 'Add line item'),
+        _Labeled(
+          label: 'Product',
+          child: AppDropdown<String>(
+            value: _productId,
+            placeholder: 'Select product',
+            options: [
+              for (final p in active)
+                AppDropdownOption(value: p.id, label: p.name),
+            ],
+            onSelected: (id) => setState(() => _productId = id),
           ),
+        ),
+        const SizedBox(height: 14),
+        AppTextField(
+          controller: _qtyCtrl,
+          label: 'Quantity',
+          prefixIcon: LucideIcons.hash,
+          keyboardType: TextInputType.number,
+          hint: '1',
+        ),
+        const SizedBox(height: 14),
+        AppTextField(
+          controller: _costCtrl,
+          label: 'Cost per unit',
+          prefixIcon: LucideIcons.dollarSign,
+          keyboardType: const TextInputType.numberWithOptions(decimal: true),
+          hint: '0',
+        ),
+        const SizedBox(height: 20),
+        AppButton(
+          label: 'Add item',
+          icon: LucideIcons.plus,
+          fullWidth: true,
+          onPressed: () => _add(active),
+        ),
+        const SizedBox(height: 8),
+        AppButton(
+          label: 'Cancel',
+          variant: AppButtonVariant.plain,
+          fullWidth: true,
+          onPressed: () => Navigator.of(context).pop(),
         ),
       ],
     );
   }
-
-  void _showPicker(BuildContext context) {
-    showModalBottomSheet(
-      context: context,
-      builder: (ctx) => SafeArea(
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: branches.map((b) => ListTile(
-            leading: Icon(icon, size: 20),
-            title: Text(b.name),
-            subtitle: Text(b.code, style: AppTypography.caption),
-            onTap: () { Navigator.pop(ctx); onChanged?.call(b); },
-          )).toList(),
-        ),
-      ),
-    );
-  }
 }
 
-class _WarehousePicker extends StatelessWidget {
-  const _WarehousePicker({required this.warehouses, required this.selected, required this.label, required this.onChanged});
-  final List<Warehouse> warehouses;
-  final Warehouse? selected;
+/// A labelled, tappable clay well used for the branch and warehouse pickers.
+/// When [onTap] is null the well renders non-interactive.
+class _PickerField extends StatelessWidget {
+  const _PickerField({
+    required this.label,
+    required this.icon,
+    required this.value,
+    required this.placeholder,
+    required this.onTap,
+  });
+
   final String label;
-  final ValueChanged<Warehouse?> onChanged;
+  final IconData icon;
+  final String value;
+  final bool placeholder;
+  final VoidCallback? onTap;
 
   @override
   Widget build(BuildContext context) {
-    final active = warehouses.where((w) => w.isActive).toList();
+    final lum = context.lum;
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Padding(padding: const EdgeInsets.only(left: 4, bottom: 8), child: Text(label, style: AppTypography.fieldLabel)),
-        InkWell(
-          onTap: () => _showPicker(context, active),
-          borderRadius: BorderRadius.circular(12),
-          child: Container(
-            height: 52,
-            padding: const EdgeInsets.symmetric(horizontal: 16),
-            decoration: BoxDecoration(color: AppColors.fieldFill, borderRadius: BorderRadius.circular(12)),
-            child: Row(
-              children: [
-                Icon(Icons.warehouse, size: 20, color: AppColors.textMuted),
-                const SizedBox(width: 12),
-                Expanded(child: Text(selected?.name ?? 'None (branch default)', style: selected != null ? AppTypography.body : AppTypography.fieldHint)),
-                Icon(Icons.keyboard_arrow_down, color: AppColors.textMuted),
-              ],
+        Padding(
+          padding: const EdgeInsets.only(left: 2, bottom: 8),
+          child: Text(label,
+              style: AppTypography.fieldLabel.copyWith(color: lum.g700)),
+        ),
+        Semantics(
+          button: true,
+          label: '$label: $value',
+          child: GestureDetector(
+            behavior: HitTestBehavior.opaque,
+            onTap: onTap,
+            child: Opacity(
+              opacity: onTap == null ? 0.7 : 1,
+              child: ClayContainer(
+                variant: ClayVariant.inset,
+                color: lum.surface2,
+                borderRadius: AppRadius.md,
+                isDark: lum.isDark,
+                height: 50,
+                padding: const EdgeInsets.symmetric(horizontal: 14),
+                child: Row(
+                  children: [
+                    Icon(icon, size: 18, color: lum.g400),
+                    const SizedBox(width: 10),
+                    Expanded(
+                      child: Text(
+                        value,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: AppTypography.fieldText.copyWith(
+                          color:
+                              placeholder ? lum.textTertiary : lum.textPrimary,
+                        ),
+                      ),
+                    ),
+                    Icon(LucideIcons.chevronRight, size: 18, color: lum.g400),
+                  ],
+                ),
+              ),
             ),
           ),
         ),
       ],
     );
   }
+}
 
-  void _showPicker(BuildContext context, List<Warehouse> active) {
-    showModalBottomSheet(
-      context: context,
-      builder: (ctx) => SafeArea(
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            ListTile(leading: const Icon(Icons.business, size: 20), title: const Text('None (branch default)'), onTap: () { Navigator.pop(ctx); onChanged(null); }),
-            ...active.map((w) => ListTile(
-              leading: const Icon(Icons.warehouse, size: 20),
-              title: Text(w.name),
-              subtitle: Text(w.code, style: AppTypography.caption),
-              trailing: w.isDefault ? const Icon(Icons.star, size: 16, color: AppColors.accent) : null,
-              onTap: () { Navigator.pop(ctx); onChanged(w); },
-            )),
-          ],
+class _Labeled extends StatelessWidget {
+  const _Labeled({required this.label, required this.child});
+  final String label;
+  final Widget child;
+
+  @override
+  Widget build(BuildContext context) {
+    final lum = context.lum;
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Padding(
+          padding: const EdgeInsets.only(left: 2, bottom: 8),
+          child: Text(label,
+              style: AppTypography.fieldLabel.copyWith(color: lum.g700)),
         ),
-      ),
+        child,
+      ],
+    );
+  }
+}
+
+/// One selectable row inside a [_PickerSheet].
+class _PickerRow {
+  const _PickerRow({
+    required this.icon,
+    required this.title,
+    required this.onTap,
+    this.subtitle,
+    this.selected = false,
+  });
+
+  final IconData icon;
+  final String title;
+  final String? subtitle;
+  final VoidCallback onTap;
+  final bool selected;
+}
+
+/// A bottom-sheet/dialog listing selectable rows. Tapping a row closes the sheet
+/// and fires its callback, so the caller owns the state mutation.
+class _PickerSheet extends StatelessWidget {
+  const _PickerSheet({required this.title, required this.rows});
+
+  final String title;
+  final List<_PickerRow> rows;
+
+  @override
+  Widget build(BuildContext context) {
+    final lum = context.lum;
+    return Column(
+      mainAxisSize: MainAxisSize.min,
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        AppSheetHeader(title: title),
+        for (final row in rows) ...[
+          Semantics(
+            button: true,
+            selected: row.selected,
+            label: row.title,
+            child: Material(
+              color: Colors.transparent,
+              borderRadius: BorderRadius.circular(AppRadius.md),
+              child: InkWell(
+                onTap: () {
+                  Navigator.of(context).pop();
+                  row.onTap();
+                },
+                borderRadius: BorderRadius.circular(AppRadius.md),
+                child: ClayContainer(
+                  variant: ClayVariant.inset,
+                  color: row.selected ? lum.accentSoft : lum.surface2,
+                  borderRadius: AppRadius.md,
+                  isDark: lum.isDark,
+                  padding:
+                      const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+                  child: Row(
+                    children: [
+                      Icon(row.icon,
+                          size: 18,
+                          color: row.selected ? lum.accentPress : lum.g500),
+                      const SizedBox(width: 12),
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(
+                              row.title,
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                              style: AppTypography.subhead.copyWith(
+                                color: lum.textPrimary,
+                                fontWeight: FontWeight.w600,
+                              ),
+                            ),
+                            if (row.subtitle != null) ...[
+                              const SizedBox(height: 2),
+                              Text(
+                                row.subtitle!,
+                                style: AppTypography.caption
+                                    .copyWith(color: lum.g500),
+                              ),
+                            ],
+                          ],
+                        ),
+                      ),
+                      if (row.selected)
+                        Icon(LucideIcons.check,
+                            size: 18, color: lum.accentPress),
+                    ],
+                  ),
+                ),
+              ),
+            ),
+          ),
+          const SizedBox(height: 8),
+        ],
+      ],
     );
   }
 }
