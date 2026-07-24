@@ -12,5 +12,10 @@
 	<true/>
 	<key>com.apple.security.network.client</key>
 	<true/>
+	<!-- Required by the printing package: a sandboxed macOS app cannot reach the
+	     print system without this, and Printing.layoutPdf shows "This application
+	     does not support printing." -->
+	<key>com.apple.security.print</key>
+	<true/>
 </dict>
 </plist>
