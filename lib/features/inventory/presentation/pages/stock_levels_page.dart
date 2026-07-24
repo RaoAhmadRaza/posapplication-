@@ -2,19 +2,25 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
+import 'package:lucide_icons_flutter/lucide_icons.dart';
+
 import '../../../../core/design/app_colors.dart';
 import '../../../../core/design/app_radius.dart';
-import '../../../../core/design/app_spacing.dart';
 import '../../../../core/design/app_typography.dart';
-import '../../../../core/design/widgets/app_button.dart';
+import '../../../../core/design/clay.dart';
 import '../../../../core/design/widgets/app_card.dart';
-import '../../../../core/design/widgets/app_inline_banner.dart';
-import '../../../../core/design/widgets/app_text_field.dart';
+import '../../../../core/design/widgets/app_list_skeleton.dart';
+import '../../../../core/design/widgets/app_pill.dart';
+import '../../../../core/design/widgets/app_search_field.dart';
+import '../../../../core/design/widgets/app_sheet.dart';
+import '../../../../core/design/widgets/app_states.dart';
 import '../../../auth/presentation/controllers/branch_controller.dart';
+import '../../domain/entities/product.dart';
 import '../../domain/entities/stock_level.dart';
 import '../../domain/entities/warehouse.dart';
 import '../controllers/stock_levels_controller.dart';
 import '../controllers/warehouses_controller.dart';
+import '../widgets/inventory_ui.dart';
 
 class StockLevelsPage extends ConsumerStatefulWidget {
   const StockLevelsPage({super.key});
@@ -52,8 +58,14 @@ class _StockLevelsPageState extends ConsumerState<StockLevelsPage> {
     });
   }
 
+  void _selectWarehouse(String? id) {
+    setState(() => _selectedWarehouseId = id);
+    ref.read(stockLevelsProvider.notifier).load(warehouseId: id);
+  }
+
   @override
   Widget build(BuildContext context) {
+    final lum = context.lum;
     final branch = ref.watch(currentBranchProvider);
     final state = ref.watch(stockLevelsProvider);
     final warehousesAsync = ref.watch(warehousesProvider);
@@ -67,154 +79,220 @@ class _StockLevelsPageState extends ConsumerState<StockLevelsPage> {
       });
     }
 
+    final selectedWarehouse =
+        warehouses.where((w) => w.id == _selectedWarehouseId).firstOrNull;
+
     return Scaffold(
-      backgroundColor: AppColors.background,
-      appBar: AppBar(
-        backgroundColor: AppColors.background,
-        surfaceTintColor: AppColors.background,
-        leading: IconButton(
-          icon: const Icon(Icons.arrow_back_ios, color: AppColors.accent, size: 20),
-          onPressed: () => Navigator.of(context).pop(),
-        ),
-        title: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
+      backgroundColor: lum.paper,
+      body: SafeArea(
+        child: Column(
           children: [
-            Text('Stock Levels', style: AppTypography.headline),
-            if (branch != null)
-              Text(
-                branch.name,
-                style: AppTypography.footnote.copyWith(color: AppColors.textMuted),
+            _header(lum, branch?.name),
+            Padding(
+              padding: const EdgeInsets.fromLTRB(16, 4, 16, 0),
+              child: Column(
+                children: [
+                  AppSearchField(
+                    controller: _searchController,
+                    hint: 'Search name or SKU',
+                  ),
+                  const SizedBox(height: 12),
+                  Align(
+                    alignment: Alignment.centerLeft,
+                    child: Wrap(
+                      spacing: 8,
+                      runSpacing: 8,
+                      children: [
+                        _DropdownChip(
+                          label: selectedWarehouse?.name ?? 'All warehouses',
+                          active: _selectedWarehouseId != null,
+                          onClear: _selectedWarehouseId != null
+                              ? () => _selectWarehouse(null)
+                              : null,
+                          onTap: () => _showWarehousePicker(warehouses),
+                        ),
+                        _ToggleChip(
+                          icon: LucideIcons.triangleAlert,
+                          label: 'Low stock',
+                          active: _lowStockOnly,
+                          onTap: () =>
+                              setState(() => _lowStockOnly = !_lowStockOnly),
+                        ),
+                      ],
+                    ),
+                  ),
+                  const SizedBox(height: 12),
+                ],
               ),
+            ),
+            Expanded(child: _buildBody(state)),
           ],
         ),
-        actions: [
-          IconButton(
-            icon: const Icon(Icons.edit_calendar, color: AppColors.accent),
-            tooltip: 'Set Opening Stock',
-            onPressed: () => context.push('/inventory/stock/movement'),
-          ),
-        ],
       ),
-      body: Column(
+    );
+  }
+
+  Widget _header(LumColors lum, String? branchName) {
+    final back = Semantics(
+      button: true,
+      label: 'Back',
+      child: GestureDetector(
+        behavior: HitTestBehavior.opaque,
+        onTap: () => Navigator.of(context).maybePop(),
+        child: ClayContainer(
+          variant: ClayVariant.soft,
+          color: lum.surface,
+          borderRadius: AppRadius.sm,
+          isDark: lum.isDark,
+          width: 44,
+          height: 44,
+          child: Icon(LucideIcons.arrowLeft, size: 20, color: lum.g600),
+        ),
+      ),
+    );
+
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(16, 12, 16, 8),
+      child: Row(
         children: [
-          Padding(
-            padding: const EdgeInsets.symmetric(horizontal: AppSpacing.screenPadding),
+          back,
+          const SizedBox(width: 14),
+          Expanded(
             child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              mainAxisSize: MainAxisSize.min,
               children: [
-                const SizedBox(height: AppSpacing.md),
-                AppTextField(
-                  controller: _searchController,
-                  label: 'Search',
-                  prefixIcon: Icons.search,
-                  hint: 'Product name or SKU',
+                Text(
+                  'INVENTORY',
+                  style: AppTypography.caption.copyWith(
+                    fontWeight: FontWeight.w600,
+                    letterSpacing: 0.7,
+                    color: lum.g400,
+                  ),
                 ),
-                const SizedBox(height: AppSpacing.sm),
-                Row(
-                  children: [
-                    Expanded(
-                      child: _WarehouseDropdown(
-                        warehouses: warehouses,
-                        selectedId: _selectedWarehouseId,
-                        onChanged: (id) {
-                          setState(() => _selectedWarehouseId = id);
-                          ref.read(stockLevelsProvider.notifier).load(warehouseId: id);
-                        },
-                      ),
-                    ),
-                    const SizedBox(width: AppSpacing.sm),
-                    _LowStockToggle(
-                      value: _lowStockOnly,
-                      onChanged: (v) => setState(() => _lowStockOnly = v),
-                    ),
-                  ],
+                const SizedBox(height: 2),
+                Text(
+                  'Stock levels',
+                  style: AppTypography.title1
+                      .copyWith(fontSize: 23, color: lum.textPrimary),
                 ),
+                if (branchName != null) ...[
+                  const SizedBox(height: 2),
+                  Text(
+                    branchName,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: AppTypography.footnote.copyWith(color: lum.g500),
+                  ),
+                ],
               ],
             ),
           ),
-          const SizedBox(height: AppSpacing.sm),
-          Expanded(child: _buildBody(state)),
+          _ToolIcon(
+            icon: LucideIcons.packagePlus,
+            tooltip: 'Set opening stock',
+            onTap: () => context.push('/inventory/stock/movement'),
+          ),
         ],
       ),
     );
   }
 
+  void _showWarehousePicker(List<Warehouse> warehouses) {
+    showAppSheet<void>(
+      context: context,
+      builder: (ctx) {
+        final lum = ctx.lum;
+        Widget row(String label, bool selected, VoidCallback onTap) => InkWell(
+              onTap: onTap,
+              borderRadius: BorderRadius.circular(AppRadius.md),
+              child: Padding(
+                padding:
+                    const EdgeInsets.symmetric(horizontal: 6, vertical: 14),
+                child: Row(
+                  children: [
+                    Expanded(
+                      child: Text(
+                        label,
+                        style: AppTypography.body.copyWith(
+                          color: lum.textPrimary,
+                          fontWeight:
+                              selected ? FontWeight.w600 : FontWeight.w400,
+                        ),
+                      ),
+                    ),
+                    if (selected)
+                      Icon(LucideIcons.check, size: 18, color: lum.accent),
+                  ],
+                ),
+              ),
+            );
+
+        return Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            const AppSheetHeader(title: 'Warehouse'),
+            row('All warehouses', _selectedWarehouseId == null, () {
+              Navigator.of(ctx).pop();
+              _selectWarehouse(null);
+            }),
+            for (final w in warehouses.where((w) => w.isActive))
+              row(w.name, w.id == _selectedWarehouseId, () {
+                Navigator.of(ctx).pop();
+                _selectWarehouse(w.id);
+              }),
+            const SizedBox(height: 8),
+          ],
+        );
+      },
+    );
+  }
+
   Widget _buildBody(AsyncValue<List<StockLevel>> state) {
     return state.when(
-      loading: () => const Center(child: CircularProgressIndicator()),
-      error: (e, _) => Center(
-        child: Padding(
-          padding: const EdgeInsets.symmetric(horizontal: AppSpacing.screenPadding),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              AppInlineBanner(
-                message: 'Could not load stock levels.',
-                type: BannerType.error,
-              ),
-              const SizedBox(height: AppSpacing.md),
-              AppButton(
-                label: 'Retry',
-                onPressed: () => ref.read(stockLevelsProvider.notifier).load(
-                      warehouseId: _selectedWarehouseId,
-                    ),
-              ),
-            ],
-          ),
-        ),
+      loading: () => const Padding(
+        padding: EdgeInsets.symmetric(horizontal: 16),
+        child: AppListSkeleton(),
+      ),
+      error: (e, _) => AppErrorState(
+        title: "We couldn't load stock levels",
+        body: 'We couldn\'t reach the server. Your data is safe — '
+            'try again in a moment.',
+        onRetry: () => ref
+            .read(stockLevelsProvider.notifier)
+            .load(warehouseId: _selectedWarehouseId),
       ),
       data: (levels) {
         var filtered = levels;
         if (_searchText.isNotEmpty) {
-          filtered = filtered.where((l) =>
-              l.productName.toLowerCase().contains(_searchText) ||
-              l.productSku.toLowerCase().contains(_searchText)).toList();
+          filtered = filtered
+              .where((l) =>
+                  l.productName.toLowerCase().contains(_searchText) ||
+                  l.productSku.toLowerCase().contains(_searchText))
+              .toList();
         }
         if (_lowStockOnly) {
-          filtered = filtered.where((l) => l.isLowStock).toList();
+          filtered =
+              filtered.where((l) => l.qtyOnHand <= l.reorderPoint).toList();
         }
 
         if (filtered.isEmpty) {
           final hasFilters = _searchText.isNotEmpty || _lowStockOnly;
-          return Center(
-            child: Padding(
-              padding: const EdgeInsets.symmetric(horizontal: AppSpacing.screenPadding),
-              child: Column(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  Icon(
-                    hasFilters ? Icons.search_off : Icons.inventory_2_outlined,
-                    size: 48,
-                    color: AppColors.textHint,
-                  ),
-                  const SizedBox(height: AppSpacing.md),
-                  Text(
-                    hasFilters ? 'No matching stock' : 'No stock levels yet',
-                    style: AppTypography.subhead.copyWith(color: AppColors.textMuted),
-                  ),
-                  const SizedBox(height: AppSpacing.xs),
-                  Text(
-                    hasFilters
-                        ? 'Try a different search or clear filters.'
-                        : 'Record stock movements to see levels here.',
-                    textAlign: TextAlign.center,
-                    style: AppTypography.footnote.copyWith(color: AppColors.textHint),
-                  ),
-                ],
-              ),
-            ),
+          return AppEmptyState(
+            icon: hasFilters ? LucideIcons.searchX : LucideIcons.boxes,
+            title: hasFilters ? 'No matching stock' : 'No stock levels yet',
+            body: hasFilters
+                ? 'Try a different search term or clear filters.'
+                : 'Record stock movements to see levels here.',
           );
         }
 
         return ListView.builder(
-          padding: const EdgeInsets.symmetric(
-            horizontal: AppSpacing.screenPadding,
-            vertical: AppSpacing.md,
-          ),
+          padding: const EdgeInsets.fromLTRB(16, 4, 16, 24),
           itemCount: filtered.length,
           itemBuilder: (_, i) => Padding(
-            padding: EdgeInsets.only(
-              bottom: i < filtered.length - 1 ? AppSpacing.md : 0,
-            ),
+            padding:
+                EdgeInsets.only(bottom: i < filtered.length - 1 ? 10 : 0),
             child: _StockLevelCard(level: filtered[i]),
           ),
         );
@@ -223,217 +301,145 @@ class _StockLevelsPageState extends ConsumerState<StockLevelsPage> {
   }
 }
 
-class _WarehouseDropdown extends StatelessWidget {
-  const _WarehouseDropdown({
-    required this.warehouses,
-    required this.selectedId,
-    required this.onChanged,
+class _ToolIcon extends StatelessWidget {
+  const _ToolIcon({required this.icon, required this.onTap, this.tooltip});
+
+  final IconData icon;
+  final VoidCallback onTap;
+  final String? tooltip;
+
+  @override
+  Widget build(BuildContext context) {
+    final lum = context.lum;
+    return Tooltip(
+      message: tooltip ?? '',
+      child: Semantics(
+        button: true,
+        label: tooltip,
+        child: GestureDetector(
+          behavior: HitTestBehavior.opaque,
+          onTap: onTap,
+          child: ClayContainer(
+            variant: ClayVariant.soft,
+            color: lum.surface,
+            borderRadius: AppRadius.sm,
+            isDark: lum.isDark,
+            width: 44,
+            height: 44,
+            child: Icon(icon, size: 19, color: lum.g600),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _DropdownChip extends StatelessWidget {
+  const _DropdownChip({
+    required this.label,
+    required this.active,
+    this.onClear,
+    this.onTap,
   });
 
-  final List<Warehouse> warehouses;
-  final String? selectedId;
-  final ValueChanged<String?> onChanged;
+  final String label;
+  final bool active;
+  final VoidCallback? onClear;
+  final VoidCallback? onTap;
 
   @override
   Widget build(BuildContext context) {
-    final selected = warehouses.where((w) => w.id == selectedId).firstOrNull;
-    return InkWell(
-      onTap: () => _showPicker(context),
-      borderRadius: BorderRadius.circular(AppRadius.chip),
-      child: Container(
-        height: 40,
-        padding: const EdgeInsets.symmetric(horizontal: AppSpacing.md),
-        decoration: BoxDecoration(
-          color: AppColors.fieldFill,
-          borderRadius: BorderRadius.circular(AppRadius.chip),
-        ),
-        child: Row(
-          children: [
-            Icon(Icons.warehouse, size: 16, color: AppColors.textMuted),
-            const SizedBox(width: AppSpacing.xs),
-            Expanded(
-              child: Text(
-                selected?.name ?? 'All Warehouses',
-                style: AppTypography.footnote.copyWith(color: AppColors.textPrimary),
-                overflow: TextOverflow.ellipsis,
-              ),
-            ),
-            Icon(Icons.keyboard_arrow_down, size: 18, color: AppColors.textMuted),
-          ],
-        ),
-      ),
-    );
-  }
-
-  void _showPicker(BuildContext context) {
-    showModalBottomSheet(
-      context: context,
-      builder: (ctx) => SafeArea(
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            ListTile(
-              leading: const Icon(Icons.all_inclusive, size: 20),
-              title: const Text('All Warehouses'),
-              onTap: () {
-                Navigator.of(ctx).pop();
-                onChanged(null);
-              },
-            ),
-            ...warehouses.where((w) => w.isActive).map((w) => ListTile(
-                  leading: const Icon(Icons.warehouse, size: 20),
-                  title: Text(w.name),
-                  subtitle: Text(w.code, style: AppTypography.caption),
-                  trailing: w.isDefault
-                      ? const Icon(Icons.star, size: 16, color: AppColors.accent)
-                      : null,
-                  onTap: () {
-                    Navigator.of(ctx).pop();
-                    onChanged(w.id);
-                  },
-                )),
-          ],
-        ),
-      ),
-    );
-  }
-}
-
-class _LowStockToggle extends StatelessWidget {
-  const _LowStockToggle({required this.value, required this.onChanged});
-
-  final bool value;
-  final ValueChanged<bool> onChanged;
-
-  @override
-  Widget build(BuildContext context) {
-    return InkWell(
-      onTap: () => onChanged(!value),
-      borderRadius: BorderRadius.circular(AppRadius.chip),
-      child: Container(
-        height: 40,
-        padding: const EdgeInsets.symmetric(horizontal: AppSpacing.md),
-        decoration: BoxDecoration(
-          color: value ? AppColors.warning.withValues(alpha: 0.12) : AppColors.fieldFill,
-          borderRadius: BorderRadius.circular(AppRadius.chip),
-          border: value ? Border.all(color: AppColors.warning, width: 1) : null,
-        ),
-        child: Row(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Icon(
-              Icons.warning_amber_rounded,
-              size: 16,
-              color: value ? AppColors.warning : AppColors.textMuted,
-            ),
-            const SizedBox(width: AppSpacing.xs),
-            Text(
-              'Low Stock',
-              style: AppTypography.footnote.copyWith(
-                color: value ? AppColors.warning : AppColors.textMuted,
-                fontWeight: value ? FontWeight.w600 : FontWeight.w400,
-              ),
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-}
-
-class _StockLevelCard extends ConsumerWidget {
-  const _StockLevelCard({required this.level});
-  final StockLevel level;
-
-  @override
-  Widget build(BuildContext context, WidgetRef ref) {
-    return AppCard(
-      child: InkWell(
-        onTap: () => context.push('/inventory/stock/${level.productId}'),
-        borderRadius: BorderRadius.circular(AppRadius.card),
-        child: Padding(
-          padding: const EdgeInsets.all(AppSpacing.xl),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
+    final lum = context.lum;
+    return Semantics(
+      button: true,
+      label: label,
+      child: GestureDetector(
+        behavior: HitTestBehavior.opaque,
+        onTap: onTap,
+        child: ClayContainer(
+          variant: ClayVariant.soft,
+          color: active ? lum.accentSoft : lum.surface,
+          borderRadius: AppRadius.pill,
+          isDark: lum.isDark,
+          height: 36,
+          padding: const EdgeInsets.symmetric(horizontal: 14),
+          child: Row(
+            mainAxisSize: MainAxisSize.min,
             children: [
-              Row(
-                children: [
-                  Container(
-                    width: 40,
-                    height: 40,
-                    decoration: BoxDecoration(
-                      color: AppColors.accent.withValues(alpha: 0.1),
-                      borderRadius: BorderRadius.circular(10),
-                    ),
-                    child: Center(
-                      child: Text(
-                        level.productName.isNotEmpty
-                            ? level.productName[0].toUpperCase()
-                            : '?',
-                        style: AppTypography.headline.copyWith(color: AppColors.accent),
-                      ),
-                    ),
-                  ),
-                  const SizedBox(width: AppSpacing.md),
-                  Expanded(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Row(
-                          children: [
-                            Flexible(
-                              child: Text(
-                                level.productName,
-                                style: AppTypography.headline,
-                                overflow: TextOverflow.ellipsis,
-                              ),
-                            ),
-                            if (level.isLowStock) ...[
-                              const SizedBox(width: AppSpacing.sm),
-                              Container(
-                                padding: const EdgeInsets.symmetric(
-                                  horizontal: AppSpacing.sm,
-                                  vertical: 2,
-                                ),
-                                decoration: BoxDecoration(
-                                  color: AppColors.warning.withValues(alpha: 0.12),
-                                  borderRadius: BorderRadius.circular(AppRadius.chip),
-                                ),
-                                child: Text(
-                                  'Low',
-                                  style: AppTypography.caption.copyWith(
-                                    color: AppColors.warning,
-                                    fontWeight: FontWeight.w600,
-                                  ),
-                                ),
-                              ),
-                            ],
-                          ],
-                        ),
-                        const SizedBox(height: 2),
-                        Text(
-                          'SKU: ${level.productSku}',
-                          style: AppTypography.footnote.copyWith(
-                            color: AppColors.textMuted,
-                          ),
-                        ),
-                      ],
-                    ),
-                  ),
-                ],
+              Icon(
+                LucideIcons.warehouse,
+                size: 15,
+                color: active ? lum.accentPress : lum.g500,
               ),
-              const Divider(color: AppColors.separator, height: AppSpacing.xl),
-              Row(
-                children: [
-                  _StockMetric(label: 'On Hand', value: level.qtyOnHand),
-                  _StockMetric(label: 'Reserved', value: level.qtyReserved),
-                  _StockMetric(label: 'In Transit', value: level.qtyInTransit),
-                  _StockMetric(
-                    label: 'Available',
-                    value: level.available,
-                    accent: true,
-                  ),
-                ],
+              const SizedBox(width: 6),
+              Text(
+                label,
+                style: AppTypography.footnote.copyWith(
+                  fontWeight: FontWeight.w600,
+                  color: active ? lum.accentPress : lum.g600,
+                ),
+              ),
+              const SizedBox(width: 4),
+              if (active && onClear != null)
+                GestureDetector(
+                  onTap: onClear,
+                  child: Icon(LucideIcons.x, size: 15, color: lum.accentPress),
+                )
+              else
+                Icon(LucideIcons.chevronDown, size: 15, color: lum.g500),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _ToggleChip extends StatelessWidget {
+  const _ToggleChip({
+    required this.icon,
+    required this.label,
+    required this.active,
+    required this.onTap,
+  });
+
+  final IconData icon;
+  final String label;
+  final bool active;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    final lum = context.lum;
+    return Semantics(
+      button: true,
+      toggled: active,
+      label: label,
+      child: GestureDetector(
+        behavior: HitTestBehavior.opaque,
+        onTap: onTap,
+        child: ClayContainer(
+          variant: ClayVariant.soft,
+          color: active ? lum.warningSoft : lum.surface,
+          borderRadius: AppRadius.pill,
+          isDark: lum.isDark,
+          height: 36,
+          padding: const EdgeInsets.symmetric(horizontal: 14),
+          child: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Icon(
+                icon,
+                size: 15,
+                color: active ? lum.warningText : lum.g500,
+              ),
+              const SizedBox(width: 6),
+              Text(
+                label,
+                style: AppTypography.footnote.copyWith(
+                  fontWeight: FontWeight.w600,
+                  color: active ? lum.warningText : lum.g600,
+                ),
               ),
             ],
           ),
@@ -443,32 +449,71 @@ class _StockLevelCard extends ConsumerWidget {
   }
 }
 
-class _StockMetric extends StatelessWidget {
-  const _StockMetric({
-    required this.label,
-    required this.value,
-    this.accent = false,
-  });
-
-  final String label;
-  final double value;
-  final bool accent;
+class _StockLevelCard extends StatelessWidget {
+  const _StockLevelCard({required this.level});
+  final StockLevel level;
 
   @override
   Widget build(BuildContext context) {
-    return Expanded(
-      child: Column(
+    final lum = context.lum;
+    final (tone, label) = stockStatusPill(
+      level.qtyOnHand,
+      level.reorderPoint,
+      ProductType.standard,
+    );
+
+    return AppCard(
+      onTap: () => context.push('/inventory/stock/${level.productId}'),
+      padding: const EdgeInsets.all(14),
+      child: Row(
         children: [
-          Text(
-            value.toStringAsFixed(value == value.roundToDouble() ? 0 : 1),
-            style: AppTypography.headline.copyWith(
-              color: accent ? AppColors.accent : AppColors.textPrimary,
+          ClayContainer(
+            variant: ClayVariant.inset,
+            color: lum.g100,
+            borderRadius: AppRadius.sm,
+            isDark: lum.isDark,
+            width: 46,
+            height: 46,
+            child: Icon(kInvItemIcon, size: 21, color: lum.g500),
+          ),
+          const SizedBox(width: 14),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  level.productName,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style:
+                      AppTypography.headline.copyWith(color: lum.textPrimary),
+                ),
+                const SizedBox(height: 3),
+                Text(
+                  level.productSku,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: AppTypography.monoValue
+                      .copyWith(fontSize: 12.5, color: lum.g500),
+                ),
+              ],
             ),
           ),
-          const SizedBox(height: 2),
-          Text(
-            label,
-            style: AppTypography.caption.copyWith(color: AppColors.textHint),
+          const SizedBox(width: 12),
+          Column(
+            crossAxisAlignment: CrossAxisAlignment.end,
+            children: [
+              Text(
+                qtyLabel(level.qtyOnHand),
+                style: AppTypography.monoValue.copyWith(
+                  fontSize: 20,
+                  fontWeight: FontWeight.w600,
+                  color: lum.textPrimary,
+                ),
+              ),
+              const SizedBox(height: 6),
+              AppPill(label: label, tone: tone),
+            ],
           ),
         ],
       ),
