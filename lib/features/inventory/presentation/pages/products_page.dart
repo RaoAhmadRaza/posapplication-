@@ -22,6 +22,7 @@ import '../../../../core/design/widgets/app_toast.dart';
 import '../../../../core/services/scanner_support.dart';
 import '../../../../core/services/voice_input_service.dart';
 import '../../../../core/services/voice_support.dart';
+import '../../../../core/services/voxa_stt_service.dart';
 import '../../../../core/widgets/barcode_scan_page.dart';
 import '../../../../core/widgets/permission_gate.dart';
 import '../../domain/entities/brand.dart';
@@ -160,6 +161,31 @@ class _ProductsPageState extends ConsumerState<ProductsPage> {
   }
 
   Future<void> _startVoiceSearch() async {
+    // Windows/Linux: record → Voxa transcribe on the second tap (no partials).
+    if (voiceSearchCloudSupported) {
+      if (VoxaStt.instance.isRecording) {
+        final text = await VoxaStt.instance.stopAndTranscribe();
+        if (!mounted) return;
+        setState(() => _voiceListening = false);
+        if (text != null) {
+          _searchController.text = text;
+          setState(() => _isSearching = true);
+          _applyFilters();
+        } else {
+          showAppToast(context, 'Voice service unavailable — is Voxa running?',
+              type: BannerType.warning);
+        }
+        return;
+      }
+      final ok = await VoxaStt.instance.startRecording();
+      if (!mounted) return;
+      setState(() => _voiceListening = ok);
+      if (!ok) {
+        showAppToast(context, 'Microphone permission needed',
+            type: BannerType.warning);
+      }
+      return;
+    }
     if (_voiceListening) {
       _voiceService.cancel();
       setState(() {
