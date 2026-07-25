@@ -116,6 +116,17 @@ scratchpad — reference only, NOT importable). Frontend-only; backend/routing/c
   0 new across all 17 screens + shared widgets. VERIFY OWED: on-device visual eyeball of the post-auth
   screens (agent env can't screenshot; Login already eyeballed OK on iOS sim).
 
+## Form density pass — PO + product forms (DONE 2026-07-26)
+Presentation-only. New shared `core/design/widgets/app_field.dart`: `AppFieldLabel` (one definition of
+the red-asterisk required marker; AppTextField gained `isRequired`) + `AppFieldRow` (fields on one line,
+auto-stacked under `minFieldWidth`). Both forms now lead with required fields and push every optional
+one into a trailing **Extra info** card:
+- PO form: Supplier*/Order date*/Currency* on one row; line items 4-across (Qty*, Unit cost*, Tax, Disc);
+  Extra info = expected date, exch. rate, freight, insurance, custom duty, order discount, notes.
+- Product form: Name*/Barcode, Type*/Category/Brand, Cost*/Selling*/Tax/Margin, UoM/reorder pair, Status*;
+  Extra info = description, min price, wholesale, weight, tags. Cost + selling price are now *enforced*
+  in `_requiredFieldError()` (shared by both save buttons) so the asterisks aren't decorative.
+
 ## UI Redesign — dashboard + nav (DONE 2026-07-21; detail in DECISIONS)
 Second design export, SAME design-system UUID as the auth zip → tokens/theme/clay reused UNCHANGED; pure
 consumer-side reskin per docs/UI_REDESIGN_PLAYBOOK.md. No router/domain/data/supabase edits; every
@@ -139,6 +150,13 @@ controller/provider binding byte-identical.
   ^3.1.15 (31 symbols pre-verified, zero transitive deps).
 - GATE: analyze 13 pre-existing/0 new; macOS builds + boots clean (WORKSPACE-STATE completed=true, no render
   exceptions); flutter test = same 2 failures as clean HEAD (proven in a HEAD worktree), NOT from this work.
+- **Hover (2026-07-26):** new shared `core/design/widgets/app_hover.dart` (`AppHover`) — a MouseRegion +
+  translucent neutral overlay (matches the nav rail's `hoverColor: lum.g100`), so every dashboard card and
+  button tints on pointer-over without any colour, size or shadow changing. `StackFit.passthrough` is
+  load-bearing: the default loose fit let tiles shrink to their content inside tight grid cells, so the
+  overlay spilled past the card. Wrapped: KPI tiles, KPI edit buttons, header icon buttons, quick-launch
+  tiles, welcome card, all section cards, recent-sale rows, drilldown back button + rows. Covered by
+  test/design/app_hover_test.dart (tint on/off, tight-constraint passthrough, disabled pass-through).
 - **Parity pass after user screenshot review (2026-07-21):** 4 real bugs found by comparing the running app
   against the reference renders. (1) Avatars (welcome card + rail) rendered as shadow-only — `ClayVariant.lumen`
   paints NO fill of its own and I passed no colour; `AppButton` was the existing correct precedent
@@ -693,8 +711,11 @@ date. Coverage: auth/RBAC → catalog/stock → sales/returns → dashboard → 
 Barcode scanning (unified via scanProductCode() in barcode_scan_page): live camera on mobile (mobile_scanner) + decode-from-
 image on ALL platforms — mobile_scanner.analyzeImage on iOS/Android/macOS, pure-Dart zxing2 QR decode on Windows/Linux (where
 mobile_scanner has no plugin; QR/DataMatrix only, not 1D). barcodeImageScanSupported = !kIsWeb. Three entry points, same exact
-barcode/SKU lookup: products_page scan icon → jump to stock detail; POS terminal HEADER scan action (ModuleHeader actions) →
-add to cart on exact match (else fill search); dashboard HEADER scan button (DashboardAppBar) → jump to stock detail. label
+barcode/SKU lookup: POS terminal HEADER scan action and dashboard HEADER scan button open showScannedProductDialog
+(sales/presentation/widgets/scanned_product_dialog.dart) on a single exact match — details + "Add to Cart" (PermissionGate
+sales:create → shared addProductToCart → posCartProvider) + "Back"; products_page scan icon still jumps to the product's stock
+detail page, which carries its own "Add to cart" action (same helper + gate). No match → POS/products fill the search field;
+dashboard reports no match. label
 printing (LabelPdfService/LabelPrintPage);
 notifications (+prefs, trg_low_stock_notify, hub bell badge); bulk CSV import (bulk_import_products); voice search
 (speech_to_text, gated voiceSearchNativeSupported = iOS/Android/macOS): products search-row mic, POS header mic → fill search,

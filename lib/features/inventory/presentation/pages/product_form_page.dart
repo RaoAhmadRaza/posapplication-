@@ -12,6 +12,7 @@ import '../../../../core/design/widgets/app_button.dart';
 import '../../../../core/design/widgets/app_confirm_dialog.dart';
 import '../../../../core/design/widgets/app_detail_scaffold.dart';
 import '../../../../core/design/widgets/app_dropdown.dart';
+import '../../../../core/design/widgets/app_field.dart';
 import '../../../../core/design/widgets/app_inline_banner.dart';
 import '../../../../core/design/widgets/app_section_card.dart';
 import '../../../../core/design/widgets/app_sheet.dart';
@@ -163,9 +164,20 @@ class _ProductFormPageState extends ConsumerState<ProductFormPage> {
     };
   }
 
+  /// The fields the form marks with a red asterisk — checked in one place so
+  /// both save buttons agree with what the labels promise.
+  String? _requiredFieldError() {
+    if (_nameCtrl.text.trim().isEmpty) return 'Name is required.';
+    if (_costPriceCtrl.text.trim().isEmpty) return 'Cost price is required.';
+    if (_sellingPriceCtrl.text.trim().isEmpty) {
+      return 'Selling price is required.';
+    }
+    return null;
+  }
+
   Future<void> _saveCore() async {
-    final name = _nameCtrl.text.trim();
-    if (name.isEmpty) { setState(() => _error = 'Name is required.'); return; }
+    final invalid = _requiredFieldError();
+    if (invalid != null) { setState(() => _error = invalid); return; }
 
     setState(() { _saving = true; _error = null; });
 
@@ -190,9 +202,8 @@ class _ProductFormPageState extends ConsumerState<ProductFormPage> {
   }
 
   Future<void> _saveAndClose() async {
-    final name = _nameCtrl.text.trim();
-    if (name.isEmpty) {
-      await _saveCore();
+    if (_requiredFieldError() != null) {
+      await _saveCore(); // surfaces the same error banner, stays on the form
       return;
     }
 
@@ -306,6 +317,8 @@ class _ProductFormPageState extends ConsumerState<ProductFormPage> {
           AppSectionCard(eyebrow: 'Pricing', child: _buildPriceInputs()),
           const SizedBox(height: 14),
           AppSectionCard(eyebrow: 'Inventory', child: _buildInventorySection()),
+          const SizedBox(height: 14),
+          AppSectionCard(eyebrow: 'Extra info', child: _buildExtraSection()),
           if (!_subSectionsEnabled) ...[
             const SizedBox(height: 12),
             _saveHint(lum),
@@ -426,10 +439,11 @@ class _ProductFormPageState extends ConsumerState<ProductFormPage> {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
-        _twoCol(
+        AppFieldRow(children: [
           AppTextField(
               controller: _nameCtrl,
               label: 'Name',
+              isRequired: true,
               prefixIcon: Icons.inventory_2_outlined,
               hint: 'Product name',
               onChanged: (_) => setState(() {})),
@@ -453,60 +467,49 @@ class _ProductFormPageState extends ConsumerState<ProductFormPage> {
               ],
             ],
           ),
-        ),
+        ]),
         const SizedBox(height: AppSpacing.fieldGap),
-        AppTextField(controller: _descriptionCtrl, label: 'Description', prefixIcon: Icons.notes, hint: 'Optional', maxLines: 3),
-        const SizedBox(height: AppSpacing.fieldGap),
-        _fieldLabel('Type'),
-        AppDropdown<String>(
-          value: _type,
-          options: const [
-            AppDropdownOption(value: 'STANDARD', label: 'Standard'),
-            AppDropdownOption(value: 'SERIALIZED', label: 'Serialized'),
-            AppDropdownOption(value: 'SERVICE', label: 'Service'),
-            AppDropdownOption(value: 'COMPOSITE', label: 'Composite'),
-          ],
-          onSelected: (v) => setState(() => _type = v),
-        ),
-        const SizedBox(height: AppSpacing.fieldGap),
-        Row(children: [
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.stretch,
-              children: [
-                _fieldLabel('Category'),
-                AppDropdown<String?>(
-                  value: _categoryId,
-                  placeholder: catsLoading ? 'Loading…' : 'None',
-                  enabled: !catsLoading,
-                  options: [
-                    const AppDropdownOption<String?>(value: null, label: 'None'),
-                    for (final c in categories)
-                      AppDropdownOption<String?>(value: c.id, label: c.name),
-                  ],
-                  onSelected: (v) => setState(() => _categoryId = v),
-                ),
+        AppFieldRow(children: [
+          _labeled(
+            'Type',
+            AppDropdown<String>(
+              value: _type,
+              options: const [
+                AppDropdownOption(value: 'STANDARD', label: 'Standard'),
+                AppDropdownOption(value: 'SERIALIZED', label: 'Serialized'),
+                AppDropdownOption(value: 'SERVICE', label: 'Service'),
+                AppDropdownOption(value: 'COMPOSITE', label: 'Composite'),
               ],
+              onSelected: (v) => setState(() => _type = v),
+            ),
+            isRequired: true,
+          ),
+          _labeled(
+            'Category',
+            AppDropdown<String?>(
+              value: _categoryId,
+              placeholder: catsLoading ? 'Loading…' : 'None',
+              enabled: !catsLoading,
+              options: [
+                const AppDropdownOption<String?>(value: null, label: 'None'),
+                for (final c in categories)
+                  AppDropdownOption<String?>(value: c.id, label: c.name),
+              ],
+              onSelected: (v) => setState(() => _categoryId = v),
             ),
           ),
-          const SizedBox(width: AppSpacing.md),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.stretch,
-              children: [
-                _fieldLabel('Brand'),
-                AppDropdown<String?>(
-                  value: _brandId,
-                  placeholder: brandsLoading ? 'Loading…' : 'None',
-                  enabled: !brandsLoading,
-                  options: [
-                    const AppDropdownOption<String?>(value: null, label: 'None'),
-                    for (final b in brands)
-                      AppDropdownOption<String?>(value: b.id, label: b.name),
-                  ],
-                  onSelected: (v) => setState(() => _brandId = v),
-                ),
+          _labeled(
+            'Brand',
+            AppDropdown<String?>(
+              value: _brandId,
+              placeholder: brandsLoading ? 'Loading…' : 'None',
+              enabled: !brandsLoading,
+              options: [
+                const AppDropdownOption<String?>(value: null, label: 'None'),
+                for (final b in brands)
+                  AppDropdownOption<String?>(value: b.id, label: b.name),
               ],
+              onSelected: (v) => setState(() => _brandId = v),
             ),
           ),
         ]),
@@ -519,33 +522,24 @@ class _ProductFormPageState extends ConsumerState<ProductFormPage> {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
-        Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
-          Expanded(
-              child: AppTextField(
-                  controller: _costPriceCtrl,
-                  label: 'Cost price',
-                  prefixIcon: Icons.payments_outlined,
-                  keyboardType: TextInputType.number,
-                  onChanged: (_) => setState(() {}))),
-          const SizedBox(width: AppSpacing.md),
-          Expanded(
-              child: AppTextField(
-                  controller: _sellingPriceCtrl,
-                  label: 'Selling price',
-                  prefixIcon: Icons.sell_outlined,
-                  keyboardType: TextInputType.number,
-                  onChanged: (_) => setState(() {}))),
-          const SizedBox(width: AppSpacing.md),
-          Expanded(child: _marginField()),
+        AppFieldRow(minFieldWidth: 150, children: [
+          AppTextField(
+              controller: _costPriceCtrl,
+              label: 'Cost price',
+              isRequired: true,
+              prefixIcon: Icons.payments_outlined,
+              keyboardType: TextInputType.number,
+              onChanged: (_) => setState(() {})),
+          AppTextField(
+              controller: _sellingPriceCtrl,
+              label: 'Selling price',
+              isRequired: true,
+              prefixIcon: Icons.sell_outlined,
+              keyboardType: TextInputType.number,
+              onChanged: (_) => setState(() {})),
+          AppTextField(controller: _taxRateCtrl, label: 'Tax rate %', prefixIcon: Icons.percent, keyboardType: TextInputType.number),
+          _marginField(),
         ]),
-        const SizedBox(height: AppSpacing.fieldGap),
-        Row(children: [
-          Expanded(child: AppTextField(controller: _minPriceCtrl, label: 'Min price', prefixIcon: Icons.trending_down, hint: 'Optional', keyboardType: TextInputType.number)),
-          const SizedBox(width: AppSpacing.md),
-          Expanded(child: AppTextField(controller: _wholesalePriceCtrl, label: 'Wholesale', prefixIcon: Icons.storefront_outlined, hint: 'Optional', keyboardType: TextInputType.number)),
-        ]),
-        const SizedBox(height: AppSpacing.fieldGap),
-        AppTextField(controller: _taxRateCtrl, label: 'Tax rate %', prefixIcon: Icons.percent, keyboardType: TextInputType.number),
         const SizedBox(height: 6),
         _toggleRow('Tax inclusive', _taxInclusive, (v) => setState(() => _taxInclusive = v)),
       ],
@@ -569,7 +563,7 @@ class _ProductFormPageState extends ConsumerState<ProductFormPage> {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        _fieldLabel('Margin'),
+        const AppFieldLabel('Margin'),
         Container(
           height: 50,
           padding: const EdgeInsets.symmetric(horizontal: 14),
@@ -598,40 +592,55 @@ class _ProductFormPageState extends ConsumerState<ProductFormPage> {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
-        Row(children: [
-          Expanded(child: AppTextField(controller: _unitCtrl, label: 'Unit of measure', prefixIcon: Icons.straighten, hint: 'PCS')),
-          const SizedBox(width: AppSpacing.md),
-          Expanded(child: AppTextField(controller: _weightCtrl, label: 'Weight (kg)', prefixIcon: Icons.monitor_weight_outlined, hint: 'Optional', keyboardType: TextInputType.number)),
+        AppFieldRow(minFieldWidth: 160, children: [
+          AppTextField(controller: _unitCtrl, label: 'Unit of measure', prefixIcon: Icons.straighten, hint: 'PCS'),
+          AppTextField(controller: _reorderPointCtrl, label: 'Reorder point', prefixIcon: Icons.warning_amber, keyboardType: TextInputType.number),
+          AppTextField(controller: _reorderQtyCtrl, label: 'Reorder qty', prefixIcon: Icons.add_shopping_cart, keyboardType: TextInputType.number),
         ]),
         const SizedBox(height: AppSpacing.fieldGap),
-        Row(children: [
-          Expanded(child: AppTextField(controller: _reorderPointCtrl, label: 'Reorder point', prefixIcon: Icons.warning_amber, keyboardType: TextInputType.number)),
-          const SizedBox(width: AppSpacing.md),
-          Expanded(child: AppTextField(controller: _reorderQtyCtrl, label: 'Reorder qty', prefixIcon: Icons.add_shopping_cart, keyboardType: TextInputType.number)),
-        ]),
-        const SizedBox(height: AppSpacing.fieldGap),
-        _fieldLabel('Status'),
-        AppDropdown<String>(
-          value: _status,
-          options: const [
-            AppDropdownOption(value: 'ACTIVE', label: 'Active'),
-            AppDropdownOption(value: 'INACTIVE', label: 'Inactive'),
-            AppDropdownOption(value: 'DISCONTINUED', label: 'Discontinued'),
-          ],
-          onSelected: (v) => setState(() => _status = v),
+        _labeled(
+          'Status',
+          AppDropdown<String>(
+            value: _status,
+            options: const [
+              AppDropdownOption(value: 'ACTIVE', label: 'Active'),
+              AppDropdownOption(value: 'INACTIVE', label: 'Inactive'),
+              AppDropdownOption(value: 'DISCONTINUED', label: 'Discontinued'),
+            ],
+            onSelected: (v) => setState(() => _status = v),
+          ),
+          isRequired: true,
         ),
-        const SizedBox(height: AppSpacing.fieldGap),
-        AppTextField(controller: _tagsCtrl, label: 'Tags', prefixIcon: Icons.label_outline, hint: 'Comma-separated'),
       ],
     );
   }
 
-  Widget _twoCol(Widget a, Widget b) => Row(
-        crossAxisAlignment: CrossAxisAlignment.end,
+  // ---- Extra info: everything optional, out of the way of the required flow ----
+  Widget _buildExtraSection() {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        AppTextField(controller: _descriptionCtrl, label: 'Description', prefixIcon: Icons.notes, hint: 'Optional', maxLines: 3),
+        const SizedBox(height: AppSpacing.fieldGap),
+        AppFieldRow(children: [
+          AppTextField(controller: _minPriceCtrl, label: 'Min price', prefixIcon: Icons.trending_down, hint: 'Optional', keyboardType: TextInputType.number),
+          AppTextField(controller: _wholesalePriceCtrl, label: 'Wholesale', prefixIcon: Icons.storefront_outlined, hint: 'Optional', keyboardType: TextInputType.number),
+        ]),
+        const SizedBox(height: AppSpacing.fieldGap),
+        AppFieldRow(children: [
+          AppTextField(controller: _weightCtrl, label: 'Weight (kg)', prefixIcon: Icons.monitor_weight_outlined, hint: 'Optional', keyboardType: TextInputType.number),
+          AppTextField(controller: _tagsCtrl, label: 'Tags', prefixIcon: Icons.label_outline, hint: 'Comma-separated'),
+        ]),
+      ],
+    );
+  }
+
+  Widget _labeled(String label, Widget child, {bool isRequired = false}) =>
+      Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          Expanded(child: a),
-          const SizedBox(width: AppSpacing.md),
-          Expanded(child: b),
+          AppFieldLabel(label, isRequired: isRequired),
+          child,
         ],
       );
 
@@ -652,16 +661,6 @@ class _ProductFormPageState extends ConsumerState<ProductFormPage> {
           child: Icon(LucideIcons.scanLine, size: 20, color: lum.g600),
         ),
       ),
-    );
-  }
-
-  Widget _fieldLabel(String text) {
-    final lum = context.lum;
-    return Padding(
-      padding: const EdgeInsets.only(left: 4, bottom: 8),
-      child: Text(text,
-          style: AppTypography.footnote
-              .copyWith(fontWeight: FontWeight.w600, color: lum.g700)),
     );
   }
 

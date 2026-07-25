@@ -2,7 +2,9 @@ import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import 'package:lucide_icons_flutter/lucide_icons.dart';
 import '../../../../core/design/app_colors.dart';
+import '../../../../core/design/app_radius.dart';
 import '../../../../core/design/app_typography.dart';
+import '../../../../core/design/widgets/app_hover.dart';
 import '../../../../core/design/widgets/app_money_text.dart';
 import '../../../../core/design/widgets/app_pill.dart';
 import '../../domain/entities/dashboard_summary.dart';
@@ -47,9 +49,15 @@ class RecentSalesCard extends StatelessWidget {
                 ),
               ),
             ),
-      child: Column(
-        mainAxisSize: MainAxisSize.min,
-        children: [for (final s in sales) _SaleRow(sale: s)],
+      // Clipped so the last row's hover tint keeps the card's rounded corners.
+      child: ClipRRect(
+        borderRadius: const BorderRadius.vertical(
+          bottom: Radius.circular(AppRadius.lg),
+        ),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [for (final s in sales) _SaleRow(sale: s)],
+        ),
       ),
     );
   }
@@ -71,49 +79,52 @@ class _SaleRow extends StatelessWidget {
       _ => (AppPillTone.neutral, sale.status),
     };
 
-    return InkWell(
-      onTap: () => context.push('/sales/invoice/${sale.invoiceNumber}'),
-      child: Container(
-        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-        decoration: BoxDecoration(
-          border: Border(top: BorderSide(color: lum.hairline)),
-        ),
-        child: Row(
-          children: [
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  Text(
-                    sale.invoiceNumber,
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                    style: AppTypography.monoValue.copyWith(
-                      fontSize: 13,
-                      color: lum.textPrimary,
+    return AppHover(
+      radius: 0,
+      child: InkWell(
+        onTap: () => context.push('/sales/invoice/${sale.invoiceNumber}'),
+        child: Container(
+          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+          decoration: BoxDecoration(
+            border: Border(top: BorderSide(color: lum.hairline)),
+          ),
+          child: Row(
+            children: [
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Text(
+                      sale.invoiceNumber,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: AppTypography.monoValue.copyWith(
+                        fontSize: 13,
+                        color: lum.textPrimary,
+                      ),
                     ),
-                  ),
-                  const SizedBox(height: 2),
-                  Text(
-                    sale.customer ?? 'Walk-in',
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                    style: AppTypography.caption.copyWith(
-                      fontSize: 12.5,
-                      color: lum.g600,
+                    const SizedBox(height: 2),
+                    Text(
+                      sale.customer ?? 'Walk-in',
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: AppTypography.caption.copyWith(
+                        fontSize: 12.5,
+                        color: lum.g600,
+                      ),
                     ),
-                  ),
-                ],
+                  ],
+                ),
               ),
-            ),
-            const SizedBox(width: 10),
-            AppPill(label: label, tone: tone),
-            const SizedBox(width: 10),
-            AppMoneyText(sale.grandTotal, size: 13, decimals: 2),
-            const SizedBox(width: 10),
-            Icon(LucideIcons.chevronRight, size: 17, color: lum.g400),
-          ],
+              const SizedBox(width: 10),
+              AppPill(label: label, tone: tone),
+              const SizedBox(width: 10),
+              AppMoneyText(sale.grandTotal, size: 13, decimals: 2),
+              const SizedBox(width: 10),
+              Icon(LucideIcons.chevronRight, size: 17, color: lum.g400),
+            ],
+          ),
         ),
       ),
     );

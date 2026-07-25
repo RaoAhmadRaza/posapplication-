@@ -7,6 +7,7 @@ import '../../../../core/design/app_radius.dart';
 import '../../../../core/design/app_typography.dart';
 import '../../../../core/design/clay.dart';
 import '../../../../core/design/widgets/app_button.dart';
+import '../../../../core/design/widgets/app_hover.dart';
 import '../../domain/entities/drilldown.dart';
 import '../controllers/drilldown_controller.dart';
 import '../widgets/dashboard_layout.dart';
@@ -115,16 +116,19 @@ class _DrilldownAppBar extends StatelessWidget implements PreferredSizeWidget {
           Semantics(
             button: true,
             label: 'Back',
-            child: InkWell(
-              onTap: () => context.pop(),
-              borderRadius: BorderRadius.circular(AppRadius.sm),
-              child: SizedBox(
-                width: 40,
-                height: 40,
-                child: Icon(
-                  LucideIcons.arrowLeft,
-                  size: isWide ? 22 : 24,
-                  color: lum.accent,
+            child: AppHover(
+              radius: AppRadius.sm,
+              child: InkWell(
+                onTap: () => context.pop(),
+                borderRadius: BorderRadius.circular(AppRadius.sm),
+                child: SizedBox(
+                  width: 40,
+                  height: 40,
+                  child: Icon(
+                    LucideIcons.arrowLeft,
+                    size: isWide ? 22 : 24,
+                    color: lum.accent,
+                  ),
                 ),
               ),
             ),
@@ -216,7 +220,10 @@ class _DrilldownRowTile extends StatelessWidget {
     );
 
     if (row.deepLink == null) return tile;
-    return InkWell(onTap: () => context.push(row.deepLink!), child: tile);
+    return AppHover(
+      radius: 0,
+      child: InkWell(onTap: () => context.push(row.deepLink!), child: tile),
+    );
   }
 }
 

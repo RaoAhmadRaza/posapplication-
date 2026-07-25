@@ -129,9 +129,10 @@ class _Body extends ConsumerWidget {
   /// 'View all' opens the same sales list the today's-sales KPI drills into.
   DrilldownNav? _viewAllSales() {
     final desc = kpiDescriptors['today_sales'];
+    // UTC for the same reason as the KPI grid's drilldown date.
     return desc?.drill?.call(
       null,
-      DateTime.now().toIso8601String().substring(0, 10),
+      DateTime.now().toUtc().toIso8601String().substring(0, 10),
     );
   }
 }

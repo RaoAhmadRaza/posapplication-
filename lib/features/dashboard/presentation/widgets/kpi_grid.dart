@@ -5,6 +5,7 @@ import 'package:lucide_icons_flutter/lucide_icons.dart';
 import '../../../../core/design/app_colors.dart';
 import '../../../../core/design/app_radius.dart';
 import '../../../../core/design/app_typography.dart';
+import '../../../../core/design/widgets/app_hover.dart';
 import '../../../auth/presentation/controllers/branch_controller.dart';
 import '../../domain/entities/dashboard_summary.dart';
 import '../controllers/kpi_layout_controller.dart';
@@ -139,7 +140,12 @@ class _GridEntry extends ConsumerWidget {
     if (editing) return tile;
 
     final branchId = ref.read(currentBranchProvider)?.id;
-    final date = DateTime.now().toIso8601String().substring(0, 10);
+    // UTC, not local: dashboard_summary buckets "today" as
+    // date_trunc('day', now()) and drilldown_sales as date(created_at), both in
+    // the DB session timezone (UTC). A local date puts the drilldown a day
+    // ahead of the KPI it came from — ahead of UTC midnight the list came back
+    // empty for a tile showing sales.
+    final date = DateTime.now().toUtc().toIso8601String().substring(0, 10);
     final nav = desc.drill?.call(branchId, date);
     final VoidCallback? onTap = nav != null
         ? () => context.push('/dashboard/drilldown', extra: nav)
@@ -148,12 +154,14 @@ class _GridEntry extends ConsumerWidget {
                 ? context.go(desc.route!)
                 : context.push(desc.route!)
             : null);
-    if (onTap == null) return tile;
+    if (onTap == null) return AppHover(child: tile);
 
-    return InkWell(
-      onTap: onTap,
-      borderRadius: BorderRadius.circular(AppRadius.lg),
-      child: tile,
+    return AppHover(
+      child: InkWell(
+        onTap: onTap,
+        borderRadius: BorderRadius.circular(AppRadius.lg),
+        child: tile,
+      ),
     );
   }
 }

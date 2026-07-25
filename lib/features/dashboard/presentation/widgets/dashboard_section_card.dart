@@ -3,6 +3,7 @@ import '../../../../core/design/app_colors.dart';
 import '../../../../core/design/app_radius.dart';
 import '../../../../core/design/app_typography.dart';
 import '../../../../core/design/clay.dart';
+import '../../../../core/design/widgets/app_hover.dart';
 
 /// Panel used by the dashboard's chart and list sections: a soft clay card with
 /// a display-face heading and an optional right-aligned eyebrow.
@@ -58,26 +59,28 @@ class DashboardSectionCard extends StatelessWidget {
       ],
     );
 
-    return ClayContainer(
-      variant: ClayVariant.soft,
-      color: lum.surface,
-      borderRadius: AppRadius.lg,
-      isDark: lum.isDark,
-      padding: padded ? const EdgeInsets.all(18) : EdgeInsets.zero,
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.stretch,
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          if (padded)
-            header
-          else
-            Padding(
-              padding: const EdgeInsets.fromLTRB(16, 16, 16, 12),
-              child: header,
-            ),
-          if (padded) const SizedBox(height: 16),
-          child,
-        ],
+    return AppHover(
+      child: ClayContainer(
+        variant: ClayVariant.soft,
+        color: lum.surface,
+        borderRadius: AppRadius.lg,
+        isDark: lum.isDark,
+        padding: padded ? const EdgeInsets.all(18) : EdgeInsets.zero,
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            if (padded)
+              header
+            else
+              Padding(
+                padding: const EdgeInsets.fromLTRB(16, 16, 16, 12),
+                child: header,
+              ),
+            if (padded) const SizedBox(height: 16),
+            child,
+          ],
+        ),
       ),
     );
   }

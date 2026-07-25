@@ -16,7 +16,9 @@ import '../../../../core/design/widgets/app_detail_scaffold.dart';
 import '../../../../core/design/widgets/app_money_text.dart';
 import '../../../../core/design/widgets/app_pill.dart';
 import '../../../../core/design/widgets/app_states.dart';
+import '../../../../core/widgets/permission_gate.dart';
 import '../../../auth/presentation/controllers/branch_controller.dart';
+import '../../../sales/presentation/widgets/scanned_product_dialog.dart';
 import '../../domain/entities/brand.dart';
 import '../../domain/entities/category.dart';
 import '../../domain/entities/product.dart';
@@ -135,6 +137,12 @@ class _ProductStockDetailPageState
           brands: brands,
           totalOnHand: totalOnHand,
           onEdit: () => context.push('/inventory/products/${product.id}'),
+          onAddToCart: () {
+            addProductToCart(ref, product);
+            ScaffoldMessenger.of(context).showSnackBar(
+              SnackBar(content: Text('Added ${product.name} to cart')),
+            );
+          },
           onAdjust: () => context.push('/inventory/adjustments/create'),
           onOpening: () => context.push('/inventory/stock/movement',
               extra: {'productId': widget.productId}),
@@ -163,6 +171,7 @@ class _HeaderCard extends StatelessWidget {
     required this.brands,
     required this.totalOnHand,
     required this.onEdit,
+    required this.onAddToCart,
     required this.onAdjust,
     required this.onOpening,
     required this.onPrint,
@@ -173,6 +182,7 @@ class _HeaderCard extends StatelessWidget {
   final List<Brand> brands;
   final double totalOnHand;
   final VoidCallback onEdit;
+  final VoidCallback onAddToCart;
   final VoidCallback onAdjust;
   final VoidCallback onOpening;
   final VoidCallback onPrint;
@@ -351,35 +361,51 @@ class _HeaderCard extends StatelessWidget {
   }
 
   Widget _actions(bool wide) {
+    // Five actions no longer fit a fixed row: compact size on wide, and a Wrap
+    // instead of a Row so the tail flows to a second line rather than overflowing.
+    final size = wide ? AppButtonSize.sm : AppButtonSize.md;
     final edit = AppButton(
-        label: 'Edit', icon: LucideIcons.pencil, onPressed: onEdit);
+        label: 'Edit', icon: LucideIcons.pencil, size: size, onPressed: onEdit);
+    // Hidden for staff without sales:create.
+    final addToCart = PermissionGate(
+      module: 'sales',
+      action: 'create',
+      child: Padding(
+        padding: EdgeInsets.only(top: wide ? 0 : 10),
+        child: AppButton(
+            label: 'Add to cart',
+            icon: LucideIcons.shoppingCart,
+            variant: AppButtonVariant.tinted,
+            fullWidth: !wide,
+            size: size,
+            onPressed: onAddToCart),
+      ),
+    );
     final adjust = AppButton(
         label: 'Adjust stock',
         icon: LucideIcons.slidersHorizontal,
         variant: AppButtonVariant.tinted,
+        size: size,
         onPressed: onAdjust);
     final opening = AppButton(
         label: 'Set opening stock',
         icon: LucideIcons.packagePlus,
         variant: AppButtonVariant.plain,
+        size: size,
         onPressed: onOpening);
     final print = AppButton(
         label: 'Print label',
         icon: LucideIcons.printer,
         variant: AppButtonVariant.plain,
+        size: size,
         onPressed: onPrint);
 
     if (wide) {
-      return Row(
-        children: [
-          edit,
-          const SizedBox(width: 10),
-          adjust,
-          const Spacer(),
-          opening,
-          const SizedBox(width: 4),
-          print,
-        ],
+      return Wrap(
+        spacing: 8,
+        runSpacing: 8,
+        crossAxisAlignment: WrapCrossAlignment.center,
+        children: [edit, adjust, addToCart, opening, print],
       );
     }
     return Column(
@@ -390,6 +416,7 @@ class _HeaderCard extends StatelessWidget {
             icon: LucideIcons.pencil,
             fullWidth: true,
             onPressed: onEdit),
+        addToCart,
         const SizedBox(height: 10),
         Row(children: [
           Expanded(child: adjust),

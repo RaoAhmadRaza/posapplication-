@@ -31,6 +31,7 @@ import '../widgets/pos/pos_cart_panel.dart';
 import '../widgets/pos/pos_cart_sheet.dart';
 import '../widgets/pos/pos_search_bar.dart';
 import '../widgets/pos/product_grid.dart';
+import '../widgets/scanned_product_dialog.dart';
 import '../widgets/sales_empty_state.dart';
 import '../widgets/sales_scaffold.dart';
 import 'customer_picker_sheet.dart';
@@ -177,7 +178,7 @@ class _PosTerminalPageState extends ConsumerState<PosTerminalPage>
       return;
     }
 
-    // Exact barcode/SKU match → add to the cart immediately (POS "beep & add").
+    // Exact barcode/SKU match → confirm in the scanned-product popup.
     // Otherwise fall back to filling the search so the user can pick.
     final online = ref
         .read(connectivityProvider)
@@ -195,8 +196,8 @@ class _PosTerminalPageState extends ConsumerState<PosTerminalPage>
     final exact =
         results.where((p) => p.barcode == code || p.sku == code).toList();
     if (exact.length == 1) {
-      _addLine(exact.first);
-      _snack('Added ${exact.first.name}');
+      final added = await showScannedProductDialog(context, ref, exact.first);
+      if (mounted && added) _snack('Added ${exact.first.name}');
       return;
     }
     _searchCtrl.text = code; // listener runs the filtered search
@@ -244,22 +245,7 @@ class _PosTerminalPageState extends ConsumerState<PosTerminalPage>
     if (result != null && result.isNotEmpty) _searchCtrl.text = result;
   }
 
-  void _addLine(Product product) {
-    double price = product.sellingPrice;
-    double taxPct = product.taxRate;
-    if (product.taxInclusive && product.taxRate > 0) {
-      price = product.sellingPrice / (1 + product.taxRate / 100);
-    }
-    ref.read(posCartProvider.notifier).addLine(
-          productId: product.id,
-          productName: product.name,
-          sku: product.sku,
-          barcode: product.barcode,
-          qty: 1,
-          unitPrice: price,
-          taxPct: taxPct,
-        );
-  }
+  void _addLine(Product product) => addProductToCart(ref, product);
 
   Future<void> _openCustomerPicker() async {
     // Offline is cash-only by construction: no credit, so no customer needed, and

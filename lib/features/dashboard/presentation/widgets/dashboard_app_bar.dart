@@ -1,10 +1,10 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:go_router/go_router.dart';
 import 'package:lucide_icons_flutter/lucide_icons.dart';
 import '../../../../core/design/app_colors.dart';
 import '../../../../core/design/app_radius.dart';
 import '../../../../core/design/app_typography.dart';
+import '../../../../core/design/widgets/app_hover.dart';
 import '../../../../core/services/scanner_support.dart';
 import '../../../../core/services/voice_input_service.dart';
 import '../../../../core/services/voice_support.dart';
@@ -12,6 +12,7 @@ import '../../../../core/services/voxa_stt_service.dart';
 import '../../../../core/widgets/barcode_scan_page.dart';
 import '../../../inventory/domain/usecases/search_products.dart';
 import '../../../notifications/presentation/widgets/notification_bell.dart';
+import '../../../sales/presentation/widgets/scanned_product_dialog.dart';
 import '../../../search/presentation/widgets/global_search_field.dart';
 import '../../../sync/presentation/widgets/sync_status_widget.dart';
 import '../controllers/dashboard_controller.dart';
@@ -128,18 +129,21 @@ class HeaderIconButton extends StatelessWidget {
       child: Semantics(
         button: true,
         label: tooltip,
-        child: InkWell(
-          onTap: onPressed,
-          borderRadius: BorderRadius.circular(AppRadius.sm),
-          child: Container(
-            width: 40,
-            height: 40,
-            alignment: Alignment.center,
-            decoration: BoxDecoration(
-              color: active ? lum.accentSoft : Colors.transparent,
-              borderRadius: BorderRadius.circular(AppRadius.sm),
+        child: AppHover(
+          radius: AppRadius.sm,
+          child: InkWell(
+            onTap: onPressed,
+            borderRadius: BorderRadius.circular(AppRadius.sm),
+            child: Container(
+              width: 40,
+              height: 40,
+              alignment: Alignment.center,
+              decoration: BoxDecoration(
+                color: active ? lum.accentSoft : Colors.transparent,
+                borderRadius: BorderRadius.circular(AppRadius.sm),
+              ),
+              child: glyph,
             ),
-            child: glyph,
           ),
         ),
       ),
@@ -211,8 +215,9 @@ class _RefreshButtonState extends State<_RefreshButton>
   }
 }
 
-/// Dashboard header scan: decode a product code (camera/image), then jump to
-/// that product's stock detail on a single exact match, else report no match.
+/// Dashboard header scan: decode a product code (camera/image), then show the
+/// scanned-product popup (details + add to cart) on a single exact match, else
+/// report no match.
 Future<void> _scanAndJump(BuildContext context, WidgetRef ref) async {
   final code = await scanProductCode(context);
   if (!context.mounted || code == null) return;
@@ -229,7 +234,12 @@ Future<void> _scanAndJump(BuildContext context, WidgetRef ref) async {
     final exact =
         results.where((p) => p.barcode == code || p.sku == code).toList();
     if (exact.length == 1) {
-      context.push('/inventory/stock/${exact.first.id}');
+      final added = await showScannedProductDialog(context, ref, exact.first);
+      if (context.mounted && added) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Added ${exact.first.name} to cart')),
+        );
+      }
       return;
     }
   }

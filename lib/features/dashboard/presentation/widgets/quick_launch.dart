@@ -6,6 +6,7 @@ import '../../../../core/design/app_colors.dart';
 import '../../../../core/design/app_radius.dart';
 import '../../../../core/design/app_typography.dart';
 import '../../../../core/design/clay.dart';
+import '../../../../core/design/widgets/app_hover.dart';
 import '../../../auth/presentation/controllers/permission_controller.dart';
 
 /// One quick-launch target and the permission that unlocks it.
@@ -161,10 +162,12 @@ class _QuickTile extends StatelessWidget {
     return Semantics(
       button: true,
       label: action.label,
-      child: InkWell(
-        onTap: () => action.onTap(context),
-        borderRadius: BorderRadius.circular(AppRadius.lg),
-        child: tile,
+      child: AppHover(
+        child: InkWell(
+          onTap: () => action.onTap(context),
+          borderRadius: BorderRadius.circular(AppRadius.lg),
+          child: tile,
+        ),
       ),
     );
   }

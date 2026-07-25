@@ -5,6 +5,7 @@ import '../../../../core/design/app_motion.dart';
 import '../../../../core/design/app_radius.dart';
 import '../../../../core/design/app_typography.dart';
 import '../../../../core/design/clay.dart';
+import '../../../../core/design/widgets/app_hover.dart';
 import '../../../../core/design/widgets/app_money_text.dart';
 
 /// Direction of a KPI's change, and whether that direction is good news.
@@ -206,20 +207,24 @@ class _EditButton extends StatelessWidget {
         button: true,
         enabled: enabled,
         label: tooltip,
-        child: InkWell(
-          onTap: onPressed,
-          borderRadius: BorderRadius.circular(AppRadius.sm),
-          child: Opacity(
-            opacity: enabled ? 1 : 0.4,
-            child: Container(
-              width: 30,
-              height: 30,
-              alignment: Alignment.center,
-              decoration: BoxDecoration(
-                color: background,
-                borderRadius: BorderRadius.circular(AppRadius.sm),
+        child: AppHover(
+          radius: AppRadius.sm,
+          enabled: enabled,
+          child: InkWell(
+            onTap: onPressed,
+            borderRadius: BorderRadius.circular(AppRadius.sm),
+            child: Opacity(
+              opacity: enabled ? 1 : 0.4,
+              child: Container(
+                width: 30,
+                height: 30,
+                alignment: Alignment.center,
+                decoration: BoxDecoration(
+                  color: background,
+                  borderRadius: BorderRadius.circular(AppRadius.sm),
+                ),
+                child: Icon(icon, size: 17, color: foreground),
               ),
-              child: Icon(icon, size: 17, color: foreground),
             ),
           ),
         ),

@@ -9,6 +9,7 @@ import '../../../../core/design/clay.dart';
 import '../../../../core/design/widgets/app_button.dart';
 import '../../../../core/design/widgets/app_detail_scaffold.dart';
 import '../../../../core/design/widgets/app_dropdown.dart';
+import '../../../../core/design/widgets/app_field.dart';
 import '../../../../core/design/widgets/app_inline_banner.dart';
 import '../../../../core/design/widgets/app_money_text.dart';
 import '../../../../core/design/widgets/app_search_field.dart';
@@ -419,7 +420,7 @@ class _PurchaseOrderFormPageState
                 const SizedBox(height: 14),
                 _lineItemsCard(context),
                 const SizedBox(height: 14),
-                _chargesNotesCard(context),
+                _extraInfoCard(context),
                 const SizedBox(height: 14),
                 _totalsCard(context),
                 if (_error != null) ...[
@@ -444,54 +445,39 @@ class _PurchaseOrderFormPageState
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          _PickerField(
-            label: 'Supplier',
-            icon: LucideIcons.truck,
-            value: _supplier?.name ?? 'Select supplier',
-            placeholder: _supplier == null,
-            onTap: _locked ? null : _pickSupplier,
-          ),
-          const SizedBox(height: 14),
-          _PickerField(
-            label: 'Order date',
-            icon: LucideIcons.calendar,
-            value: _fmtDate(_orderDate),
-            placeholder: false,
-            onTap: _locked ? null : () => _pickDate(isExpected: false),
-          ),
-          const SizedBox(height: 14),
-          _PickerField(
-            label: 'Expected date',
-            icon: LucideIcons.calendar,
-            value:
-                _expectedDate != null ? _fmtDate(_expectedDate!) : 'Optional',
-            placeholder: _expectedDate == null,
-            onTap: _locked ? null : () => _pickDate(isExpected: true),
-          ),
-          const SizedBox(height: 14),
-          _labeled(
-            context,
-            'Currency',
-            AppDropdown<String>(
-              value: _currency.text.trim().isEmpty ? null : _currency.text,
-              options: const [
-                AppDropdownOption(value: 'PKR', label: 'PKR'),
-                AppDropdownOption(value: 'USD', label: 'USD'),
-                AppDropdownOption(value: 'AED', label: 'AED'),
-              ],
-              onSelected: (v) => setState(() => _currency.text = v),
-              enabled: !_locked,
+          AppFieldRow(children: [
+            _PickerField(
+              label: 'Supplier',
+              isRequired: true,
+              icon: LucideIcons.truck,
+              value: _supplier?.name ?? 'Select supplier',
+              placeholder: _supplier == null,
+              onTap: _locked ? null : _pickSupplier,
             ),
-          ),
-          const SizedBox(height: 14),
-          AppTextField(
-            controller: _exchangeRate,
-            label: 'Exch. rate',
-            prefixIcon: LucideIcons.arrowRightLeft,
-            keyboardType:
-                const TextInputType.numberWithOptions(decimal: true),
-            enabled: !_locked,
-          ),
+            _PickerField(
+              label: 'Order date',
+              isRequired: true,
+              icon: LucideIcons.calendar,
+              value: _fmtDate(_orderDate),
+              placeholder: false,
+              onTap: _locked ? null : () => _pickDate(isExpected: false),
+            ),
+            _labeled(
+              context,
+              'Currency',
+              AppDropdown<String>(
+                value: _currency.text.trim().isEmpty ? null : _currency.text,
+                options: const [
+                  AppDropdownOption(value: 'PKR', label: 'PKR'),
+                  AppDropdownOption(value: 'USD', label: 'USD'),
+                  AppDropdownOption(value: 'AED', label: 'AED'),
+                ],
+                onSelected: (v) => setState(() => _currency.text = v),
+                enabled: !_locked,
+              ),
+              isRequired: true,
+            ),
+          ]),
         ],
       ),
     );
@@ -600,19 +586,13 @@ class _PurchaseOrderFormPageState
                     AppTypography.caption.copyWith(color: lum.dangerText)),
           ],
           const SizedBox(height: 12),
-          Row(
+          AppFieldRow(
+            minFieldWidth: 130,
             children: [
-              Expanded(child: _lineNumField(line.qtyCtrl, 'Qty')),
-              const SizedBox(width: 12),
-              Expanded(child: _lineNumField(line.costCtrl, 'Unit cost')),
-            ],
-          ),
-          const SizedBox(height: 12),
-          Row(
-            children: [
-              Expanded(child: _lineNumField(line.taxCtrl, 'Tax %')),
-              const SizedBox(width: 12),
-              Expanded(child: _lineNumField(line.discountCtrl, 'Disc %')),
+              _lineNumField(line.qtyCtrl, 'Qty', isRequired: true),
+              _lineNumField(line.costCtrl, 'Unit cost', isRequired: true),
+              _lineNumField(line.taxCtrl, 'Tax %'),
+              _lineNumField(line.discountCtrl, 'Disc %'),
             ],
           ),
           const SizedBox(height: 12),
@@ -630,55 +610,36 @@ class _PurchaseOrderFormPageState
     );
   }
 
-  Widget _lineNumField(TextEditingController c, String label) => AppTextField(
-        controller: c,
-        label: label,
-        prefixIcon: LucideIcons.hash,
-        keyboardType: const TextInputType.numberWithOptions(decimal: true),
-        enabled: !_locked,
-      );
+  Widget _lineNumField(TextEditingController c, String label,
+          {bool isRequired = false}) =>
+      _numField(c, label, LucideIcons.hash, isRequired: isRequired);
 
-  Widget _chargesNotesCard(BuildContext context) {
+  /// Everything optional — dates, rate, landed-cost charges, notes.
+  Widget _extraInfoCard(BuildContext context) {
     return AppSectionCard(
-      eyebrow: 'Charges & notes',
+      eyebrow: 'Extra info',
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          AppTextField(
-            controller: _freight,
-            label: 'Freight',
-            prefixIcon: LucideIcons.truck,
-            keyboardType:
-                const TextInputType.numberWithOptions(decimal: true),
-            enabled: !_locked,
-          ),
+          AppFieldRow(children: [
+            _PickerField(
+              label: 'Expected date',
+              icon: LucideIcons.calendar,
+              value:
+                  _expectedDate != null ? _fmtDate(_expectedDate!) : 'Optional',
+              placeholder: _expectedDate == null,
+              onTap: _locked ? null : () => _pickDate(isExpected: true),
+            ),
+            _numField(_exchangeRate, 'Exch. rate', LucideIcons.arrowRightLeft),
+          ]),
           const SizedBox(height: 14),
-          AppTextField(
-            controller: _insurance,
-            label: 'Insurance',
-            prefixIcon: LucideIcons.shield,
-            keyboardType:
-                const TextInputType.numberWithOptions(decimal: true),
-            enabled: !_locked,
-          ),
+          AppFieldRow(children: [
+            _numField(_freight, 'Freight', LucideIcons.truck),
+            _numField(_insurance, 'Insurance', LucideIcons.shield),
+            _numField(_customDuty, 'Custom duty', LucideIcons.landmark),
+          ]),
           const SizedBox(height: 14),
-          AppTextField(
-            controller: _customDuty,
-            label: 'Custom duty',
-            prefixIcon: LucideIcons.landmark,
-            keyboardType:
-                const TextInputType.numberWithOptions(decimal: true),
-            enabled: !_locked,
-          ),
-          const SizedBox(height: 14),
-          AppTextField(
-            controller: _discountTotal,
-            label: 'Order discount',
-            prefixIcon: LucideIcons.percent,
-            keyboardType:
-                const TextInputType.numberWithOptions(decimal: true),
-            enabled: !_locked,
-          ),
+          _numField(_discountTotal, 'Order discount', LucideIcons.percent),
           const SizedBox(height: 14),
           AppTextField(
             controller: _notes,
@@ -692,6 +653,17 @@ class _PurchaseOrderFormPageState
       ),
     );
   }
+
+  Widget _numField(TextEditingController c, String label, IconData icon,
+          {bool isRequired = false}) =>
+      AppTextField(
+        controller: c,
+        label: label,
+        prefixIcon: icon,
+        isRequired: isRequired,
+        keyboardType: const TextInputType.numberWithOptions(decimal: true),
+        enabled: !_locked,
+      );
 
   Widget _totalsCard(BuildContext context) {
     final lum = context.lum;
@@ -737,16 +709,12 @@ class _PurchaseOrderFormPageState
     );
   }
 
-  Widget _labeled(BuildContext context, String label, Widget child) {
-    final lum = context.lum;
+  Widget _labeled(BuildContext context, String label, Widget child,
+      {bool isRequired = false}) {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Padding(
-          padding: const EdgeInsets.only(left: 2, bottom: 8),
-          child: Text(label,
-              style: AppTypography.fieldLabel.copyWith(color: lum.g700)),
-        ),
+        AppFieldLabel(label, isRequired: isRequired),
         child,
       ],
     );
@@ -762,6 +730,7 @@ class _PickerField extends StatelessWidget {
     required this.value,
     required this.placeholder,
     required this.onTap,
+    this.isRequired = false,
   });
 
   final String label;
@@ -769,6 +738,7 @@ class _PickerField extends StatelessWidget {
   final String value;
   final bool placeholder;
   final VoidCallback? onTap;
+  final bool isRequired;
 
   @override
   Widget build(BuildContext context) {
@@ -776,11 +746,7 @@ class _PickerField extends StatelessWidget {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Padding(
-          padding: const EdgeInsets.only(left: 2, bottom: 8),
-          child: Text(label,
-              style: AppTypography.fieldLabel.copyWith(color: lum.g700)),
-        ),
+        AppFieldLabel(label, isRequired: isRequired),
         Semantics(
           button: true,
           label: '$label: $value',

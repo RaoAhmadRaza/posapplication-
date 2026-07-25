@@ -3,6 +3,7 @@ import '../app_colors.dart';
 import '../app_motion.dart';
 import '../app_radius.dart';
 import '../app_typography.dart';
+import 'app_field.dart';
 
 class AppTextField extends StatefulWidget {
   final TextEditingController controller;
@@ -24,6 +25,9 @@ class AppTextField extends StatefulWidget {
 
   /// Grey note under the well, shown when there is no [errorText].
   final String? helperText;
+
+  /// Marks the label with a red asterisk.
+  final bool isRequired;
   const AppTextField({
     super.key,
     required this.controller,
@@ -41,6 +45,7 @@ class AppTextField extends StatefulWidget {
     this.enabled = true,
     this.maxLines = 1,
     this.helperText,
+    this.isRequired = false,
   });
 
   @override
@@ -164,13 +169,7 @@ class _AppTextFieldState extends State<AppTextField> {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Padding(
-          padding: const EdgeInsets.only(left: 2, bottom: 8),
-          child: Text(
-            widget.label,
-            style: AppTypography.fieldLabel.copyWith(color: lum.g700),
-          ),
-        ),
+        AppFieldLabel(widget.label, isRequired: widget.isRequired),
         well,
         if (!hasError && widget.helperText != null)
           Padding(
