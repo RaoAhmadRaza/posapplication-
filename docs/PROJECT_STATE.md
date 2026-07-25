@@ -29,7 +29,46 @@ lib/
     presentation/controllers/  4  presentation/pages/  7 (open/close session, POS terminal, payment, success, receipt)
   features/dashboard/ (data + domain + controller)
   features/{purchasing,suppliers,customers,accounting,repair,hr}/ (full clean-arch per feature)
+  features/assistant/ (AI companion chat — clean-arch mirror of notifications)
 ```
+
+## AI Companion — Phases 1–5 CODE COMPLETE, deploy + on-device verify OWED (2026-07-25)
+In-app read-only chat assistant: explains the app + finds features (baked-in route/feature KB in the
+system prompt) and answers questions about the user's OWN data by calling the existing report RPCs.
+First LLM integration in the app. Full detail in DECISIONS.md (2026-07-25).
+- **Backend** `supabase/functions/llm-proxy/` (Deno): mirrors the JWT-gated `list-sessions` pattern.
+  **OpenAI** (`npm:openai`) key server-side ONLY (`Deno.env`, `supabase secrets set OPENAI_API_KEY`) —
+  never in the app. **Auth:** manual `createClient(SUPABASE_URL, SUPABASE_ANON_KEY, {Authorization: caller
+  JWT})` + `getUser()` via `Deno.serve` (NOT `withSupabase` — @supabase/server rejects this project's legacy
+  anon key with "Invalid credentials"). **Security invariant:** data tools run on that caller-scoped client,
+  never service-role → cross-tenant leakage structurally impossible. `tools.ts` = 15 READ-only tools
+  (dashboards, aging, ledgers + find_ resolvers, P&L/TB/BS, sales/inventory/product reports, low-stock,
+  product search) as OpenAI function tools; `runTool` rejects unregistered names; NO mutation RPC ever
+  registered. Model `OPENAI_MODEL` env, default `gpt-4o-mini` (set `gpt-4.1-nano`/`gpt-5-nano` for cheaper).
+  **Streaming SSE** (delta/tool/done/error) via a manual `chat.completions` tool-call loop (accumulate
+  streamed `tool_calls` fragments by index → run tools → `role:"tool"` results → loop). System prompt +
+  per-user permission block. Per-user rate limit (20/60s → 429); token usage logged to `chat_messages.usage`.
+  Deploy with `--no-verify-jwt` (auth is in-handler).
+- **Schema** migration `20260725120000_ai_companion_schema.sql`: `chat_conversations` + `chat_messages`,
+  tenant+user-owned RLS (`tenant_id=auth_tenant_id() and user_id=auth.uid()`), indexes, realtime-published.
+  **NOT db-pushed.**
+- **Flutter** `lib/features/assistant/`: entities/model/datasource (raw-http SSE stream — `functions.invoke`
+  buffers, so POST the function URL with the JWT + parse SSE) / repository / `Notifier<AssistantState>`
+  controller (optimistic bubbles, deltas stream into the last bubble). Net-new UI: `ChatBubble`,
+  `ChatComposer` (native STT mic reusing `VoiceInputService`), `AssistantPage` (bespoke Scaffold —
+  AppDetailScaffold is scroll-centered, wrong for a pinned composer). Route `/assistant` (top-level sibling
+  GoRoute, no redirect/branch changes). `AssistantLauncher` (sparkles) mounted in `module_scaffold` +
+  `dashboard_app_bar` → on every screen.
+- Voice v1 = native only (iOS/Android/macOS); Windows/Linux Voxa deferred. GATE: `flutter analyze` **8
+  issues, 0 new** (baseline 8).
+- **STATUS 2026-07-25: verified working end-to-end** on macOS — JWT auth, streaming SSE, tool-call loop,
+  persistence all confirmed (`status 200`, tool loop runs). Provider went Anthropic→Gemini→**OpenAI** during
+  bring-up (Gemini free tier = `limit:0` in region; owner supplied an OpenAI key). Remaining owner step:
+  `supabase secrets set OPENAI_API_KEY=...` + `supabase functions deploy llm-proxy --no-verify-jwt`, confirm
+  the key's plan has quota, then eyeball light+dark + voice. **DATA-POLICY GATE:** chat content (balances,
+  salaries) is sent to OpenAI — owner must sign off before rollout.
+- **DEFERRED:** conversation list/rename/delete UI, realtime multi-device reconciliation in the controller,
+  desktop Voxa voice.
 
 ## UI Redesign — LUMINA design system (IN PROGRESS, started 2026-07-20)
 Reskinning the app to the Claude-Design "LUMINA" system (source zip: React/TS + tokens.css, kept in
