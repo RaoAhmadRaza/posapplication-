@@ -166,6 +166,70 @@ List<int> _branchMapFor(Set<String> matrix) => [
       4,
     ];
 
+/// Root path each shell branch opens to. Used by [RailDetailScaffold], whose
+/// rail must navigate with `go` (it lives above the shell and cannot goBranch).
+const _branchRoot = <int, String>{
+  0: '/dashboard',
+  1: '/inventory',
+  _kPurchaseBranch: '/purchasing',
+  _kSalesBranch: '/sales/pos',
+  4: '/settings',
+  _kRepairBranch: '/repair',
+  _kCustomersBranch: '/customers',
+  _kReportsBranch: '/reports',
+  _kAccountingBranch: '/accounting',
+  _kApprovalsBranch: '/approvals',
+  _kHrBranch: '/hr',
+};
+
+/// Wraps a top-level (outside-the-shell) detail page in the persistent desktop
+/// rail so it reads as part of the app instead of a bare full screen. These
+/// pages are kept above the shell on purpose (they are pushed from above it,
+/// where a shell descendant would crash on a duplicate page key), so the rail
+/// here navigates with `go`, not `goBranch`. Below the rail breakpoint the child
+/// renders alone and keeps its own back navigation.
+class RailDetailScaffold extends ConsumerWidget {
+  const RailDetailScaffold({
+    super.key,
+    required this.child,
+    this.selectedBranch = 1,
+  });
+
+  final Widget child;
+
+  /// Shell branch to light in the rail (1 = Inventory).
+  final int selectedBranch;
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final matrix = ref.watch(permissionMatrixProvider).value ?? <String>{};
+    final branchMap = _branchMapFor(matrix);
+    final items = [for (final b in branchMap) _allItems[b]];
+    final selected = branchMap.indexOf(selectedBranch);
+
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        if (constraints.maxWidth < _kRailBreakpoint) return child;
+        return Scaffold(
+          body: Row(
+            children: [
+              _NavRail(
+                items: items,
+                selected: selected,
+                onSelect: (i) => context.go(_branchRoot[branchMap[i]]!),
+                dests: const [],
+                destIndex: -1,
+                moduleLabel: '',
+              ),
+              Expanded(child: child),
+            ],
+          ),
+        );
+      },
+    );
+  }
+}
+
 class BottomNavShell extends ConsumerWidget {
   const BottomNavShell({super.key, required this.navigationShell});
 
