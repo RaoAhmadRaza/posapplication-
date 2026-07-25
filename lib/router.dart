@@ -1252,16 +1252,19 @@ final appRouter = GoRouter(
         ),
       ],
     ),
-    // Two inventory detail routes kept TOP-LEVEL (outside the shell): they are
+    // Inventory detail routes kept TOP-LEVEL (outside the shell): they are
     // pushed from ABOVE the shell (dashboard drilldown, notifications, global
-    // search, sync exception centre). Declared AFTER the StatefulShellRoute so
-    // the in-branch '/inventory/products/create' and '/inventory/stock/movement'
-    // literal leaves win the match over these ':productId' params.
+    // search, sync exception centre), where a shell descendant would crash on a
+    // duplicate page key. Declared AFTER the StatefulShellRoute so the in-branch
+    // '/inventory/products/create' and '/inventory/stock/movement' literal leaves
+    // win the match over these ':productId' params. Each is wrapped in
+    // RailDetailScaffold so it still shows the desktop nav rail + fade.
     GoRoute(
       path: '/inventory/products/:productId',
-      builder: (context, state) {
+      pageBuilder: (context, state) {
         final id = state.pathParameters['productId']!;
-        return ProductFormPage(productId: id);
+        return _fadePage(
+            state, RailDetailScaffold(child: ProductFormPage(productId: id)));
       },
     ),
     // Stock-movement form kept TOP-LEVEL (outside the shell): pushed from the
