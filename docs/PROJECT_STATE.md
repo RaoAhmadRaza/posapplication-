@@ -612,6 +612,12 @@ matrix runtime-proven via rolled-back impersonation (S18/S19 lateral-grant, S15 
 1.10 blocks ADMIN re-drift); data integrity clean. Remaining: owner on-device acceptance (PIN/MFA/POS smoke). analyze clean.
 
 ## Inventory — COMPLETE (Slices A/B/C; detail in DECISIONS.md)
+Product images now UPLOAD (file_picker, all platforms) → public 'product-images' bucket (migration 20260724170000,
+NOT db-pushed) → getPublicUrl → existing product_images row; form "Add image" = Upload | Paste URL. First img auto-primary.
+Images render on products list, product detail header, and POS grid tile (all fall back to icon on null/broken URL).
+The 5 top-level inventory detail routes (detail/edit/movement/adjustments-create/labels) now wrap in RailDetailScaffold
+(bottom_nav_shell.dart) → desktop nav rail + fade while staying above the shell (avoids push-from-above crash). Detail
+page redesigned premium (image hero, spec strip, CustomPainter stock-trend sparkline).
 Catalog (categories/brands/products + variants/images/pricing, barcode templates, trigram search, SKU auto-gen,
 soft-delete RPCs). Stock engine (trigger-maintained stock_balance over immutable stock_ledger; all writes via
 post_stock_movement; negative blocked; warehouses CRUD + opening-balance + levels + ledger). Stock ops
