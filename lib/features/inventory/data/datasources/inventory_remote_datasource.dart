@@ -122,8 +122,12 @@ class InventoryRemoteDataSource {
     if (brandId != null) query = query.eq('brand_id', brandId);
     if (status != null) query = query.eq('status', status);
     final from = page * pageSize;
+    // Tiebreak on id: created_at alone is not unique (bulk imports share a
+    // timestamp), and range() pagination over a non-total order returns the
+    // same row on multiple pages. id makes the order total and pages disjoint.
     return query
         .order('created_at', ascending: false)
+        .order('id')
         .range(from, from + pageSize - 1);
   }
 

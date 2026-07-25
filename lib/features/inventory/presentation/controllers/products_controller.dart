@@ -110,7 +110,11 @@ class ProductsController extends AsyncNotifier<List<Product>> {
     final branch = ref.read(currentBranchProvider);
     final merged = branch == null ? rows : await _mergeStock(rows, branch.id);
     final current = state.value ?? const <Product>[];
-    state = AsyncValue.data([...current, ...merged]);
+    // Defence-in-depth against any residual page overlap: never append an id
+    // already in the list (seen.add is false when the id is already present).
+    final seen = current.map((p) => p.id).toSet();
+    final fresh = merged.where((p) => seen.add(p.id)).toList();
+    state = AsyncValue.data([...current, ...fresh]);
     return null;
   }
 
