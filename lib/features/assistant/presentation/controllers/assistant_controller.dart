@@ -8,12 +8,21 @@ import '../../domain/entities/chat_message.dart';
 class AssistantState {
   const AssistantState({
     this.messages = const [],
+    this.conversations = const [],
+    this.activeConversationId,
     this.sending = false,
     this.toolStatus,
     this.error,
   });
 
   final List<ChatMessage> messages;
+
+  /// The user's saved threads, newest first — backs the history panel.
+  final List<ChatConversation> conversations;
+
+  /// The thread currently shown, or null for an unsaved new chat.
+  final String? activeConversationId;
+
   final bool sending;
 
   /// Name of the read tool currently running, for a status line ("Looking up…").
@@ -22,6 +31,9 @@ class AssistantState {
 
   AssistantState copyWith({
     List<ChatMessage>? messages,
+    List<ChatConversation>? conversations,
+    String? activeConversationId,
+    bool clearActiveConversationId = false,
     bool? sending,
     String? toolStatus,
     bool clearToolStatus = false,
@@ -30,6 +42,10 @@ class AssistantState {
   }) =>
       AssistantState(
         messages: messages ?? this.messages,
+        conversations: conversations ?? this.conversations,
+        activeConversationId: clearActiveConversationId
+            ? null
+            : (activeConversationId ?? this.activeConversationId),
         sending: sending ?? this.sending,
         toolStatus: clearToolStatus ? null : (toolStatus ?? this.toolStatus),
         error: clearError ? null : (error ?? this.error),
@@ -42,10 +58,41 @@ final assistantControllerProvider =
 );
 
 class AssistantController extends Notifier<AssistantState> {
-  String? _conversationId;
+  AssistantRepository get _repo => ref.read(assistantRepositoryProvider);
 
   @override
-  AssistantState build() => const AssistantState();
+  AssistantState build() {
+    _resumeLast();
+    return const AssistantState();
+  }
+
+  /// On open: load the thread list and resume the most recent one, so the chat
+  /// is still there after navigating away or restarting. Bails if the user has
+  /// already started interacting (a race with an eager first message).
+  Future<void> _resumeLast() async {
+    try {
+      final convs = await _repo.listConversations();
+      if (state.sending ||
+          state.messages.isNotEmpty ||
+          state.activeConversationId != null) {
+        state = state.copyWith(conversations: convs);
+        return;
+      }
+      if (convs.isEmpty) {
+        state = state.copyWith(conversations: convs);
+        return;
+      }
+      final last = convs.first;
+      final msgs = await _repo.loadHistory(last.id);
+      state = state.copyWith(
+        conversations: convs,
+        messages: msgs,
+        activeConversationId: last.id,
+      );
+    } on Exception {
+      // Leave the state empty — a brand-new chat still works without history.
+    }
+  }
 
   Future<void> send(String text) async {
     final trimmed = text.trim();
@@ -70,9 +117,10 @@ class AssistantController extends Notifier<AssistantState> {
     );
 
     final buffer = StringBuffer();
+    var createdNew = false;
     try {
       final stream = ref.read(assistantRepositoryProvider).streamReply(
-            conversationId: _conversationId,
+            conversationId: state.activeConversationId,
             message: trimmed,
           );
 
@@ -85,7 +133,10 @@ class AssistantController extends Notifier<AssistantState> {
           case AssistantToolCall(:final name):
             state = state.copyWith(toolStatus: name);
           case AssistantDone(:final conversationId):
-            _conversationId ??= conversationId;
+            if (state.activeConversationId == null && conversationId != null) {
+              createdNew = true;
+              state = state.copyWith(activeConversationId: conversationId);
+            }
           case AssistantStreamError(:final message):
             state = state.copyWith(error: message);
         }
@@ -100,6 +151,9 @@ class AssistantController extends Notifier<AssistantState> {
       }
       state = state.copyWith(sending: false, clearToolStatus: true);
     }
+
+    // A new thread (or a fresh reply that bumped updated_at) changes the list.
+    if (createdNew) await _refreshConversations();
   }
 
   void _writeAssistant(int index, String content) {
@@ -110,9 +164,57 @@ class AssistantController extends Notifier<AssistantState> {
     }
   }
 
-  /// Start a fresh conversation.
-  void reset() {
-    _conversationId = null;
-    state = const AssistantState();
+  /// Switch to a saved thread and load its messages.
+  Future<void> openConversation(String id) async {
+    if (state.sending || id == state.activeConversationId) return;
+    try {
+      final msgs = await _repo.loadHistory(id);
+      state = state.copyWith(
+        messages: msgs,
+        activeConversationId: id,
+        clearError: true,
+      );
+    } on Exception catch (e) {
+      state = state.copyWith(error: e.toString());
+    }
+  }
+
+  /// Rename a saved thread, then refresh the list so the panel reflects it.
+  Future<void> renameConversation(String id, String title) async {
+    final clean = title.trim();
+    if (clean.isEmpty) return;
+    await _repo.renameConversation(id, clean);
+    await _refreshConversations();
+  }
+
+  /// Delete a saved thread; if it was the open one, drop to a new chat.
+  Future<void> deleteConversation(String id) async {
+    await _repo.deleteConversation(id);
+    if (state.activeConversationId == id) {
+      state = state.copyWith(
+        messages: const [],
+        clearActiveConversationId: true,
+      );
+    }
+    await _refreshConversations();
+  }
+
+  /// Start a fresh conversation, keeping the saved history list intact.
+  void startNewChat() {
+    if (state.sending) return;
+    state = state.copyWith(
+      messages: const [],
+      clearActiveConversationId: true,
+      clearError: true,
+      clearToolStatus: true,
+    );
+  }
+
+  Future<void> _refreshConversations() async {
+    try {
+      state = state.copyWith(conversations: await _repo.listConversations());
+    } on Exception {
+      // Keep the current list on a transient failure.
+    }
   }
 }

@@ -28,6 +28,11 @@ class AssistantRepository {
     return rows.map(ChatMessageModel.conversationFromJson).toList();
   }
 
+  Future<void> renameConversation(String id, String title) =>
+      _ds.renameConversation(id, title);
+
+  Future<void> deleteConversation(String id) => _ds.deleteConversation(id);
+
   Stream<AssistantStreamEvent> streamReply({
     String? conversationId,
     required String message,

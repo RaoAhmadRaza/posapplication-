@@ -35,6 +35,19 @@ class AssistantRemoteDataSource {
     return List<Map<String, dynamic>>.from(rows);
   }
 
+  /// Rename a conversation. RLS scopes the update to the caller's own rows.
+  Future<void> renameConversation(String id, String title) async {
+    await _client
+        .from('chat_conversations')
+        .update({'title': title, 'updated_at': DateTime.now().toIso8601String()})
+        .eq('id', id);
+  }
+
+  /// Delete a conversation (its messages cascade via the FK). RLS-scoped.
+  Future<void> deleteConversation(String id) async {
+    await _client.from('chat_conversations').delete().eq('id', id);
+  }
+
   /// Streams the assistant's reply. Yields delta/tool/done/error events.
   Stream<AssistantStreamEvent> streamReply({
     String? conversationId,
