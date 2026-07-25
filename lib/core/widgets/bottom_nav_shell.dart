@@ -149,6 +149,23 @@ int _hrIndexFor(String path) {
   return 0;
 }
 
+/// Permission-filtered module branches in display order (Settings last).
+/// Reports has no in-branch destinations of its own, so it gets the normal
+/// module rail (like Dashboard/Inventory), not a sub-rail.
+List<int> _branchMapFor(Set<String> matrix) => [
+      0,
+      1,
+      if (matrix.contains('purchase:read')) _kPurchaseBranch,
+      if (matrix.contains('sales:read')) _kSalesBranch,
+      if (matrix.contains('repair:read')) _kRepairBranch,
+      if (matrix.contains('customers:read')) _kCustomersBranch,
+      if (matrix.contains('reports:read')) _kReportsBranch,
+      if (matrix.contains('accounting:read')) _kAccountingBranch,
+      if (matrix.contains('approvals:read')) _kApprovalsBranch,
+      if (matrix.contains('hr:read')) _kHrBranch,
+      4,
+    ];
+
 class BottomNavShell extends ConsumerWidget {
   const BottomNavShell({super.key, required this.navigationShell});
 
@@ -157,31 +174,7 @@ class BottomNavShell extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final matrix = ref.watch(permissionMatrixProvider).value ?? <String>{};
-    final hasPurchase = matrix.contains('purchase:read');
-    final hasSales = matrix.contains('sales:read');
-    final hasRepair = matrix.contains('repair:read');
-    final hasCustomers = matrix.contains('customers:read');
-    final hasReports = matrix.contains('reports:read');
-    final hasAccounting = matrix.contains('accounting:read');
-    final hasApprovals = matrix.contains('approvals:read');
-    final hasHr = matrix.contains('hr:read');
-
-    // Settings stays last (it sits below the rail divider); Reports slots in
-    // just before it. Reports has no in-branch destinations of its own, so it
-    // gets the normal module rail (like Dashboard/Inventory), not a sub-rail.
-    final branchMap = [
-      0,
-      1,
-      if (hasPurchase) 2,
-      if (hasSales) 3,
-      if (hasRepair) _kRepairBranch,
-      if (hasCustomers) _kCustomersBranch,
-      if (hasReports) _kReportsBranch,
-      if (hasAccounting) _kAccountingBranch,
-      if (hasApprovals) _kApprovalsBranch,
-      if (hasHr) _kHrBranch,
-      4,
-    ];
+    final branchMap = _branchMapFor(matrix);
     final items = [for (final b in branchMap) _allItems[b]];
     final selected = branchMap.indexOf(navigationShell.currentIndex);
 
