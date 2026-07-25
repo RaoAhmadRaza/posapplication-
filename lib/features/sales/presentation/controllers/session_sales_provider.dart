@@ -22,3 +22,17 @@ final sessionExpectedCashProvider = FutureProvider.autoDispose
   if (failure != null) throw failure;
   return openingFloat + ((map?['total_cash'] as num?)?.toDouble() ?? 0);
 });
+
+/// Live sales total + transaction count for an OPEN session. The session row's
+/// own total_sales/total_transactions stay 0 until close_cashier_session runs,
+/// so the pre-close summary reads these instead.
+final sessionStatsProvider = FutureProvider.autoDispose
+    .family<(double sales, int txns), String>((ref, sessionId) async {
+  final (map, failure) =
+      await ref.read(loadSessionSalesUseCaseProvider).call(sessionId);
+  if (failure != null) throw failure;
+  return (
+    (map?['total_sales'] as num?)?.toDouble() ?? 0,
+    (map?['total_transactions'] as int?) ?? 0,
+  );
+});

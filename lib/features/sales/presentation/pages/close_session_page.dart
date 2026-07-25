@@ -16,6 +16,7 @@ import '../../../../core/widgets/no_access_scaffold.dart';
 import '../../../../core/widgets/permission_gate.dart';
 import '../../domain/failures/sales_failure.dart';
 import '../controllers/session_controller.dart';
+import '../controllers/session_sales_provider.dart';
 import '../widgets/sales_empty_state.dart';
 import '../widgets/sales_rise.dart';
 import '../widgets/sales_scaffold.dart';
@@ -118,18 +119,23 @@ class _CloseSessionPageState extends ConsumerState<CloseSessionPage> {
             children: [
               AppSectionCard(
                 eyebrow: 'Session summary',
-                child: Column(
-                  children: [
-                    // Only what close_cashier_session actually accounts for.
-                    // There is no per-method (cash/card/wallet) split anywhere
-                    // in the session path, so none is shown.
-                    _SummaryRow(label: 'Opening float', value: session.openingFloat),
-                    _SummaryRow(label: 'Total sales', value: session.totalSales),
-                    _SummaryRow(
-                      label: 'Transactions',
-                      count: session.totalTransactions,
-                    ),
-                  ],
+                child: Consumer(
+                  builder: (context, ref, _) {
+                    // Live totals: the session row's own total_sales/txns stay 0
+                    // until close_cashier_session runs, so read them live here.
+                    // Only what close_cashier_session accounts for — no
+                    // per-method (cash/card/wallet) split exists in this path.
+                    final stats = ref.watch(sessionStatsProvider(session.id));
+                    final (sales, txns) = stats.value ?? (0.0, 0);
+                    return Column(
+                      children: [
+                        _SummaryRow(
+                            label: 'Opening float', value: session.openingFloat),
+                        _SummaryRow(label: 'Total sales', value: sales),
+                        _SummaryRow(label: 'Transactions', count: txns),
+                      ],
+                    );
+                  },
                 ),
               ),
               const SizedBox(height: 16),
