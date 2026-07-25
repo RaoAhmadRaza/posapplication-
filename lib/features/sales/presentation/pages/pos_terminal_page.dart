@@ -39,6 +39,9 @@ import 'held_sales_sheet.dart';
 /// Width of the cart column in the design's desktop three-panel layout.
 const _kCartWidth = 360.0;
 
+/// Stock filter for the POS grid. Mirrors the tile's stock classification.
+enum PosStockFilter { all, low, out }
+
 class PosTerminalPage extends ConsumerStatefulWidget {
   const PosTerminalPage({super.key});
 
@@ -58,6 +61,7 @@ class _PosTerminalPageState extends ConsumerState<PosTerminalPage>
   bool _pulledOnce = false;
   String _query = '';
   String? _categoryId;
+  PosStockFilter _stockFilter = PosStockFilter.all;
   int _heldCount = 0;
 
   @override
@@ -363,6 +367,8 @@ class _PosTerminalPageState extends ConsumerState<PosTerminalPage>
       categories: categories,
       categoryId: _categoryId,
       onCategory: (id) => setState(() => _categoryId = id),
+      stockFilter: _stockFilter,
+      onStockFilter: (f) => setState(() => _stockFilter = f),
       onScan: _scanBarcode,
       onAdd: _addLine,
       online: online,
@@ -455,6 +461,8 @@ class _Catalogue extends StatelessWidget {
     required this.categories,
     required this.categoryId,
     required this.onCategory,
+    required this.stockFilter,
+    required this.onStockFilter,
     required this.onScan,
     required this.onAdd,
     required this.online,
@@ -468,12 +476,23 @@ class _Catalogue extends StatelessWidget {
   final List<Category> categories;
   final String? categoryId;
   final ValueChanged<String?> onCategory;
+  final PosStockFilter stockFilter;
+  final ValueChanged<PosStockFilter> onStockFilter;
   final VoidCallback onScan;
   final void Function(Product) onAdd;
 
   /// Passed down so a missing stock level reads correctly in each mode.
   final bool online;
   final double Function(String) cartQtyOf;
+
+  /// Whether [p] matches the active stock filter. Mirrors ProductTile's
+  /// classification: online, a missing stock row means none on hand.
+  bool _matchesStock(Product p, StockLevel? s) {
+    final available = s?.available ?? 0;
+    final out = s == null ? online : available <= 0;
+    final low = s != null && available > 0 && available <= p.reorderPoint;
+    return stockFilter == PosStockFilter.out ? out : low;
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -501,6 +520,17 @@ class _Catalogue extends StatelessWidget {
               onSelected: (i) => onCategory(i == 0 ? null : active[i - 1].id),
             ),
           ),
+        // Stock filter — online only; offline stock is uncached, so Low/Out
+        // can't be resolved (same reason categories are hidden offline).
+        if (online)
+          Padding(
+            padding: const EdgeInsets.fromLTRB(18, 10, 18, 0),
+            child: AppFilterChips(
+              labels: const ['All', 'Low', 'Out of stock'],
+              selected: stockFilter.index,
+              onSelected: (i) => onStockFilter(PosStockFilter.values[i]),
+            ),
+          ),
         const SizedBox(height: 14),
         Expanded(
           child: products.when(
@@ -511,13 +541,20 @@ class _Catalogue extends StatelessWidget {
                   'and try the search again.',
             ),
             data: (list) {
-              final filtered = categoryId == null
+              var filtered = categoryId == null
                   ? list
                   : list.where((p) => p.categoryId == categoryId).toList();
+              if (stockFilter != PosStockFilter.all) {
+                filtered = filtered
+                    .where((p) => _matchesStock(p, stockMap[p.id]))
+                    .toList();
+              }
               if (filtered.isEmpty) {
                 return SalesEmptyState(
                   icon: LucideIcons.package,
-                  message: searchCtrl.text.isEmpty && categoryId == null
+                  message: searchCtrl.text.isEmpty &&
+                          categoryId == null &&
+                          stockFilter == PosStockFilter.all
                       ? 'Search for a part, or scan its barcode.'
                       : 'No parts match that.',
                 );

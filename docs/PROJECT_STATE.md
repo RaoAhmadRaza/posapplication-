@@ -120,7 +120,9 @@ controller/provider binding byte-identical. Sales was the last module still on l
 - **POS rebuilt**: 932-line page → composition root + `presentation/widgets/pos/` (product grid, search
   bar, cart panel, cart sheet, banners). Catalogue is now a card grid (LayoutBuilder-derived aspect
   ratio, never hand-picked) with category chips fed by the existing `categoriesProvider`; chips are
-  **hidden offline** because `CachedProduct` has no category. Desktop = grid + 360px cart column;
+  **hidden offline** because `CachedProduct` has no category. Stock filter chips (All/Low/Out) sit under
+  the category row (online only; `_matchesStock` mirrors the tile's classification). POS uses its own
+  paginated loader (`posProductsProvider`, independent of the catalog) with scroll-to-load-more. Desktop = grid + 360px cart column;
   mobile = grid + floating View-cart bar → sheet. Offline gating, autosave, scan, stale-session badge
   and every provider read lifted verbatim.
 - **Honest data**: close-session shows only what `close_cashier_session` returns (opening float / total
