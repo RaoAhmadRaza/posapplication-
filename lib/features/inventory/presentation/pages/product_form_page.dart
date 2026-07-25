@@ -1,3 +1,4 @@
+import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:lucide_icons_flutter/lucide_icons.dart';
@@ -601,11 +602,11 @@ class _ProductFormPageState extends ConsumerState<ProductFormPage> {
     return _SubSection(
       title: 'Images',
       count: images.length,
-      addLabel: 'Add image URL',
+      addLabel: 'Add image',
       onAdd: _showAddImageSheet,
       children: images
           .map((img) => _SubRow(
-                leading: Icons.image_outlined,
+                leadingImageUrl: img.url,
                 title: img.url,
                 subtitle: img.isPrimary ? 'Primary' : null,
                 subtitleIsAccent: img.isPrimary,
@@ -623,11 +624,62 @@ class _ProductFormPageState extends ConsumerState<ProductFormPage> {
   }
 
   void _showAddImageSheet() {
+    showAppSheet<void>(
+      context: context,
+      builder: (ctx) => Padding(
+        padding: const EdgeInsets.only(bottom: 8),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            const AppSheetHeader(title: 'Add image'),
+            AppButton(
+              label: 'Upload from device',
+              icon: LucideIcons.upload,
+              fullWidth: true,
+              onPressed: () async {
+                Navigator.pop(ctx);
+                await _pickAndUploadImage();
+              },
+            ),
+            const SizedBox(height: AppSpacing.fieldGap),
+            AppButton(
+              label: 'Paste image URL',
+              icon: LucideIcons.link,
+              variant: AppButtonVariant.tinted,
+              fullWidth: true,
+              onPressed: () {
+                Navigator.pop(ctx);
+                _showUrlImageSheet();
+              },
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Future<void> _pickAndUploadImage() async {
+    final result = await FilePicker.pickFiles(type: FileType.image);
+    if (result == null || result.files.isEmpty) return;
+    final file = result.files.first;
+    final bytes = await file.readAsBytes();
+    final ext = file.extension ?? 'jpg';
+    final failure =
+        await ref.read(productEditProvider.notifier).uploadImage(bytes, ext);
+    if (!mounted) return;
+    showAppToast(
+      context,
+      failure?.message ?? 'Image uploaded',
+      type: failure != null ? BannerType.error : BannerType.success,
+    );
+  }
+
+  void _showUrlImageSheet() {
     final urlCtrl = TextEditingController();
     showAppSheet<void>(
       context: context,
       builder: (ctx) => _EditSheet(
-        title: 'Add image',
+        title: 'Add image URL',
         fields: [
           AppTextField(controller: urlCtrl, label: 'Image URL', prefixIcon: Icons.link, hint: 'https://…'),
         ],
@@ -763,7 +815,7 @@ class _SubRow extends StatelessWidget {
   const _SubRow({
     required this.title,
     this.subtitle,
-    this.leading,
+    this.leadingImageUrl,
     this.onEdit,
     this.onDelete,
     this.editIcon = LucideIcons.pencil,
@@ -772,7 +824,7 @@ class _SubRow extends StatelessWidget {
 
   final String title;
   final String? subtitle;
-  final IconData? leading;
+  final String? leadingImageUrl;
   final VoidCallback? onEdit;
   final VoidCallback? onDelete;
   final IconData editIcon;
@@ -791,8 +843,18 @@ class _SubRow extends StatelessWidget {
         padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
         child: Row(
           children: [
-            if (leading != null) ...[
-              Icon(leading, size: 20, color: lum.g500),
+            if (leadingImageUrl != null) ...[
+              ClipRRect(
+                borderRadius: BorderRadius.circular(AppRadius.sm),
+                child: Image.network(
+                  leadingImageUrl!,
+                  width: 40,
+                  height: 40,
+                  fit: BoxFit.cover,
+                  errorBuilder: (_, _, _) => Icon(
+                      Icons.broken_image_outlined, size: 20, color: lum.g500),
+                ),
+              ),
               const SizedBox(width: 10),
             ],
             Expanded(
