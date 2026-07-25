@@ -6,6 +6,7 @@ import 'core/state/app_flow_state.dart';
 import 'core/supabase.dart';
 import 'core/widgets/bottom_nav_shell.dart';
 import 'features/auth/presentation/controllers/branch_controller.dart';
+import 'features/assistant/presentation/pages/assistant_page.dart';
 import 'features/auth/presentation/pages/splash_page.dart';
 import 'features/auth/presentation/pages/environment_check_screen.dart';
 import 'features/auth/presentation/pages/login_page.dart';
@@ -355,6 +356,10 @@ final appRouter = GoRouter(
     GoRoute(
       path: '/home',
       redirect: (context, state) => '/dashboard',
+    ),
+    GoRoute(
+      path: '/assistant',
+      builder: (context, state) => const AssistantPage(),
     ),
     GoRoute(
       path: '/notifications',

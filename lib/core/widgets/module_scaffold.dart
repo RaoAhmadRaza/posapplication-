@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../design/app_colors.dart';
 import '../design/app_typography.dart';
 import '../design/clay.dart';
+import '../../features/assistant/presentation/widgets/assistant_launcher.dart';
 import '../../features/auth/presentation/controllers/profile_controller.dart';
 import '../../features/notifications/presentation/widgets/notification_bell.dart';
 import '../../features/sync/presentation/widgets/sync_status_widget.dart';
@@ -131,6 +132,7 @@ class ModuleHeader extends StatelessWidget {
             ...actions,
             const SizedBox(width: 4),
             const SyncStatusWidget(),
+            const AssistantLauncher(),
             const NotificationBell(),
             const SizedBox(width: 4),
             ModuleAvatar(size: isWide ? 34 : 30),
