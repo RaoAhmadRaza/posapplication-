@@ -257,7 +257,7 @@ class _HeaderCard extends StatelessWidget {
                 product.imageUrl!,
                 width: size,
                 height: size,
-                fit: BoxFit.cover,
+                fit: BoxFit.fill,
                 errorBuilder: (_, _, _) =>
                     Icon(kInvItemIcon, size: size * 0.42, color: lum.g400),
               ),

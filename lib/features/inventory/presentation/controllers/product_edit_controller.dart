@@ -53,6 +53,16 @@ class ProductEditController extends Notifier<AsyncValue<Product?>> {
   @override
   AsyncValue<Product?> build() => const AsyncValue.data(null);
 
+  // Sub-resource states (variants/images/pricing) live outside `state`, so a
+  // reload alone won't rebuild listeners. Re-emit `state` to notify; the always-
+  // true override lets an equal value through.
+  @override
+  bool updateShouldNotify(
+          AsyncValue<Product?> previous, AsyncValue<Product?> next) =>
+      true;
+
+  void _notify() => state = AsyncValue.data(state.value);
+
   Future<void> loadForEdit(String id) async {
     editingId = id;
     state = const AsyncValue.loading();
@@ -78,6 +88,7 @@ class ProductEditController extends Notifier<AsyncValue<Product?>> {
     final (variants, _) =
         await ref.read(loadVariantsUseCaseProvider).call(editingId!);
     variantsState = ProductVariantsState(variants: variants);
+    _notify();
   }
 
   Future<void> _loadImages() async {
@@ -85,6 +96,7 @@ class ProductEditController extends Notifier<AsyncValue<Product?>> {
     final (images, _) =
         await ref.read(loadImagesUseCaseProvider).call(editingId!);
     imagesState = ProductImagesState(images: images);
+    _notify();
   }
 
   Future<void> _loadPricingTiers() async {
@@ -92,6 +104,7 @@ class ProductEditController extends Notifier<AsyncValue<Product?>> {
     final (tiers, _) =
         await ref.read(loadPricingTiersUseCaseProvider).call(editingId!);
     pricingState = ProductPricingState(tiers: tiers);
+    _notify();
   }
 
   Future<InventoryFailure?> saveProduct(Map<String, dynamic> data) async {
@@ -133,6 +146,7 @@ class ProductEditController extends Notifier<AsyncValue<Product?>> {
         await ref.read(saveImageUseCaseProvider).call(data);
     if (failure != null) return failure;
     await _loadImages();
+    ref.invalidate(productsProvider);
     return null;
   }
 
@@ -163,6 +177,7 @@ class ProductEditController extends Notifier<AsyncValue<Product?>> {
   Future<void> deleteImage(String id) async {
     await ref.read(deleteImageUseCaseProvider).call(id);
     await _loadImages();
+    ref.invalidate(productsProvider);
   }
 
   // Pricing tiers

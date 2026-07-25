@@ -210,6 +210,18 @@ class SalesRemoteDataSource {
         .eq('session_id', sessionId);
     final total = result.fold<num>(0, (s, r) => s + ((r['grand_total'] as num?) ?? 0));
     final count = result.length;
-    return {'total_sales': total.toDouble(), 'total_transactions': count};
+    // Cash-only, mirrors close_cashier_session's expected_float calc so the
+    // live tile matches what closing will actually compute.
+    final cashResult = await _client
+        .from('payments')
+        .select('amount, invoices!inner(session_id)')
+        .eq('method', 'CASH')
+        .eq('invoices.session_id', sessionId);
+    final cash = cashResult.fold<num>(0, (s, r) => s + ((r['amount'] as num?) ?? 0));
+    return {
+      'total_sales': total.toDouble(),
+      'total_transactions': count,
+      'total_cash': cash.toDouble(),
+    };
   }
 }

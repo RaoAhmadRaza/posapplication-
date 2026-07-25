@@ -11,11 +11,14 @@ import '../../../../core/design/widgets/app_button.dart';
 import '../../../../core/design/widgets/app_card.dart';
 import '../../../../core/design/widgets/app_inline_banner.dart';
 import '../../../../core/design/widgets/app_money_field.dart';
+import '../../../../core/design/widgets/app_money_text.dart';
 import '../../../../core/widgets/no_access_scaffold.dart';
 import '../../../../core/widgets/permission_gate.dart';
 import '../../../auth/presentation/controllers/branch_controller.dart';
+import '../../domain/entities/cashier_session.dart';
 import '../../domain/failures/sales_failure.dart';
 import '../controllers/session_controller.dart';
+import '../controllers/session_sales_provider.dart';
 import '../widgets/sales_rise.dart';
 import '../widgets/sales_scaffold.dart';
 
@@ -119,7 +122,9 @@ class _OpenSessionPageState extends ConsumerState<OpenSessionPage> {
                     color: context.lum.g500,
                   ),
                 ),
-                const SizedBox(height: 26),
+                const SizedBox(height: 20),
+                _ExpectedCashTile(session: session),
+                const SizedBox(height: 6),
                 AppButton(
                   label: 'Resume selling',
                   onPressed: () => context.go('/sales/pos'),
@@ -189,6 +194,47 @@ class _OpenSessionPageState extends ConsumerState<OpenSessionPage> {
             ],
           ),
         ),
+      ),
+    );
+  }
+}
+
+/// Live "expected cash in drawer" readout: opening float + cash sales so
+/// far this session (same formula close_cashier_session uses to close).
+class _ExpectedCashTile extends ConsumerWidget {
+  const _ExpectedCashTile({required this.session});
+  final CashierSession session;
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final lum = context.lum;
+    final expected = ref.watch(
+      sessionExpectedCashProvider((session.id, session.openingFloat)),
+    );
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+      decoration: BoxDecoration(
+        color: lum.accentSoft,
+        borderRadius: BorderRadius.circular(AppRadius.md),
+      ),
+      child: Row(
+        children: [
+          Expanded(
+            child: Text(
+              'Expected cash in drawer',
+              style: AppTypography.footnote.copyWith(color: lum.g600),
+            ),
+          ),
+          expected.when(
+            data: (v) => AppMoneyText(v, size: 17),
+            loading: () => const SizedBox(
+              width: 16,
+              height: 16,
+              child: CircularProgressIndicator(strokeWidth: 2),
+            ),
+            error: (_, _) => Text('—', style: AppTypography.footnote),
+          ),
+        ],
       ),
     );
   }

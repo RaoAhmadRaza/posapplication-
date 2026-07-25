@@ -479,27 +479,43 @@ class _ProductsPageState extends ConsumerState<ProductsPage> {
                   ),
           );
         }
-        return ListView.builder(
-          controller: _scrollController,
-          padding: EdgeInsets.fromLTRB(
-              16, 4, 16, _selectionMode && _selectedIds.isNotEmpty ? 96 : 24),
-          itemCount: products.length + (_loadingMore ? 1 : 0),
-          itemBuilder: (_, i) {
-            if (i >= products.length) {
-              return const Padding(
-                padding: EdgeInsets.symmetric(vertical: 16),
-                child: Center(child: CircularProgressIndicator()),
-              );
-            }
-            final p = products[i];
-            return Padding(
-              padding: EdgeInsets.only(bottom: i < products.length - 1 ? 10 : 0),
-              child: _ProductCard(
-                product: p,
-                selectionMode: _selectionMode,
-                selected: _selectedIds.contains(p.id),
-                onToggle: _selectionMode ? () => _toggleProduct(p.id) : null,
-              ),
+        final bottomPad =
+            _selectionMode && _selectedIds.isNotEmpty ? 96.0 : 24.0;
+        return LayoutBuilder(
+          builder: (context, constraints) {
+            final w = constraints.maxWidth;
+            final cols = w < 600 ? 1 : (w < 1040 ? 2 : 3);
+            return Column(
+              children: [
+                Expanded(
+                  child: GridView.builder(
+                    controller: _scrollController,
+                    padding: EdgeInsets.fromLTRB(16, 4, 16, bottomPad),
+                    gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
+                      crossAxisCount: cols,
+                      mainAxisExtent: 158,
+                      crossAxisSpacing: 14,
+                      mainAxisSpacing: 14,
+                    ),
+                    itemCount: products.length,
+                    itemBuilder: (_, i) {
+                      final p = products[i];
+                      return _ProductCard(
+                        product: p,
+                        selectionMode: _selectionMode,
+                        selected: _selectedIds.contains(p.id),
+                        onToggle:
+                            _selectionMode ? () => _toggleProduct(p.id) : null,
+                      );
+                    },
+                  ),
+                ),
+                if (_loadingMore)
+                  const Padding(
+                    padding: EdgeInsets.symmetric(vertical: 16),
+                    child: Center(child: CircularProgressIndicator()),
+                  ),
+              ],
             );
           },
         );
@@ -895,72 +911,123 @@ class _ProductCard extends ConsumerWidget {
     final (tone, label) =
         stockStatusPill(product.qtyOnHand, product.reorderPoint, product.type);
 
+    final photo = ClayContainer(
+      variant: ClayVariant.inset,
+      color: lum.g100,
+      borderRadius: AppRadius.md,
+      isDark: lum.isDark,
+      width: 116,
+      height: 116,
+      child: product.imageUrl == null
+          ? Icon(kInvItemIcon, size: 40, color: lum.g500)
+          : ClipRRect(
+              borderRadius: BorderRadius.circular(AppRadius.md),
+              child: Image.network(
+                product.imageUrl!,
+                width: 116,
+                height: 116,
+                fit: BoxFit.fill,
+                errorBuilder: (_, _, _) =>
+                    Icon(kInvItemIcon, size: 40, color: lum.g500),
+              ),
+            ),
+    );
+
     return AppCard(
       onTap: selectionMode
           ? onToggle
           : () => context.push('/inventory/stock/${product.id}'),
-      padding: const EdgeInsets.all(14),
+      padding: const EdgeInsets.all(16),
       child: Row(
         children: [
-          if (selectionMode) ...[
-            AppCheckbox(
-              value: selected,
-              onChanged: (_) => onToggle?.call(),
-            ),
-            const SizedBox(width: 12),
-          ],
-          ClayContainer(
-            variant: ClayVariant.inset,
-            color: lum.g100,
-            borderRadius: AppRadius.sm,
-            isDark: lum.isDark,
-            width: 46,
-            height: 46,
-            child: product.imageUrl == null
-                ? Icon(kInvItemIcon, size: 21, color: lum.g500)
-                : ClipRRect(
-                    borderRadius: BorderRadius.circular(AppRadius.sm),
-                    child: Image.network(
-                      product.imageUrl!,
-                      width: 46,
-                      height: 46,
-                      fit: BoxFit.cover,
-                      errorBuilder: (_, _, _) =>
-                          Icon(kInvItemIcon, size: 21, color: lum.g500),
+          selectionMode
+              ? Stack(
+                  children: [
+                    photo,
+                    Positioned(
+                      top: 4,
+                      left: 4,
+                      child: AppCheckbox(
+                        value: selected,
+                        onChanged: (_) => onToggle?.call(),
+                      ),
                     ),
-                  ),
-          ),
-          const SizedBox(width: 14),
+                  ],
+                )
+              : photo,
+          const SizedBox(width: 16),
           Expanded(
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
               children: [
-                Text(
-                  product.name,
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                  style:
-                      AppTypography.headline.copyWith(color: lum.textPrimary),
+                Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Text(
+                      product.name,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: AppTypography.headline
+                          .copyWith(color: lum.textPrimary),
+                    ),
+                    const SizedBox(height: 4),
+                    Text(
+                      _meta(brandName),
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: AppTypography.caption
+                          .copyWith(color: lum.g500, fontSize: 12.5),
+                    ),
+                  ],
                 ),
-                const SizedBox(height: 3),
-                Text(
-                  _meta(brandName),
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                  style: AppTypography.caption
-                      .copyWith(color: lum.g500, fontSize: 12.5),
+                Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Row(
+                      children: [
+                        Text(
+                          'Cost',
+                          style: AppTypography.caption.copyWith(
+                            color: lum.g400,
+                            fontWeight: FontWeight.w600,
+                            letterSpacing: 0.3,
+                          ),
+                        ),
+                        const SizedBox(width: 6),
+                        AppMoneyText(product.costPrice,
+                            size: 13, color: lum.g500),
+                        const Spacer(),
+                        AppPill(label: label, tone: tone),
+                      ],
+                    ),
+                    const SizedBox(height: 8),
+                    Container(height: 1, color: lum.g100),
+                    const SizedBox(height: 8),
+                    Row(
+                      crossAxisAlignment: CrossAxisAlignment.baseline,
+                      textBaseline: TextBaseline.alphabetic,
+                      children: [
+                        Text(
+                          'Sell',
+                          style: AppTypography.caption.copyWith(
+                            color: lum.g400,
+                            fontWeight: FontWeight.w600,
+                            letterSpacing: 0.3,
+                          ),
+                        ),
+                        const SizedBox(width: 8),
+                        Expanded(
+                          child: AppMoneyText(product.sellingPrice, size: 19),
+                        ),
+                      ],
+                    ),
+                  ],
                 ),
               ],
             ),
-          ),
-          const SizedBox(width: 12),
-          Column(
-            crossAxisAlignment: CrossAxisAlignment.end,
-            children: [
-              AppMoneyText(product.sellingPrice, size: 16),
-              const SizedBox(height: 6),
-              AppPill(label: label, tone: tone),
-            ],
           ),
         ],
       ),

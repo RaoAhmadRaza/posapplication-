@@ -272,7 +272,36 @@ class InventoryRemoteDataSource {
   }
 
   Future<void> deleteImage(String id) async {
+    final img = await _client
+        .from('product_images')
+        .select('product_id, is_primary')
+        .eq('id', id)
+        .single();
+    final productId = img['product_id'] as String;
     await _client.from('product_images').delete().eq('id', id);
+    // Deleting the primary leaves products.image_url pointing at a gone image.
+    // Promote the next remaining image (by sort_order) and re-denormalize, or
+    // clear the thumbnail when none are left.
+    if (img['is_primary'] == true) {
+      final rest = await _client
+          .from('product_images')
+          .select('id, url')
+          .eq('product_id', productId)
+          .order('sort_order')
+          .limit(1);
+      if (rest.isNotEmpty) {
+        await _client
+            .from('product_images')
+            .update({'is_primary': true}).eq('id', rest.first['id']);
+        await _client
+            .from('products')
+            .update({'image_url': rest.first['url']}).eq('id', productId);
+      } else {
+        await _client
+            .from('products')
+            .update({'image_url': null}).eq('id', productId);
+      }
+    }
   }
 
   // ==================== Pricing Tiers ====================
