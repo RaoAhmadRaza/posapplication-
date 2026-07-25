@@ -1,3 +1,4 @@
+import 'dart:typed_data';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../domain/entities/product.dart';
 import '../../domain/entities/product_variant.dart';
@@ -12,6 +13,7 @@ import '../../domain/usecases/save_variant.dart';
 import '../../domain/usecases/delete_variant.dart';
 import '../../domain/usecases/load_images.dart';
 import '../../domain/usecases/save_image.dart';
+import '../../domain/usecases/upload_product_image.dart';
 import '../../domain/usecases/set_primary_image.dart';
 import '../../domain/usecases/delete_image.dart';
 import '../../domain/usecases/load_pricing_tiers.dart';
@@ -134,9 +136,28 @@ class ProductEditController extends Notifier<AsyncValue<Product?>> {
     return null;
   }
 
+  // Uploads bytes to storage, then records the returned public URL as an image.
+  // First image on a product becomes primary.
+  Future<InventoryFailure?> uploadImage(Uint8List bytes, String ext) async {
+    final id = editingId;
+    if (id == null) return null;
+    final (url, failure) =
+        await ref.read(uploadProductImageUseCaseProvider).call(id, bytes, ext);
+    if (failure != null) return failure;
+    final addFailure = await addImage({
+      'product_id': id,
+      'url': url,
+      'sort_order': imagesState.images.length,
+      'is_primary': imagesState.images.isEmpty,
+    });
+    ref.invalidate(productsProvider);
+    return addFailure;
+  }
+
   Future<void> setPrimaryImage(String imageId) async {
     await ref.read(setPrimaryImageUseCaseProvider).call(imageId);
     await _loadImages();
+    ref.invalidate(productsProvider);
   }
 
   Future<void> deleteImage(String id) async {
