@@ -1,5 +1,6 @@
 import 'dart:async';
 import 'dart:io';
+import 'dart:typed_data';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import '../../domain/entities/category.dart';
@@ -314,6 +315,17 @@ class InventoryRepositoryImpl implements InventoryRepository {
     try {
       final row = await _ds.addImage(data);
       return (ProductImageModel.fromJson(row), null);
+    } catch (e) {
+      return (null, _mapError(e));
+    }
+  }
+
+  @override
+  Future<(String?, InventoryFailure?)> uploadImage(
+      String productId, Uint8List bytes, String ext) async {
+    try {
+      final url = await _ds.uploadProductImage(productId, bytes, ext);
+      return (url, null);
     } catch (e) {
       return (null, _mapError(e));
     }
