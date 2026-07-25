@@ -1277,15 +1277,19 @@ final appRouter = GoRouter(
         final extra = state.extra as Map<String, dynamic>?;
         return _fadePage(
           state,
-          StockMovementFormPage(productId: extra?['productId'] as String?),
+          RailDetailScaffold(
+            child:
+                StockMovementFormPage(productId: extra?['productId'] as String?),
+          ),
         );
       },
     ),
     GoRoute(
       path: '/inventory/stock/:productId',
-      builder: (context, state) {
+      pageBuilder: (context, state) {
         final id = state.pathParameters['productId']!;
-        return ProductStockDetailPage(productId: id);
+        return _fadePage(
+            state, RailDetailScaffold(child: ProductStockDetailPage(productId: id)));
       },
     ),
     // Adjustment-create form kept TOP-LEVEL for the same reason: pushed from the
@@ -1295,7 +1299,7 @@ final appRouter = GoRouter(
     GoRoute(
       path: '/inventory/adjustments/create',
       pageBuilder: (context, state) =>
-          _fadePage(state, const AdjustmentFormPage()),
+          _fadePage(state, const RailDetailScaffold(child: AdjustmentFormPage())),
     ),
     // Label print kept TOP-LEVEL (outside the shell) for the same reason as the
     // detail routes above: it is pushed from the root-level stock-detail page
@@ -1306,7 +1310,9 @@ final appRouter = GoRouter(
       path: '/inventory/labels',
       pageBuilder: (context, state) => _fadePage(
         state,
-        LabelPrintPage(productIds: state.extra as List<String>),
+        RailDetailScaffold(
+          child: LabelPrintPage(productIds: state.extra as List<String>),
+        ),
       ),
     ),
   ],
