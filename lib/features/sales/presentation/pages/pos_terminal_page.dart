@@ -49,8 +49,10 @@ class PosTerminalPage extends ConsumerStatefulWidget {
 class _PosTerminalPageState extends ConsumerState<PosTerminalPage>
     with WidgetsBindingObserver {
   final _searchCtrl = TextEditingController();
+  final _gridScrollCtrl = ScrollController();
   final _voiceService = VoiceInputService();
   bool _voiceListening = false;
+  bool _loadingMore = false;
   Timer? _debounce;
   bool _showAutoSavedNote = false;
   bool _pulledOnce = false;
@@ -62,6 +64,7 @@ class _PosTerminalPageState extends ConsumerState<PosTerminalPage>
   void initState() {
     super.initState();
     _searchCtrl.addListener(_onSearchChanged);
+    _gridScrollCtrl.addListener(_onGridScroll);
     WidgetsBinding.instance.addObserver(this);
     WidgetsBinding.instance.addPostFrameCallback((_) => _refreshHeld());
   }
@@ -71,6 +74,7 @@ class _PosTerminalPageState extends ConsumerState<PosTerminalPage>
     WidgetsBinding.instance.removeObserver(this);
     _searchCtrl.removeListener(_onSearchChanged);
     _searchCtrl.dispose();
+    _gridScrollCtrl.dispose();
     _voiceService.cancel();
     _debounce?.cancel();
     super.dispose();
@@ -79,6 +83,22 @@ class _PosTerminalPageState extends ConsumerState<PosTerminalPage>
   bool get _isOnline => ref
       .read(connectivityProvider)
       .maybeWhen(data: (v) => v, orElse: () => true);
+
+  void _onGridScroll() {
+    if (_loadingMore || !_isOnline) return;
+    final notifier = ref.read(posProductsProvider.notifier);
+    if (!notifier.hasMore) return;
+    final pos = _gridScrollCtrl.position;
+    if (pos.pixels < pos.maxScrollExtent - 400) return;
+    _loadMore();
+  }
+
+  Future<void> _loadMore() async {
+    setState(() => _loadingMore = true);
+    await ref.read(posProductsProvider.notifier).loadMore();
+    if (!mounted) return;
+    setState(() => _loadingMore = false);
+  }
 
   @override
   void didChangeAppLifecycleState(AppLifecycleState state) {
@@ -337,6 +357,7 @@ class _PosTerminalPageState extends ConsumerState<PosTerminalPage>
 
     final catalogue = _Catalogue(
       searchCtrl: _searchCtrl,
+      scrollController: online ? _gridScrollCtrl : null,
       products: products,
       stockMap: stockMap,
       categories: categories,
@@ -428,6 +449,7 @@ class _PosTerminalPageState extends ConsumerState<PosTerminalPage>
 class _Catalogue extends StatelessWidget {
   const _Catalogue({
     required this.searchCtrl,
+    required this.scrollController,
     required this.products,
     required this.stockMap,
     required this.categories,
@@ -440,6 +462,7 @@ class _Catalogue extends StatelessWidget {
   });
 
   final TextEditingController searchCtrl;
+  final ScrollController? scrollController;
   final AsyncValue<List<Product>> products;
   final Map<String, StockLevel> stockMap;
   final List<Category> categories;
@@ -505,6 +528,7 @@ class _Catalogue extends StatelessWidget {
                 cartQtyOf: cartQtyOf,
                 onAdd: onAdd,
                 online: online,
+                scrollController: scrollController,
                 padding: EdgeInsets.fromLTRB(18, 0, 18, bottomInset),
               );
             },
