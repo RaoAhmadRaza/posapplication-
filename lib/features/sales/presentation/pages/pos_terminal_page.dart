@@ -494,6 +494,14 @@ class _Catalogue extends StatelessWidget {
     return stockFilter == PosStockFilter.out ? out : low;
   }
 
+  /// Sort rank for the "All" view: 0 in-stock, 1 low, 2 out. Online only.
+  int _stockRank(Product p, StockLevel? s) {
+    final available = s?.available ?? 0;
+    if (s == null ? online : available <= 0) return 2;
+    if (available <= p.reorderPoint) return 1;
+    return 0;
+  }
+
   @override
   Widget build(BuildContext context) {
     // On narrow layouts the floating cart bar overlaps the grid; reserve room
@@ -548,6 +556,15 @@ class _Catalogue extends StatelessWidget {
                 filtered = filtered
                     .where((p) => _matchesStock(p, stockMap[p.id]))
                     .toList();
+              } else if (online) {
+                // On "All", surface sellable stock first: in-stock, then low,
+                // then out. Tie-break by name to keep alphabetical order within
+                // each band. Online only — offline stock is uncached.
+                filtered = [...filtered]..sort((a, b) {
+                    final r = _stockRank(a, stockMap[a.id])
+                        .compareTo(_stockRank(b, stockMap[b.id]));
+                    return r != 0 ? r : a.name.compareTo(b.name);
+                  });
               }
               if (filtered.isEmpty) {
                 return SalesEmptyState(
