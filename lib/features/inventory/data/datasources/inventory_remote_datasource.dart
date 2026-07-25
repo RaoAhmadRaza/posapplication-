@@ -1,3 +1,5 @@
+import 'dart:typed_data';
+
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import '../../../../core/supabase.dart';
@@ -208,13 +210,47 @@ class InventoryRemoteDataSource {
 
   Future<Map<String, dynamic>> addImage(Map<String, dynamic> data) async {
     final list = await _client.from('product_images').insert(data).select();
-    return list.first;
+    final row = list.first;
+    // Denormalize primary image onto products.image_url so the catalog list
+    // (which reads image_url, not a join) shows a thumbnail.
+    if (row['is_primary'] == true) {
+      await _client
+          .from('products')
+          .update({'image_url': row['url']}).eq('id', row['product_id']);
+    }
+    return row;
   }
+
+  // Uploads image bytes to the public 'product-images' bucket under
+  // <tenant_id>/<product_id>/<timestamp>.<ext> and returns the public URL.
+  Future<String> uploadProductImage(
+    String productId,
+    Uint8List bytes,
+    String ext,
+  ) async {
+    final tenant = await _tenantId();
+    final safeExt = ext.toLowerCase().replaceAll(RegExp(r'[^a-z0-9]'), '');
+    final path =
+        '$tenant/$productId/${DateTime.now().millisecondsSinceEpoch}.$safeExt';
+    await _client.storage.from('product-images').uploadBinary(
+          path,
+          bytes,
+          fileOptions: FileOptions(contentType: _imageContentType(safeExt)),
+        );
+    return _client.storage.from('product-images').getPublicUrl(path);
+  }
+
+  String _imageContentType(String ext) => switch (ext) {
+        'png' => 'image/png',
+        'webp' => 'image/webp',
+        'gif' => 'image/gif',
+        _ => 'image/jpeg',
+      };
 
   Future<void> setPrimaryImage(String imageId) async {
     final img = await _client
         .from('product_images')
-        .select('product_id')
+        .select('product_id, url')
         .eq('id', imageId)
         .single();
     final productId = img['product_id'] as String;
@@ -226,6 +262,9 @@ class InventoryRemoteDataSource {
         .from('product_images')
         .update({'is_primary': true})
         .eq('id', imageId);
+    await _client
+        .from('products')
+        .update({'image_url': img['url']}).eq('id', productId);
   }
 
   Future<void> deleteImage(String id) async {
