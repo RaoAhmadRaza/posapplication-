@@ -152,10 +152,11 @@ class ProductTile extends StatelessWidget {
         crossAxisAlignment: CrossAxisAlignment.stretch,
         mainAxisSize: MainAxisSize.min,
         children: [
-          // The design is deliberately image-light: a calm placeholder slot,
-          // not a photo. Products carry no image in the POS payload either.
+          // Primary product image if set; otherwise a calm gradient placeholder.
           Container(
             height: _kSlotHeight,
+            clipBehavior: Clip.antiAlias,
+            alignment: Alignment.center,
             decoration: BoxDecoration(
               gradient: LinearGradient(
                 begin: Alignment.topLeft,
@@ -164,7 +165,16 @@ class ProductTile extends StatelessWidget {
               ),
               borderRadius: BorderRadius.circular(AppRadius.md),
             ),
-            child: Icon(LucideIcons.cpu, size: 24, color: lum.g300),
+            child: product.imageUrl == null
+                ? Icon(LucideIcons.cpu, size: 24, color: lum.g300)
+                : Image.network(
+                    product.imageUrl!,
+                    width: double.infinity,
+                    height: _kSlotHeight,
+                    fit: BoxFit.cover,
+                    errorBuilder: (_, _, _) =>
+                        Icon(LucideIcons.cpu, size: 24, color: lum.g300),
+                  ),
           ),
           const SizedBox(height: _kSlotGap),
           SizedBox(
