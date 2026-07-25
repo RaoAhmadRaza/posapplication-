@@ -1,3 +1,4 @@
+import 'dart:typed_data';
 import '../../domain/entities/category.dart';
 import '../../domain/entities/brand.dart';
 import '../../domain/entities/product.dart';
@@ -53,6 +54,8 @@ abstract class InventoryRepository {
 
   Future<(List<ProductImage>, InventoryFailure?)> loadImages(String productId);
   Future<(ProductImage?, InventoryFailure?)> addImage(Map<String, dynamic> data);
+  Future<(String?, InventoryFailure?)> uploadImage(
+      String productId, Uint8List bytes, String ext);
   Future<(bool, InventoryFailure?)> setPrimaryImage(String imageId);
   Future<(bool, InventoryFailure?)> deleteImage(String id);
 
