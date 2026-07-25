@@ -17,7 +17,7 @@ import '../../../sync/presentation/controllers/connectivity_controller.dart';
 import '../../../sync/presentation/controllers/offline_products_controller.dart';
 import '../../../sync/presentation/controllers/sync_controller.dart';
 import '../../../inventory/presentation/controllers/categories_controller.dart';
-import '../../../inventory/presentation/controllers/products_controller.dart';
+import '../controllers/pos_products_controller.dart';
 import '../../../inventory/domain/usecases/search_products.dart';
 import '../../../inventory/presentation/controllers/stock_levels_controller.dart';
 import '../../../inventory/domain/entities/category.dart';
@@ -76,6 +76,10 @@ class _PosTerminalPageState extends ConsumerState<PosTerminalPage>
     super.dispose();
   }
 
+  bool get _isOnline => ref
+      .read(connectivityProvider)
+      .maybeWhen(data: (v) => v, orElse: () => true);
+
   @override
   void didChangeAppLifecycleState(AppLifecycleState state) {
     if (state == AppLifecycleState.paused) {
@@ -131,8 +135,13 @@ class _PosTerminalPageState extends ConsumerState<PosTerminalPage>
     _debounce?.cancel();
     _debounce = Timer(const Duration(milliseconds: 300), () {
       if (!mounted) return;
-      setState(() => _query = _searchCtrl.text); // drives the offline cache query
-      ref.read(productsProvider.notifier).search(_searchCtrl.text);
+      // POS search is independent of the inventory productsProvider so POS and
+      // the catalog page never cross-filter. Offline reads the query family;
+      // online drives POS's own paginated ProductsController instance.
+      setState(() => _query = _searchCtrl.text);
+      if (_isOnline) {
+        ref.read(posProductsProvider.notifier).search(_searchCtrl.text);
+      }
     });
   }
 
@@ -281,7 +290,7 @@ class _PosTerminalPageState extends ConsumerState<PosTerminalPage>
     final online = ref.watch(connectivityProvider).maybeWhen(data: (v) => v, orElse: () => true);
     // Offline: resolve product search + price from the local reference cache.
     final products = online
-        ? ref.watch(productsProvider)
+        ? ref.watch(posProductsProvider)
         : ref.watch(offlineProductSearchProvider(_query));
     final stockLevels = ref.watch(stockLevelsProvider).value ?? <StockLevel>[];
 
