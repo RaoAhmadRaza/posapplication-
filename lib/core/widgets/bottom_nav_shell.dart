@@ -1,7 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:flutter_svg/flutter_svg.dart';
 import 'package:go_router/go_router.dart';
 import 'package:lucide_icons_flutter/lucide_icons.dart';
 import '../../features/dashboard/presentation/widgets/dashboard_app_bar.dart'
@@ -500,22 +499,12 @@ class _RailBrand extends StatelessWidget {
   Widget build(BuildContext context) {
     return Padding(
       padding: EdgeInsets.fromLTRB(8, 2, 8, bottom),
-      child: Stack(
-        clipBehavior: Clip.none,
-        alignment: Alignment.centerLeft,
-        children: [
-          Positioned(
-            left: -6,
-            child: Opacity(
-              opacity: 0.06,
-              child: SvgPicture.asset(
-                'assets/images/lumina-glyph-ink.svg',
-                width: 40,
-                height: 40,
-              ),
-            ),
-          ),
-          const LuminaWordmark(size: 20),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: const [
+          LuminaGlyph(size: 22),
+          SizedBox(width: 8),
+          LuminaWordmark(size: 20),
         ],
       ),
     );
