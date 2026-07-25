@@ -916,7 +916,19 @@ class _ProductCard extends ConsumerWidget {
             isDark: lum.isDark,
             width: 46,
             height: 46,
-            child: Icon(kInvItemIcon, size: 21, color: lum.g500),
+            child: product.imageUrl == null
+                ? Icon(kInvItemIcon, size: 21, color: lum.g500)
+                : ClipRRect(
+                    borderRadius: BorderRadius.circular(AppRadius.sm),
+                    child: Image.network(
+                      product.imageUrl!,
+                      width: 46,
+                      height: 46,
+                      fit: BoxFit.cover,
+                      errorBuilder: (_, _, _) =>
+                          Icon(kInvItemIcon, size: 21, color: lum.g500),
+                    ),
+                  ),
           ),
           const SizedBox(width: 14),
           Expanded(
