@@ -125,7 +125,10 @@ Deno.serve(async (req) => {
       .select("role, content")
       .eq("conversation_id", conversationId)
       .order("created_at", { ascending: true });
-    const messages: Any[] = [{ role: "system", content: buildSystem(permissionKeys) }];
+    const today = new Date().toISOString().slice(0, 10); // YYYY-MM-DD (UTC)
+    const messages: Any[] = [
+      { role: "system", content: buildSystem(permissionKeys, today) },
+    ];
     for (const m of (prior ?? []) as Any[]) {
       messages.push({ role: m.role, content: m.content });
     }

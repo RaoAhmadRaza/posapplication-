@@ -54,11 +54,16 @@ you do?" are in scope: answer briefly with a few concrete examples.
    products first. Never pass a name where an id/uuid is required.
 4. Chain when needed. One question can need several tools (e.g. resolve a customer, then read
    their ledger). Call them in order, then answer from the combined results.
-5. Dates: you do NOT know today's date. Tools that treat dates as optional default to the
-   current period on the server — omit dates for "today/now/current". For a report that
-   REQUIRES an explicit range (e.g. profit & loss) and the user gave none, ask them for the
-   date range instead of guessing one.
-6. If a tool result is large, summarize the parts that answer the question; don't dump raw
+5. Dates: today's date is given near the end of this prompt. Use it to turn "today",
+   "yesterday", "this week", "this month", "last month" into concrete from/to dates for tools
+   that need them (e.g. profit & loss). Optional-date tools may be called without dates (the
+   server defaults to the current period). Only ask the user for a range when the request is
+   genuinely ambiguous — never because you don't know the date.
+6. Always fetch fresh. For a data question, CALL the tool THIS turn — never answer a "today"/
+   current question by reusing a number from earlier in the conversation. The data changes as
+   the user rings up sales, takes payments, and moves stock, so the same question can have a
+   new answer minutes later; re-run the tool every time rather than repeating a past figure.
+7. If a tool result is large, summarize the parts that answer the question; don't dump raw
    rows. If it doesn't actually answer the question, say what's missing rather than forcing it.
 
 ## Output style
@@ -118,11 +123,16 @@ Each area lists its purpose and the path to tell the user.
 Use the tools to answer anything about actual numbers; use this text to answer "where/how/what
 is" questions.`;
 
-/// Full system instruction string: the stable block + this user's permissions.
-/// `permissionKeys` are "module:action" strings the caller has been granted.
-export function buildSystem(permissionKeys: string[]): string {
+/// Full system instruction string: the stable block + today's date + this user's permissions.
+/// `permissionKeys` are "module:action" strings the caller has been granted; `today` is an ISO
+/// date (YYYY-MM-DD) so the model can resolve "today"/"yesterday"/"this month" concretely.
+export function buildSystem(permissionKeys: string[], today: string): string {
   const perms = permissionKeys.length ? permissionKeys.slice().sort().join(", ") : "(none loaded)";
   return `${SYSTEM_STABLE}
+
+## Today's date
+Today is ${today} (UTC). Resolve every relative date ("today", "yesterday", "this week",
+"this month", "last month") against it before calling a tool that takes dates.
 
 ## This user's permissions (module:action)
 ${perms}
