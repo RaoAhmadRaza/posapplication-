@@ -481,6 +481,12 @@ class _ProductsPageState extends ConsumerState<ProductsPage> {
         }
         final bottomPad =
             _selectionMode && _selectedIds.isNotEmpty ? 96.0 : 24.0;
+        // Show products that have a photo first, then the rest — stable within
+        // each group so the server order is otherwise preserved.
+        final ordered = [
+          ...products.where((p) => (p.imageUrl ?? '').trim().isNotEmpty),
+          ...products.where((p) => (p.imageUrl ?? '').trim().isEmpty),
+        ];
         return LayoutBuilder(
           builder: (context, constraints) {
             final w = constraints.maxWidth;
@@ -497,9 +503,9 @@ class _ProductsPageState extends ConsumerState<ProductsPage> {
                       crossAxisSpacing: 14,
                       mainAxisSpacing: 14,
                     ),
-                    itemCount: products.length,
+                    itemCount: ordered.length,
                     itemBuilder: (_, i) {
-                      final p = products[i];
+                      final p = ordered[i];
                       return _ProductCard(
                         product: p,
                         selectionMode: _selectionMode,
