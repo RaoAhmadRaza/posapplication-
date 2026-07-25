@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:flutter_svg/flutter_svg.dart';
 import 'package:go_router/go_router.dart';
 import 'package:lucide_icons_flutter/lucide_icons.dart';
 import '../../features/dashboard/presentation/widgets/dashboard_app_bar.dart'
@@ -380,13 +381,7 @@ class _NavRail extends StatelessWidget {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          const Padding(
-            padding: EdgeInsets.fromLTRB(8, 2, 8, 20),
-            child: Align(
-              alignment: Alignment.centerLeft,
-              child: LuminaWordmark(size: 20),
-            ),
-          ),
+          const _RailBrand(bottom: 20),
           Expanded(
             child: ListView(
               padding: EdgeInsets.zero,
@@ -456,13 +451,7 @@ class _ModuleRail extends StatelessWidget {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          const Padding(
-            padding: EdgeInsets.fromLTRB(8, 2, 8, 18),
-            child: Align(
-              alignment: Alignment.centerLeft,
-              child: LuminaWordmark(size: 20),
-            ),
-          ),
+          const _RailBrand(bottom: 18),
           Expanded(
             child: ListView(
               padding: EdgeInsets.zero,
@@ -496,6 +485,37 @@ class _ModuleRail extends StatelessWidget {
           ),
           const SizedBox(height: 8),
           const _RailUserBlock(),
+        ],
+      ),
+    );
+  }
+}
+
+/// Rail header: the wordmark with the LUMINA glyph faded in behind it.
+class _RailBrand extends StatelessWidget {
+  const _RailBrand({required this.bottom});
+  final double bottom;
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: EdgeInsets.fromLTRB(8, 2, 8, bottom),
+      child: Stack(
+        clipBehavior: Clip.none,
+        alignment: Alignment.centerLeft,
+        children: [
+          Positioned(
+            left: -6,
+            child: Opacity(
+              opacity: 0.06,
+              child: SvgPicture.asset(
+                'assets/images/lumina-glyph-ink.svg',
+                width: 40,
+                height: 40,
+              ),
+            ),
+          ),
+          const LuminaWordmark(size: 20),
         ],
       ),
     );

@@ -21,6 +21,7 @@ class AppDetailScaffold extends StatelessWidget {
     this.actions = const [],
     this.maxContentWidth = 860,
     this.onBack,
+    this.bottomBar,
   });
 
   final String eyebrow;
@@ -35,12 +36,16 @@ class AppDetailScaffold extends StatelessWidget {
   /// Defaults to popping the current route.
   final VoidCallback? onBack;
 
+  /// Optional sticky footer pinned below the scroll (e.g. a save bar).
+  final Widget? bottomBar;
+
   @override
   Widget build(BuildContext context) {
     final lum = context.lum;
 
     return Scaffold(
       backgroundColor: lum.paper,
+      bottomNavigationBar: bottomBar,
       body: SafeArea(
         child: LayoutBuilder(
           builder: (context, constraints) {

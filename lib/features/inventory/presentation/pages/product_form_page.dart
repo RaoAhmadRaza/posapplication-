@@ -69,6 +69,7 @@ class _ProductFormPageState extends ConsumerState<ProductFormPage> {
   bool _saving = false;
   bool _didSeed = false;
   bool _hasSavedOnce = false;
+  bool _uploadingImage = false;
 
   bool get _isEditing => widget.productId != null;
   bool get _subSectionsEnabled => _isEditing || _hasSavedOnce;
@@ -290,6 +291,7 @@ class _ProductFormPageState extends ConsumerState<ProductFormPage> {
             ),
           ),
       ],
+      bottomBar: _stickyBar(lum),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
@@ -297,9 +299,13 @@ class _ProductFormPageState extends ConsumerState<ProductFormPage> {
             AppInlineBanner(message: _error!, type: BannerType.error),
             const SizedBox(height: 16),
           ],
-          AppSectionCard(eyebrow: 'Product', child: _buildCoreSection()),
+          _summaryHeader(lum, images),
           const SizedBox(height: 16),
-          _buildSaveRow(),
+          AppSectionCard(eyebrow: 'Basic info', child: _buildBasicSection()),
+          const SizedBox(height: 14),
+          AppSectionCard(eyebrow: 'Pricing', child: _buildPriceInputs()),
+          const SizedBox(height: 14),
+          AppSectionCard(eyebrow: 'Inventory', child: _buildInventorySection()),
           if (!_subSectionsEnabled) ...[
             const SizedBox(height: 12),
             _saveHint(lum),
@@ -317,21 +323,58 @@ class _ProductFormPageState extends ConsumerState<ProductFormPage> {
     );
   }
 
-  Widget _saveHint(LumColors lum) {
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
-      decoration: BoxDecoration(
-        color: lum.accentSoft,
-        borderRadius: BorderRadius.circular(AppRadius.md),
-      ),
+  // Compact identity header: thumbnail, live name, and a one-line summary so the
+  // user always knows what they're editing without scrolling.
+  Widget _summaryHeader(LumColors lum, List<ProductImage> images) {
+    final name = _nameCtrl.text.trim();
+    ProductImage? primary;
+    for (final i in images) {
+      if (i.isPrimary) { primary = i; break; }
+    }
+    primary ??= images.isNotEmpty ? images.first : null;
+    final barcodeStatus =
+        _barcodeCtrl.text.trim().isEmpty ? 'No barcode' : 'Barcode set';
+    final summary = '${_typeLabel(_type)} · $barcodeStatus';
+
+    return ClayContainer(
+      variant: ClayVariant.soft,
+      color: lum.surface,
+      borderRadius: AppRadius.lg,
+      isDark: lum.isDark,
+      padding: const EdgeInsets.all(14),
       child: Row(
         children: [
-          Icon(LucideIcons.info, size: 16, color: lum.accentPress),
-          const SizedBox(width: 10),
+          ClipRRect(
+            borderRadius: BorderRadius.circular(AppRadius.md),
+            child: SizedBox(
+              width: 52,
+              height: 52,
+              child: primary != null
+                  ? Image.network(primary.url,
+                      fit: BoxFit.cover,
+                      errorBuilder: (_, _, _) => _thumbFallback(lum))
+                  : _thumbFallback(lum),
+            ),
+          ),
+          const SizedBox(width: 14),
           Expanded(
-            child: Text(
-              'Save the product to add variants, images and pricing tiers.',
-              style: AppTypography.footnote.copyWith(color: lum.accentPress),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Text(
+                  name.isEmpty ? 'Untitled product' : name,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: AppTypography.headline.copyWith(
+                      color: name.isEmpty ? lum.g500 : lum.textPrimary),
+                ),
+                const SizedBox(height: 3),
+                Text(summary,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: AppTypography.footnote.copyWith(color: lum.g500)),
+              ],
             ),
           ),
         ],
@@ -339,7 +382,39 @@ class _ProductFormPageState extends ConsumerState<ProductFormPage> {
     );
   }
 
-  Widget _buildCoreSection() {
+  Widget _thumbFallback(LumColors lum) => Container(
+        color: lum.surface2,
+        alignment: Alignment.center,
+        child: Icon(Icons.inventory_2_outlined, size: 22, color: lum.g400),
+      );
+
+  Widget _saveHint(LumColors lum) {
+    return Padding(
+      padding: const EdgeInsets.only(top: 12),
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+        decoration: BoxDecoration(
+          color: lum.accentSoft,
+          borderRadius: BorderRadius.circular(AppRadius.md),
+        ),
+        child: Row(
+          children: [
+            Icon(LucideIcons.info, size: 16, color: lum.accentPress),
+            const SizedBox(width: 10),
+            Expanded(
+              child: Text(
+                'Save the product to add variants, images and pricing tiers.',
+                style: AppTypography.footnote.copyWith(color: lum.accentPress),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  // ---- Basic info ----
+  Widget _buildBasicSection() {
     final lum = context.lum;
     final categoriesAsync = ref.watch(categoriesProvider);
     final brandsAsync = ref.watch(brandsProvider);
@@ -351,22 +426,33 @@ class _ProductFormPageState extends ConsumerState<ProductFormPage> {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
-        AppTextField(controller: _nameCtrl, label: 'Name', prefixIcon: Icons.inventory_2_outlined, hint: 'Product name'),
-        const SizedBox(height: AppSpacing.fieldGap),
-        Row(
-          crossAxisAlignment: CrossAxisAlignment.end,
-          children: [
-            Expanded(
-              child: AppTextField(controller: _barcodeCtrl, label: 'Barcode', prefixIcon: Icons.qr_code, hint: 'Optional'),
-            ),
-            if (barcodeScanSupported) ...[
-              const SizedBox(width: AppSpacing.sm),
-              Padding(
-                padding: const EdgeInsets.only(bottom: 4),
-                child: _scanButton(lum),
+        _twoCol(
+          AppTextField(
+              controller: _nameCtrl,
+              label: 'Name',
+              prefixIcon: Icons.inventory_2_outlined,
+              hint: 'Product name',
+              onChanged: (_) => setState(() {})),
+          Row(
+            crossAxisAlignment: CrossAxisAlignment.end,
+            children: [
+              Expanded(
+                child: AppTextField(
+                    controller: _barcodeCtrl,
+                    label: 'Barcode',
+                    prefixIcon: Icons.qr_code,
+                    hint: 'Optional',
+                    onChanged: (_) => setState(() {})),
               ),
+              if (barcodeScanSupported) ...[
+                const SizedBox(width: AppSpacing.sm),
+                Padding(
+                  padding: const EdgeInsets.only(bottom: 4),
+                  child: _scanButton(lum),
+                ),
+              ],
             ],
-          ],
+          ),
         ),
         const SizedBox(height: AppSpacing.fieldGap),
         AppTextField(controller: _descriptionCtrl, label: 'Description', prefixIcon: Icons.notes, hint: 'Optional', maxLines: 3),
@@ -383,38 +469,74 @@ class _ProductFormPageState extends ConsumerState<ProductFormPage> {
           onSelected: (v) => setState(() => _type = v),
         ),
         const SizedBox(height: AppSpacing.fieldGap),
-        _fieldLabel('Category'),
-        AppDropdown<String?>(
-          value: _categoryId,
-          placeholder: catsLoading ? 'Loading…' : 'None',
-          enabled: !catsLoading,
-          options: [
-            const AppDropdownOption<String?>(value: null, label: 'None'),
-            for (final c in categories)
-              AppDropdownOption<String?>(value: c.id, label: c.name),
-          ],
-          onSelected: (v) => setState(() => _categoryId = v),
-        ),
-        const SizedBox(height: AppSpacing.fieldGap),
-        _fieldLabel('Brand'),
-        AppDropdown<String?>(
-          value: _brandId,
-          placeholder: brandsLoading ? 'Loading…' : 'None',
-          enabled: !brandsLoading,
-          options: [
-            const AppDropdownOption<String?>(value: null, label: 'None'),
-            for (final b in brands)
-              AppDropdownOption<String?>(value: b.id, label: b.name),
-          ],
-          onSelected: (v) => setState(() => _brandId = v),
-        ),
-        const SizedBox(height: AppSpacing.fieldGap),
-        AppTextField(controller: _unitCtrl, label: 'Unit of measure', prefixIcon: Icons.straighten, hint: 'PCS'),
-        const SizedBox(height: AppSpacing.fieldGap),
         Row(children: [
-          Expanded(child: AppTextField(controller: _costPriceCtrl, label: 'Cost price', prefixIcon: Icons.payments_outlined, keyboardType: TextInputType.number)),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                _fieldLabel('Category'),
+                AppDropdown<String?>(
+                  value: _categoryId,
+                  placeholder: catsLoading ? 'Loading…' : 'None',
+                  enabled: !catsLoading,
+                  options: [
+                    const AppDropdownOption<String?>(value: null, label: 'None'),
+                    for (final c in categories)
+                      AppDropdownOption<String?>(value: c.id, label: c.name),
+                  ],
+                  onSelected: (v) => setState(() => _categoryId = v),
+                ),
+              ],
+            ),
+          ),
           const SizedBox(width: AppSpacing.md),
-          Expanded(child: AppTextField(controller: _sellingPriceCtrl, label: 'Selling price', prefixIcon: Icons.sell_outlined, keyboardType: TextInputType.number)),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                _fieldLabel('Brand'),
+                AppDropdown<String?>(
+                  value: _brandId,
+                  placeholder: brandsLoading ? 'Loading…' : 'None',
+                  enabled: !brandsLoading,
+                  options: [
+                    const AppDropdownOption<String?>(value: null, label: 'None'),
+                    for (final b in brands)
+                      AppDropdownOption<String?>(value: b.id, label: b.name),
+                  ],
+                  onSelected: (v) => setState(() => _brandId = v),
+                ),
+              ],
+            ),
+          ),
+        ]),
+      ],
+    );
+  }
+
+  // ---- Pricing (product-level prices, not tiers) ----
+  Widget _buildPriceInputs() {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
+          Expanded(
+              child: AppTextField(
+                  controller: _costPriceCtrl,
+                  label: 'Cost price',
+                  prefixIcon: Icons.payments_outlined,
+                  keyboardType: TextInputType.number,
+                  onChanged: (_) => setState(() {}))),
+          const SizedBox(width: AppSpacing.md),
+          Expanded(
+              child: AppTextField(
+                  controller: _sellingPriceCtrl,
+                  label: 'Selling price',
+                  prefixIcon: Icons.sell_outlined,
+                  keyboardType: TextInputType.number,
+                  onChanged: (_) => setState(() {}))),
+          const SizedBox(width: AppSpacing.md),
+          Expanded(child: _marginField()),
         ]),
         const SizedBox(height: AppSpacing.fieldGap),
         Row(children: [
@@ -426,14 +548,67 @@ class _ProductFormPageState extends ConsumerState<ProductFormPage> {
         AppTextField(controller: _taxRateCtrl, label: 'Tax rate %', prefixIcon: Icons.percent, keyboardType: TextInputType.number),
         const SizedBox(height: 6),
         _toggleRow('Tax inclusive', _taxInclusive, (v) => setState(() => _taxInclusive = v)),
+      ],
+    );
+  }
+
+  // Live margin: (selling - cost) / selling. Read-only computed well — builds
+  // trust versus two static numbers side by side.
+  Widget _marginField() {
+    final lum = context.lum;
+    final cost = double.tryParse(_costPriceCtrl.text) ?? 0;
+    final sell = double.tryParse(_sellingPriceCtrl.text) ?? 0;
+    final hasMargin = sell > 0;
+    final margin = hasMargin ? (sell - cost) / sell * 100 : 0;
+    final positive = margin >= 0;
+    final color = !hasMargin
+        ? lum.g400
+        : positive
+            ? lum.successText
+            : lum.dangerText;
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        _fieldLabel('Margin'),
+        Container(
+          height: 50,
+          padding: const EdgeInsets.symmetric(horizontal: 14),
+          decoration: BoxDecoration(
+            color: lum.surface2,
+            borderRadius: BorderRadius.circular(AppRadius.md),
+          ),
+          alignment: Alignment.centerLeft,
+          child: Row(children: [
+            Icon(positive ? Icons.trending_up : Icons.trending_down,
+                size: 18, color: color),
+            const SizedBox(width: 10),
+            Text(
+              hasMargin ? '${margin.toStringAsFixed(1)}%' : '—',
+              style: AppTypography.fieldText
+                  .copyWith(color: color, fontWeight: FontWeight.w600),
+            ),
+          ]),
+        ),
+      ],
+    );
+  }
+
+  // ---- Inventory ----
+  Widget _buildInventorySection() {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        Row(children: [
+          Expanded(child: AppTextField(controller: _unitCtrl, label: 'Unit of measure', prefixIcon: Icons.straighten, hint: 'PCS')),
+          const SizedBox(width: AppSpacing.md),
+          Expanded(child: AppTextField(controller: _weightCtrl, label: 'Weight (kg)', prefixIcon: Icons.monitor_weight_outlined, hint: 'Optional', keyboardType: TextInputType.number)),
+        ]),
         const SizedBox(height: AppSpacing.fieldGap),
         Row(children: [
           Expanded(child: AppTextField(controller: _reorderPointCtrl, label: 'Reorder point', prefixIcon: Icons.warning_amber, keyboardType: TextInputType.number)),
           const SizedBox(width: AppSpacing.md),
           Expanded(child: AppTextField(controller: _reorderQtyCtrl, label: 'Reorder qty', prefixIcon: Icons.add_shopping_cart, keyboardType: TextInputType.number)),
         ]),
-        const SizedBox(height: AppSpacing.fieldGap),
-        AppTextField(controller: _weightCtrl, label: 'Weight (kg)', prefixIcon: Icons.monitor_weight_outlined, hint: 'Optional', keyboardType: TextInputType.number),
         const SizedBox(height: AppSpacing.fieldGap),
         _fieldLabel('Status'),
         AppDropdown<String>(
@@ -445,13 +620,20 @@ class _ProductFormPageState extends ConsumerState<ProductFormPage> {
           ],
           onSelected: (v) => setState(() => _status = v),
         ),
-        const SizedBox(height: 10),
-        _toggleRow('Active', _isActive, (v) => setState(() => _isActive = v)),
         const SizedBox(height: AppSpacing.fieldGap),
         AppTextField(controller: _tagsCtrl, label: 'Tags', prefixIcon: Icons.label_outline, hint: 'Comma-separated'),
       ],
     );
   }
+
+  Widget _twoCol(Widget a, Widget b) => Row(
+        crossAxisAlignment: CrossAxisAlignment.end,
+        children: [
+          Expanded(child: a),
+          const SizedBox(width: AppSpacing.md),
+          Expanded(child: b),
+        ],
+      );
 
   Widget _scanButton(LumColors lum) {
     return Semantics(
@@ -465,8 +647,8 @@ class _ProductFormPageState extends ConsumerState<ProductFormPage> {
           color: lum.surface,
           borderRadius: AppRadius.sm,
           isDark: lum.isDark,
-          width: 52,
-          height: 52,
+          width: 50,
+          height: 50,
           child: Icon(LucideIcons.scanLine, size: 20, color: lum.g600),
         ),
       ),
@@ -496,38 +678,56 @@ class _ProductFormPageState extends ConsumerState<ProductFormPage> {
     );
   }
 
-  Widget _buildSaveRow() {
-    return Row(
-      children: [
-        Expanded(
-          child: PermissionGate(
-            module: 'inventory',
-            action: _isEditing ? 'update' : 'create',
-            child: AppButton(
-              label: 'Save',
-              loading: _saving,
-              fullWidth: true,
-              onPressed: _saveCore,
-            ),
+  // Sticky footer: Active toggle always visible next to Save, so save never
+  // requires scrolling to the bottom.
+  Widget _stickyBar(LumColors lum) {
+    final showClose = !_subSectionsEnabled;
+    return Container(
+      decoration: BoxDecoration(
+        color: lum.surface,
+        border: Border(top: BorderSide(color: lum.hairline)),
+      ),
+      child: SafeArea(
+        top: false,
+        child: Padding(
+          padding: const EdgeInsets.fromLTRB(16, 12, 16, 12),
+          child: Row(
+            children: [
+              AppToggle(
+                  value: _isActive,
+                  onChanged: (v) => setState(() => _isActive = v),
+                  semanticLabel: 'Active'),
+              const SizedBox(width: 10),
+              Text('Active',
+                  style: AppTypography.footnote
+                      .copyWith(color: lum.g600, fontWeight: FontWeight.w600)),
+              const Spacer(),
+              if (showClose) ...[
+                PermissionGate(
+                  module: 'inventory',
+                  action: 'create',
+                  child: AppButton(
+                    label: 'Save & close',
+                    variant: AppButtonVariant.tinted,
+                    loading: _saving,
+                    onPressed: _saveAndClose,
+                  ),
+                ),
+                const SizedBox(width: 10),
+              ],
+              PermissionGate(
+                module: 'inventory',
+                action: _isEditing ? 'update' : 'create',
+                child: AppButton(
+                  label: 'Save',
+                  loading: _saving,
+                  onPressed: _saveCore,
+                ),
+              ),
+            ],
           ),
         ),
-        if (!_subSectionsEnabled) ...[
-          const SizedBox(width: AppSpacing.md),
-          Expanded(
-            child: PermissionGate(
-              module: 'inventory',
-              action: 'create',
-              child: AppButton(
-                label: 'Save & close',
-                variant: AppButtonVariant.tinted,
-                loading: _saving,
-                fullWidth: true,
-                onPressed: _saveAndClose,
-              ),
-            ),
-          ),
-        ],
-      ],
+      ),
     );
   }
 
@@ -599,27 +799,27 @@ class _ProductFormPageState extends ConsumerState<ProductFormPage> {
 
   // ---- Images ----
   Widget _buildImagesSection(List<ProductImage> images) {
-    return _SubSection(
-      title: 'Images',
-      count: images.length,
-      addLabel: 'Add image',
-      onAdd: _showAddImageSheet,
-      children: images
-          .map((img) => _SubRow(
-                leadingImageUrl: img.url,
-                title: img.url,
-                subtitle: img.isPrimary ? 'Primary' : null,
-                subtitleIsAccent: img.isPrimary,
-                onEdit: img.isPrimary
-                    ? null
-                    : () => ref
-                        .read(productEditProvider.notifier)
-                        .setPrimaryImage(img.id),
-                editIcon: LucideIcons.star,
-                onDelete: () =>
-                    ref.read(productEditProvider.notifier).deleteImage(img.id),
-              ))
-          .toList(),
+    final lum = context.lum;
+    return AppSectionCard(
+      eyebrow: 'Images (${images.length})',
+      child: Wrap(
+        spacing: 10,
+        runSpacing: 10,
+        children: [
+          for (final img in images) _ImageTile(
+            image: img,
+            onSetPrimary: img.isPrimary
+                ? null
+                : () => ref
+                    .read(productEditProvider.notifier)
+                    .setPrimaryImage(img.id),
+            onDelete: () =>
+                ref.read(productEditProvider.notifier).deleteImage(img.id),
+          ),
+          if (_uploadingImage) _UploadingTile(lum: lum),
+          _AddImageTile(lum: lum, onTap: _showAddImageSheet),
+        ],
+      ),
     );
   }
 
@@ -664,9 +864,11 @@ class _ProductFormPageState extends ConsumerState<ProductFormPage> {
     final file = result.files.first;
     final bytes = await file.readAsBytes();
     final ext = file.extension ?? 'jpg';
+    setState(() => _uploadingImage = true);
     final failure =
         await ref.read(productEditProvider.notifier).uploadImage(bytes, ext);
     if (!mounted) return;
+    setState(() => _uploadingImage = false);
     showAppToast(
       context,
       failure?.message ?? 'Image uploaded',
@@ -697,7 +899,7 @@ class _ProductFormPageState extends ConsumerState<ProductFormPage> {
     );
   }
 
-  // ---- Pricing ----
+  // ---- Pricing tiers ----
   Widget _buildPricingSection(List<PricingTier> tiers) {
     return _SubSection(
       title: 'Pricing tiers',
@@ -753,6 +955,15 @@ class _ProductFormPageState extends ConsumerState<ProductFormPage> {
     );
   }
 
+  static String _typeLabel(String t) {
+    switch (t) {
+      case 'SERIALIZED': return 'Serialized';
+      case 'SERVICE': return 'Service';
+      case 'COMPOSITE': return 'Composite';
+      default: return 'Standard';
+    }
+  }
+
   static String _productTypeToString(ProductType t) {
     switch (t) {
       case ProductType.serialized: return 'SERIALIZED';
@@ -772,6 +983,157 @@ class _ProductFormPageState extends ConsumerState<ProductFormPage> {
 }
 
 // ---- Shared widgets ----
+
+const double _kTileSize = 88;
+
+class _ImageTile extends StatelessWidget {
+  const _ImageTile({
+    required this.image,
+    required this.onSetPrimary,
+    required this.onDelete,
+  });
+
+  final ProductImage image;
+  final VoidCallback? onSetPrimary;
+  final VoidCallback onDelete;
+
+  @override
+  Widget build(BuildContext context) {
+    final lum = context.lum;
+    return SizedBox(
+      width: _kTileSize,
+      height: _kTileSize,
+      child: Stack(
+        children: [
+          GestureDetector(
+            onTap: onSetPrimary,
+            child: Container(
+              width: _kTileSize,
+              height: _kTileSize,
+              decoration: BoxDecoration(
+                borderRadius: BorderRadius.circular(AppRadius.md),
+                border: Border.all(
+                  color: image.isPrimary ? lum.accent : lum.hairline,
+                  width: image.isPrimary ? 2 : 1,
+                ),
+              ),
+              child: ClipRRect(
+                borderRadius: BorderRadius.circular(AppRadius.md - 1),
+                child: Image.network(
+                  image.url,
+                  fit: BoxFit.cover,
+                  errorBuilder: (_, _, _) => Container(
+                    color: lum.surface2,
+                    child: Icon(Icons.broken_image_outlined,
+                        size: 22, color: lum.g500),
+                  ),
+                ),
+              ),
+            ),
+          ),
+          if (image.isPrimary)
+            Positioned(
+              left: 4,
+              bottom: 4,
+              child: Container(
+                padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                decoration: BoxDecoration(
+                  color: lum.accent,
+                  borderRadius: BorderRadius.circular(AppRadius.sm),
+                ),
+                child: Text('Primary',
+                    style: AppTypography.caption.copyWith(
+                        color: Colors.white, fontWeight: FontWeight.w600)),
+              ),
+            ),
+          Positioned(
+            top: 2,
+            right: 2,
+            child: Semantics(
+              button: true,
+              label: 'Delete image',
+              child: GestureDetector(
+                onTap: onDelete,
+                child: Container(
+                  padding: const EdgeInsets.all(3),
+                  decoration: BoxDecoration(
+                    color: lum.surface,
+                    shape: BoxShape.circle,
+                    border: Border.all(color: lum.hairline),
+                  ),
+                  child: Icon(LucideIcons.x, size: 13, color: lum.dangerText),
+                ),
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _UploadingTile extends StatelessWidget {
+  const _UploadingTile({required this.lum});
+  final LumColors lum;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      width: _kTileSize,
+      height: _kTileSize,
+      decoration: BoxDecoration(
+        color: lum.surface2,
+        borderRadius: BorderRadius.circular(AppRadius.md),
+        border: Border.all(color: lum.hairline),
+      ),
+      child: Center(
+        child: SizedBox(
+          width: 22,
+          height: 22,
+          child: CircularProgressIndicator(
+            strokeWidth: 2.5,
+            valueColor: AlwaysStoppedAnimation<Color>(lum.accent),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _AddImageTile extends StatelessWidget {
+  const _AddImageTile({required this.lum, required this.onTap});
+  final LumColors lum;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    return Semantics(
+      button: true,
+      label: 'Add image',
+      child: GestureDetector(
+        onTap: onTap,
+        child: Container(
+          width: _kTileSize,
+          height: _kTileSize,
+          decoration: BoxDecoration(
+            color: lum.surface,
+            borderRadius: BorderRadius.circular(AppRadius.md),
+            border: Border.all(color: lum.g300),
+          ),
+          child: Column(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              Icon(LucideIcons.plus, size: 20, color: lum.g500),
+              const SizedBox(height: 4),
+              Text('Add',
+                  style: AppTypography.caption.copyWith(color: lum.g500)),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
 
 class _SubSection extends StatelessWidget {
   const _SubSection({
@@ -815,20 +1177,14 @@ class _SubRow extends StatelessWidget {
   const _SubRow({
     required this.title,
     this.subtitle,
-    this.leadingImageUrl,
     this.onEdit,
     this.onDelete,
-    this.editIcon = LucideIcons.pencil,
-    this.subtitleIsAccent = false,
   });
 
   final String title;
   final String? subtitle;
-  final String? leadingImageUrl;
   final VoidCallback? onEdit;
   final VoidCallback? onDelete;
-  final IconData editIcon;
-  final bool subtitleIsAccent;
 
   @override
   Widget build(BuildContext context) {
@@ -843,20 +1199,6 @@ class _SubRow extends StatelessWidget {
         padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
         child: Row(
           children: [
-            if (leadingImageUrl != null) ...[
-              ClipRRect(
-                borderRadius: BorderRadius.circular(AppRadius.sm),
-                child: Image.network(
-                  leadingImageUrl!,
-                  width: 40,
-                  height: 40,
-                  fit: BoxFit.cover,
-                  errorBuilder: (_, _, _) => Icon(
-                      Icons.broken_image_outlined, size: 20, color: lum.g500),
-                ),
-              ),
-              const SizedBox(width: 10),
-            ],
             Expanded(
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
@@ -870,16 +1212,14 @@ class _SubRow extends StatelessWidget {
                     Text(subtitle!,
                         maxLines: 1,
                         overflow: TextOverflow.ellipsis,
-                        style: AppTypography.footnote.copyWith(
-                            color: subtitleIsAccent
-                                ? lum.successText
-                                : lum.g500)),
+                        style: AppTypography.footnote
+                            .copyWith(color: lum.g500)),
                 ],
               ),
             ),
             if (onEdit != null)
               IconButton(
-                icon: Icon(editIcon, size: 18, color: lum.accent),
+                icon: Icon(LucideIcons.pencil, size: 18, color: lum.accent),
                 onPressed: onEdit,
               ),
             if (onDelete != null)

@@ -13,6 +13,7 @@ import '../../../../core/design/widgets/app_inline_banner.dart';
 import '../../../../core/design/widgets/app_sheet.dart';
 import '../../../../core/design/widgets/app_text_field.dart';
 import '../../../../core/design/widgets/app_toast.dart';
+import '../../../auth/presentation/controllers/profile_controller.dart';
 import '../../domain/entities/chat_message.dart';
 import '../controllers/assistant_controller.dart';
 import '../widgets/chat_bubble.dart';
@@ -44,7 +45,11 @@ class AssistantPage extends ConsumerWidget {
             ),
             Expanded(
               child: messages.isEmpty
-                  ? _EmptyState(onPick: controller.send)
+                  ? _EmptyState(
+                      recents: state.conversations,
+                      onPick: controller.send,
+                      onOpen: controller.openConversation,
+                    )
                   : ListView.builder(
                       reverse: true,
                       padding: const EdgeInsets.symmetric(
@@ -431,64 +436,97 @@ class _ToolStatus extends StatelessWidget {
   }
 }
 
-/// Shown before the first message: a prompt + a few tappable suggestions.
-class _EmptyState extends StatelessWidget {
-  const _EmptyState({required this.onPick});
+/// Shown before the first message: a personalised greeting, a few tappable
+/// suggestions (each iconed by topic), and a list of recent threads to reopen.
+class _EmptyState extends ConsumerWidget {
+  const _EmptyState({
+    required this.recents,
+    required this.onPick,
+    required this.onOpen,
+  });
 
+  final List<ChatConversation> recents;
   final void Function(String prompt) onPick;
+  final void Function(String id) onOpen;
 
-  static const _suggestions = <String>[
-    'How are sales today?',
-    'Who owes me the most money?',
-    "What's low on stock?",
-    'Where do I create a purchase order?',
+  // Icon matches the topic's sidebar section, so the grid scans at a glance.
+  static const _suggestions = <(IconData, String)>[
+    (LucideIcons.trendingUp, 'How are sales today?'),
+    (LucideIcons.users, 'Who owes me the most money?'),
+    (LucideIcons.package, "What's low on stock?"),
+    (LucideIcons.compass, 'Where do I create a purchase order?'),
   ];
 
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context, WidgetRef ref) {
     final lum = context.lum;
-    return Center(
-      child: SingleChildScrollView(
-        padding: const EdgeInsets.all(AppSpacing.xl),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            ClayContainer(
+    final name = ref.watch(profileControllerProvider).value?.fullName ?? '';
+    final firstName = name.trim().split(' ').first;
+    final recent = recents.take(3).toList();
+
+    return SingleChildScrollView(
+      padding: const EdgeInsets.all(AppSpacing.xl),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          const SizedBox(height: AppSpacing.lg),
+          Center(
+            child: ClayContainer(
               variant: ClayVariant.lumen,
               color: lum.accent,
               borderRadius: AppRadius.lg,
               isDark: lum.isDark,
               width: 60,
               height: 60,
-              child: const Icon(LucideIcons.sparkles, size: 28, color: Colors.white),
+              child:
+                  const Icon(LucideIcons.sparkles, size: 28, color: Colors.white),
             ),
-            const SizedBox(height: AppSpacing.base),
-            Text(
-              'Ask me anything about your store',
-              textAlign: TextAlign.center,
-              style: AppTypography.title2.copyWith(color: lum.textPrimary),
-            ),
-            const SizedBox(height: AppSpacing.xs),
-            Text(
-              'Sales, stock, customers, reports, or how to find things.',
-              textAlign: TextAlign.center,
-              style: AppTypography.subhead.copyWith(color: lum.g500),
-            ),
-            const SizedBox(height: AppSpacing.xl),
-            for (final s in _suggestions) ...[
-              _SuggestionChip(text: s, onTap: () => onPick(s)),
-              const SizedBox(height: AppSpacing.sm),
-            ],
+          ),
+          const SizedBox(height: AppSpacing.base),
+          Text(
+            firstName.isEmpty ? _greeting() : '${_greeting()}, $firstName',
+            textAlign: TextAlign.center,
+            style: AppTypography.title2.copyWith(color: lum.textPrimary),
+          ),
+          const SizedBox(height: AppSpacing.xs),
+          Text(
+            'Ask about sales, stock, customers, reports, or how to find things.',
+            textAlign: TextAlign.center,
+            style: AppTypography.subhead.copyWith(color: lum.g500),
+          ),
+          const SizedBox(height: AppSpacing.xl),
+          for (final (icon, s) in _suggestions) ...[
+            _SuggestionChip(icon: icon, text: s, onTap: () => onPick(s)),
+            const SizedBox(height: AppSpacing.sm),
           ],
-        ),
+          if (recent.isNotEmpty) ...[
+            const SizedBox(height: AppSpacing.md),
+            Text(
+              'RECENT',
+              style: AppTypography.caption.copyWith(
+                fontWeight: FontWeight.w600,
+                letterSpacing: 0.7,
+                color: lum.g400,
+              ),
+            ),
+            const SizedBox(height: AppSpacing.sm),
+            for (final c in recent)
+              _RecentTile(conv: c, onTap: () => onOpen(c.id)),
+          ],
+        ],
       ),
     );
   }
 }
 
 class _SuggestionChip extends StatelessWidget {
-  const _SuggestionChip({required this.text, required this.onTap});
+  const _SuggestionChip({
+    required this.icon,
+    required this.text,
+    required this.onTap,
+  });
 
+  final IconData icon;
   final String text;
   final VoidCallback onTap;
 
@@ -509,8 +547,8 @@ class _SuggestionChip extends StatelessWidget {
         ),
         child: Row(
           children: [
-            Icon(LucideIcons.arrowUpRight, size: 16, color: lum.accent),
-            const SizedBox(width: AppSpacing.sm),
+            Icon(icon, size: 17, color: lum.accent),
+            const SizedBox(width: AppSpacing.md),
             Flexible(
               child: Text(
                 text,
@@ -522,4 +560,56 @@ class _SuggestionChip extends StatelessWidget {
       ),
     );
   }
+}
+
+/// A recent thread the returning user can reopen instead of starting over.
+class _RecentTile extends StatelessWidget {
+  const _RecentTile({required this.conv, required this.onTap});
+
+  final ChatConversation conv;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    final lum = context.lum;
+    final title =
+        (conv.title?.trim().isNotEmpty ?? false) ? conv.title!.trim() : 'New chat';
+    return Material(
+      color: Colors.transparent,
+      child: InkWell(
+        borderRadius: BorderRadius.circular(AppRadius.sm),
+        onTap: onTap,
+        child: Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 11),
+          child: Row(
+            children: [
+              Icon(LucideIcons.messageCircle, size: 17, color: lum.g500),
+              const SizedBox(width: AppSpacing.md),
+              Expanded(
+                child: Text(
+                  title,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: AppTypography.body.copyWith(color: lum.textPrimary),
+                ),
+              ),
+              if (conv.updatedAt != null)
+                Text(
+                  _ago(conv.updatedAt!),
+                  style: AppTypography.caption.copyWith(color: lum.g500),
+                ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+/// Time-of-day greeting for the empty state.
+String _greeting() {
+  final h = DateTime.now().hour;
+  if (h < 12) return 'Good morning';
+  if (h < 17) return 'Good afternoon';
+  return 'Good evening';
 }

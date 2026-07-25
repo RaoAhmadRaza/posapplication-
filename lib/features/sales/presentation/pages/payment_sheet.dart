@@ -5,7 +5,9 @@ import 'package:lucide_icons_flutter/lucide_icons.dart';
 import '../../../../core/design/app_colors.dart';
 import '../../../../core/design/app_radius.dart';
 import '../../../../core/design/app_typography.dart';
+import '../../../../core/design/format.dart';
 import '../../../../core/design/widgets/app_button.dart';
+import '../../../../core/design/widgets/app_card.dart';
 import '../../../../core/design/widgets/app_inline_banner.dart';
 import '../../../../core/design/widgets/app_money_field.dart';
 import '../../../../core/design/widgets/app_money_text.dart';
@@ -13,6 +15,8 @@ import '../../../../core/design/widgets/app_text_field.dart';
 import '../../../../core/widgets/no_access_scaffold.dart';
 import '../../../../core/widgets/permission_gate.dart';
 import '../../../sync/presentation/controllers/connectivity_controller.dart';
+import '../../domain/entities/cart_line.dart';
+import '../../domain/entities/customer.dart';
 import '../controllers/pos_cart_controller.dart';
 import '../widgets/sales_rise.dart';
 import '../widgets/sales_scaffold.dart';
@@ -164,12 +168,16 @@ class _PaymentSheetState extends ConsumerState<PaymentSheet> {
 
   Widget _buildContent(BuildContext context) {
     final lum = context.lum;
-    final hasCustomer = ref.watch(posCartProvider).customer != null;
+    final cart = ref.watch(posCartProvider);
+    final hasCustomer = cart.customer != null;
     final online = ref.watch(connectivityProvider).maybeWhen(data: (v) => v, orElse: () => true);
 
     return SalesScaffold(
       title: 'Payment',
-      maxContentWidth: 480,
+      leading: _BackButton(
+        onTap: _loading ? () {} : () => context.go('/sales/pos'),
+      ),
+      maxContentWidth: 560,
       padding: const EdgeInsets.fromLTRB(20, 20, 20, 12),
       bottomBar: Container(
         padding: const EdgeInsets.fromLTRB(20, 12, 20, 20),
@@ -181,7 +189,7 @@ class _PaymentSheetState extends ConsumerState<PaymentSheet> {
           top: false,
           child: Center(
             child: ConstrainedBox(
-              constraints: const BoxConstraints(maxWidth: 480),
+              constraints: const BoxConstraints(maxWidth: 560),
               child: AppButton(
                 label: _balance > 0 ? 'Charge · leave balance' : 'Complete sale',
                 onPressed: _loading ? null : _complete,
@@ -211,6 +219,10 @@ class _PaymentSheetState extends ConsumerState<PaymentSheet> {
                   ],
                 ),
               ),
+              const SizedBox(height: 22),
+              _CustomerCard(customer: cart.customer),
+              const SizedBox(height: 12),
+              _OrderSummaryCard(cart: cart),
               const SizedBox(height: 22),
               if (!online) ...[
                 const AppInlineBanner(
@@ -458,6 +470,228 @@ class _MethodField extends StatelessWidget {
     );
     if (enabled) return field;
     return Tooltip(message: 'Offline: cash only', child: field);
+  }
+}
+
+/// Who the sale is for. Shows the selected customer's identity, or a neutral
+/// walk-in state when none was chosen at the register.
+class _CustomerCard extends StatelessWidget {
+  const _CustomerCard({required this.customer});
+  final Customer? customer;
+
+  static String _initials(String name) {
+    final parts = name.trim().split(RegExp(r'\s+')).where((p) => p.isNotEmpty);
+    if (parts.isEmpty) return '?';
+    return parts.take(2).map((p) => p[0].toUpperCase()).join();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final lum = context.lum;
+    final c = customer;
+    final walkIn = c == null;
+    final title = walkIn ? 'Walk-in customer' : c.name;
+    final subtitle = walkIn
+        ? 'No account attached'
+        : [c.phone, c.email].whereType<String>().where((s) => s.isNotEmpty).join(' · ');
+
+    return AppCard(
+      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+      child: Row(
+        children: [
+          Container(
+            width: 42,
+            height: 42,
+            decoration: BoxDecoration(
+              shape: BoxShape.circle,
+              color: walkIn ? lum.g100 : lum.accentSoft,
+            ),
+            child: walkIn
+                ? Icon(LucideIcons.user, size: 20, color: lum.g400)
+                : Center(
+                    child: Text(
+                      _initials(c.name),
+                      style: AppTypography.label.copyWith(
+                        fontWeight: FontWeight.w700,
+                        color: lum.accentPress,
+                      ),
+                    ),
+                  ),
+          ),
+          const SizedBox(width: 12),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Text(
+                  title,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: AppTypography.label.copyWith(
+                    fontWeight: FontWeight.w600,
+                    color: lum.textPrimary,
+                  ),
+                ),
+                if (subtitle.isNotEmpty) ...[
+                  const SizedBox(height: 2),
+                  Text(
+                    subtitle,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: AppTypography.caption.copyWith(color: lum.g500),
+                  ),
+                ],
+              ],
+            ),
+          ),
+          if (!walkIn && c.loyaltyPoints > 0)
+            Container(
+              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+              decoration: BoxDecoration(
+                color: lum.accentSoft,
+                borderRadius: BorderRadius.circular(AppRadius.pill),
+              ),
+              child: Text(
+                '${c.loyaltyPoints} pts',
+                style: AppTypography.caption.copyWith(
+                  fontWeight: FontWeight.w700,
+                  color: lum.accentPress,
+                ),
+              ),
+            ),
+        ],
+      ),
+    );
+  }
+}
+
+/// Itemised order: every cart line, then the subtotal / discount / tax
+/// breakdown that adds up to the amount due.
+class _OrderSummaryCard extends StatelessWidget {
+  const _OrderSummaryCard({required this.cart});
+  final CartState cart;
+
+  @override
+  Widget build(BuildContext context) {
+    final lum = context.lum;
+    final lines = cart.lines;
+
+    return AppCard(
+      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 16),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          Row(
+            children: [
+              Expanded(
+                child: Text(
+                  'ORDER SUMMARY',
+                  style: AppTypography.caption.copyWith(
+                    fontWeight: FontWeight.w700,
+                    letterSpacing: 0.6,
+                    color: lum.g500,
+                  ),
+                ),
+              ),
+              Text(
+                '${cart.totalItems} item${cart.totalItems == 1 ? '' : 's'}',
+                style: AppTypography.caption.copyWith(color: lum.g500),
+              ),
+            ],
+          ),
+          const SizedBox(height: 12),
+          for (final line in lines) _LineRow(line: line),
+          Padding(
+            padding: const EdgeInsets.symmetric(vertical: 12),
+            child: Container(height: 1, color: lum.hairline),
+          ),
+          _TotalLine(label: 'Subtotal', value: cart.subtotal),
+          if (cart.discountTotal > 0)
+            _TotalLine(
+              label: 'Discount',
+              value: -cart.discountTotal,
+              color: lum.successText,
+            ),
+          _TotalLine(label: 'Tax', value: cart.taxTotal),
+          const SizedBox(height: 2),
+          _TotalLine(label: 'Total', value: cart.grandTotal, strong: true),
+        ],
+      ),
+    );
+  }
+}
+
+/// One product line: name + qty × unit price, with the line total right-aligned.
+class _LineRow extends StatelessWidget {
+  const _LineRow({required this.line});
+  final CartLine line;
+
+  @override
+  Widget build(BuildContext context) {
+    final lum = context.lum;
+    final qty = line.qty == line.qty.roundToDouble()
+        ? line.qty.toStringAsFixed(0)
+        : line.qty.toString();
+
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 10),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Text(
+                  line.productName,
+                  maxLines: 2,
+                  overflow: TextOverflow.ellipsis,
+                  style: AppTypography.label.copyWith(
+                    fontWeight: FontWeight.w500,
+                    color: lum.textPrimary,
+                  ),
+                ),
+                const SizedBox(height: 2),
+                Text(
+                  '$qty × ${formatAmount(line.unitPrice, decimals: 0)}',
+                  style: AppTypography.caption.copyWith(color: lum.g500),
+                ),
+              ],
+            ),
+          ),
+          const SizedBox(width: 12),
+          Padding(
+            padding: const EdgeInsets.only(top: 1),
+            child: AppMoneyText(line.lineTotal, size: 15),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _BackButton extends StatelessWidget {
+  const _BackButton({required this.onTap});
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    final lum = context.lum;
+    return Semantics(
+      button: true,
+      label: 'Back',
+      child: InkWell(
+        onTap: onTap,
+        borderRadius: BorderRadius.circular(AppRadius.pill),
+        child: SizedBox(
+          width: 40,
+          height: 44,
+          child: Icon(LucideIcons.arrowLeft, size: 20, color: lum.g600),
+        ),
+      ),
+    );
   }
 }
 

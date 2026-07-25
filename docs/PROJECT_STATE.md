@@ -77,6 +77,12 @@ First LLM integration in the app. Full detail in DECISIONS.md (2026-07-25).
   UTC date into the system prompt and a "always re-query, data changes" rule, so "today/yesterday" resolve
   correctly and a repeated question re-runs its tool (previously the model reused a stale figure until an
   app restart started a new conversation). Edge-fn changes need a redeploy; Flutter changes hot-reload.
+- **UI polish 2026-07-25:** empty state personalised — time-of-day greeting + first name
+  (`profileControllerProvider`), per-topic icons on the suggestion chips, and a "RECENT" list (top 3
+  threads from `state.conversations`) to reopen. Assistant bubbles now carry a sparkles avatar
+  (`ChatBubble` → Row for chat rhythm); user bubbles unchanged. Rich answer cards (metric tiles, status
+  pills, tappable invoice links) NOT built — they need a structured response contract from the edge fn
+  (backend), not presentation scraping of freeform markdown.
 - **DEFERRED:** realtime multi-device reconciliation in the controller (single-device is correct today),
   desktop Voxa voice.
 
@@ -586,7 +592,10 @@ static-colour refs across the module, works in Counter mode.
 - **VERIFY OWED (on-device eyeball)** — agent env can't screenshot: all 24 screens light + dark, rail
   persists on every inventory screen EXCEPT the 2 top-level detail routes, the 4 external deep-links
   (drilldown/notifications/search/sync) still resolve, hub tiles, product search/scan/voice + filters +
-  label selection, product form two-phase save (variants/images/tiers) + delete, stock detail per-wh +
+  label selection, product form two-phase save (variants/images/tiers) + delete, product form UI pass
+  (grouped Basic/Pricing/Inventory cards, compact summary header, live margin field, image thumbnail
+  grid w/ Primary badge + upload spinner, sticky Active+Save bar via AppDetailScaffold.bottomBar),
+  stock detail per-wh +
   ledger, adjustments approve, transfers dispatch/receive/cancel, count session, imei lookup, CSV import,
   and a screenshot diff vs the 12 reference renders.
 
