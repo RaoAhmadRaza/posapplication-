@@ -56,9 +56,11 @@ First LLM integration in the app. Full detail in DECISIONS.md (2026-07-25).
   buffers, so POST the function URL with the JWT + parse SSE) / repository / `Notifier<AssistantState>`
   controller (optimistic bubbles, deltas stream into the last bubble). Net-new UI: `ChatBubble`,
   `ChatComposer` (native STT mic reusing `VoiceInputService`), `AssistantPage` (bespoke Scaffold —
-  AppDetailScaffold is scroll-centered, wrong for a pinned composer). Route `/assistant` (top-level sibling
-  GoRoute, no redirect/branch changes). `AssistantLauncher` (sparkles) mounted in `module_scaffold` +
-  `dashboard_app_bar` → on every screen.
+  AppDetailScaffold is scroll-centered, wrong for a pinned composer; no back button — it is a nav-branch
+  root). Reached via a **nav-shell branch** (index 11, sparkles icon, ungated — every signed-in user):
+  the rail item / bottom-bar tab opens the chat on the right pane like any module. (Was a top-level route
+  + `AssistantLauncher` in the dashboard/module headers; 2026-07-25 moved into the nav bar, launcher
+  widget deleted.)
 - Voice v1 = native only (iOS/Android/macOS); Windows/Linux Voxa deferred. GATE: `flutter analyze` **8
   issues, 0 new** (baseline 8).
 - **STATUS 2026-07-25: verified working end-to-end** on macOS — JWT auth, streaming SSE, tool-call loop,
@@ -67,7 +69,15 @@ First LLM integration in the app. Full detail in DECISIONS.md (2026-07-25).
   `supabase secrets set OPENAI_API_KEY=...` + `supabase functions deploy llm-proxy --no-verify-jwt`, confirm
   the key's plan has quota, then eyeball light+dark + voice. **DATA-POLICY GATE:** chat content (balances,
   salaries) is sent to OpenAI — owner must sign off before rollout.
-- **DEFERRED:** conversation list/rename/delete UI, realtime multi-device reconciliation in the controller,
+- **DONE 2026-07-25 (follow-ups):** system prompt hardened (scope guardrail + cheap-model answer procedure);
+  GFM tables render in the chat bubble; launcher promoted to a **nav-shell branch** (index 11) — see the
+  UI-redesign nav notes; **conversation history** — controller resumes the most recent thread on open and a
+  history panel (sparkles header → `messagesSquare` icon) lists/switches/renames/deletes threads (RLS `for
+  all` already permits update/delete; no migration); **data-freshness fix** — the edge fn injects today's
+  UTC date into the system prompt and a "always re-query, data changes" rule, so "today/yesterday" resolve
+  correctly and a repeated question re-runs its tool (previously the model reused a stale figure until an
+  app restart started a new conversation). Edge-fn changes need a redeploy; Flutter changes hot-reload.
+- **DEFERRED:** realtime multi-device reconciliation in the controller (single-device is correct today),
   desktop Voxa voice.
 
 ## UI Redesign — LUMINA design system (IN PROGRESS, started 2026-07-20)
