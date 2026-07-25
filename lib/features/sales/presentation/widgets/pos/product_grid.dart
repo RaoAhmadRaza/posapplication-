@@ -48,11 +48,13 @@ class ProductGrid extends StatelessWidget {
     required this.cartQtyOf,
     required this.onAdd,
     required this.online,
+    this.scrollController,
     this.padding = const EdgeInsets.fromLTRB(18, 0, 18, 18),
   });
 
   final List<Product> products;
   final Map<String, StockLevel> stockMap;
+  final ScrollController? scrollController;
 
   /// Quantity of a product already in the cart, for the corner badge.
   final double Function(String productId) cartQtyOf;
@@ -74,6 +76,7 @@ class ProductGrid extends StatelessWidget {
         final tileHeight = _tileHeight(context);
 
         return GridView.builder(
+          controller: scrollController,
           padding: padding,
           itemCount: products.length,
           gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
