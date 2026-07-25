@@ -11,7 +11,6 @@ import '../../../../core/services/voice_support.dart';
 import '../../../../core/services/voxa_stt_service.dart';
 import '../../../../core/widgets/barcode_scan_page.dart';
 import '../../../inventory/domain/usecases/search_products.dart';
-import '../../../assistant/presentation/widgets/assistant_launcher.dart';
 import '../../../notifications/presentation/widgets/notification_bell.dart';
 import '../../../search/presentation/widgets/global_search_field.dart';
 import '../../../sync/presentation/widgets/sync_status_widget.dart';
@@ -81,7 +80,6 @@ class DashboardAppBar extends ConsumerWidget implements PreferredSizeWidget {
             iconSize: isWide ? 19 : 20,
             onPressed: () => ref.read(dashboardProvider.notifier).refresh(),
           ),
-          const AssistantLauncher(),
           const NotificationBell(),
           if (isWide) ...[
             const SizedBox(width: 8),

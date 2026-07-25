@@ -28,7 +28,8 @@ class _NavItem {
 
 // Indexed by shell branch: 0 Dashboard, 1 Inventory, 2 Purchase, 3 Sales,
 // 4 Settings, 5 Repair, 6 Customers, 7 Reports, 8 Accounting, 9 Approvals,
-// 10 HR. Repair onward are appended so the earlier indices never shift.
+// 10 HR, 11 Assistant. Repair onward are appended so the earlier indices never
+// shift.
 const _allItems = [
   _NavItem('Dashboard', LucideIcons.layoutGrid),
   _NavItem('Inventory', LucideIcons.box),
@@ -41,6 +42,7 @@ const _allItems = [
   _NavItem('Accounting', LucideIcons.calculator),
   _NavItem('Approvals', LucideIcons.checkSquare2),
   _NavItem('HR', LucideIcons.contactRound),
+  _NavItem('Assistant', LucideIcons.sparkles),
 ];
 
 /// Shell branch indices, per the router's branch order.
@@ -52,6 +54,7 @@ const _kReportsBranch = 7;
 const _kAccountingBranch = 8;
 const _kApprovalsBranch = 9;
 const _kHrBranch = 10;
+const _kAssistantBranch = 11;
 
 /// A destination inside a module's own branch. These navigate with `go` —
 /// `goBranch` is only for switching module.
@@ -163,6 +166,8 @@ List<int> _branchMapFor(Set<String> matrix) => [
       if (matrix.contains('accounting:read')) _kAccountingBranch,
       if (matrix.contains('approvals:read')) _kApprovalsBranch,
       if (matrix.contains('hr:read')) _kHrBranch,
+      // Assistant has no permission gate — available to every signed-in user.
+      _kAssistantBranch,
       4,
     ];
 
@@ -180,6 +185,7 @@ const _branchRoot = <int, String>{
   _kAccountingBranch: '/accounting',
   _kApprovalsBranch: '/approvals',
   _kHrBranch: '/hr',
+  _kAssistantBranch: '/assistant',
 };
 
 /// Wraps a top-level (outside-the-shell) detail page in the persistent desktop

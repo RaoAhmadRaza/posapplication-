@@ -357,10 +357,8 @@ final appRouter = GoRouter(
       path: '/home',
       redirect: (context, state) => '/dashboard',
     ),
-    GoRoute(
-      path: '/assistant',
-      builder: (context, state) => const AssistantPage(),
-    ),
+    // Assistant moved INSIDE the nav shell as its own branch (index 11) — see the
+    // StatefulShellBranch below. /assistant now carries the rail/bottom bar.
     GoRoute(
       path: '/notifications',
       builder: (context, state) => const NotificationsPage(),
@@ -1252,6 +1250,17 @@ final appRouter = GoRouter(
               path: '/hr/employees/:id',
               pageBuilder: (context, state) => _fadePage(state,
                   EmployeeProfilePage(employeeId: state.pathParameters['id']!)),
+            ),
+          ],
+        ),
+        // Assistant (branch index 11). Single-screen branch — the chat page is
+        // the branch root with no sub-routes, so it carries the rail/bottom bar
+        // like any module. Appended last so no earlier branch index shifts.
+        StatefulShellBranch(
+          routes: [
+            GoRoute(
+              path: '/assistant',
+              builder: (context, state) => const AssistantPage(),
             ),
           ],
         ),
