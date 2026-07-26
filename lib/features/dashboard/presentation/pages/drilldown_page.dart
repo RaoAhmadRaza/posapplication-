@@ -104,9 +104,17 @@ class _DrilldownAppBar extends StatelessWidget implements PreferredSizeWidget {
   @override
   Widget build(BuildContext context) {
     final lum = context.lum;
+    // Scaffold reserves preferredSize.height + the status-bar inset for the
+    // appBar slot; fill that band and pad the row down so it clears the notch.
+    // Desktop inset is 0 — no change there.
+    final topInset = MediaQuery.paddingOf(context).top;
     return Container(
-      height: preferredSize.height,
-      padding: EdgeInsets.symmetric(horizontal: isWide ? 24 : 12),
+      height: preferredSize.height + topInset,
+      padding: EdgeInsets.only(
+        top: topInset,
+        left: isWide ? 24 : 12,
+        right: isWide ? 24 : 12,
+      ),
       decoration: BoxDecoration(
         color: lum.surface,
         border: Border(bottom: BorderSide(color: lum.hairline)),

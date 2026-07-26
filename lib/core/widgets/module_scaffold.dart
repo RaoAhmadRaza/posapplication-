@@ -104,38 +104,44 @@ class ModuleHeader extends StatelessWidget {
   Widget build(BuildContext context) {
     final lum = context.lum;
     final isWide = ModuleScaffold.isWideOf(context);
+    // Reserve the status-bar inset above the fixed bar height and pad the row
+    // down into it, so the title/back/bell clear the notch. A plain SafeArea
+    // inside the fixed-height Container was swallowed by the height clamp,
+    // leaving the row overlapping the status bar. Desktop inset is 0 — no change.
+    final topInset = MediaQuery.paddingOf(context).top;
 
     return Container(
-      height: isWide ? 60 : 54,
-      padding: EdgeInsets.only(left: isWide ? 26 : 16, right: isWide ? 20 : 8),
+      height: (isWide ? 60 : 54) + topInset,
+      padding: EdgeInsets.only(
+        top: topInset,
+        left: isWide ? 26 : 16,
+        right: isWide ? 20 : 8,
+      ),
       decoration: BoxDecoration(
         color: lum.surface,
         border: Border(bottom: BorderSide(color: lum.hairline)),
       ),
-      child: SafeArea(
-        bottom: false,
-        child: Row(
-          children: [
-            ?leading,
-            Expanded(
-              child: Text(
-                title,
-                maxLines: 1,
-                overflow: TextOverflow.ellipsis,
-                style: AppTypography.title2.copyWith(
-                  fontSize: isWide ? 19 : 17,
-                  color: lum.textPrimary,
-                ),
+      child: Row(
+        children: [
+          ?leading,
+          Expanded(
+            child: Text(
+              title,
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              style: AppTypography.title2.copyWith(
+                fontSize: isWide ? 19 : 17,
+                color: lum.textPrimary,
               ),
             ),
-            ...actions,
-            const SizedBox(width: 4),
-            const SyncStatusWidget(),
-            const NotificationBell(),
-            const SizedBox(width: 4),
-            ModuleAvatar(size: isWide ? 34 : 30),
-          ],
-        ),
+          ),
+          ...actions,
+          const SizedBox(width: 4),
+          const SyncStatusWidget(),
+          const NotificationBell(),
+          const SizedBox(width: 4),
+          ModuleAvatar(size: isWide ? 34 : 30),
+        ],
       ),
     );
   }

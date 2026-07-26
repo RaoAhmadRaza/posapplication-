@@ -19,6 +19,11 @@ import '../../features/auth/presentation/controllers/profile_controller.dart';
 /// nav is a bottom bar. Width-driven, never Platform.isX — desktop windows resize.
 const _kRailBreakpoint = 900.0;
 
+/// Mobile bottom bar: at most this many tabs shown inline. Beyond it, the first
+/// [_kPrimaryBottomTabs] stay and the rest fold behind a "More" tab.
+const _kMaxBottomTabs = 5;
+const _kPrimaryBottomTabs = 4;
+
 /// One nav destination. Indexes match the router's shell branch order.
 class _NavItem {
   const _NavItem(this.label, this.icon);
@@ -696,27 +701,45 @@ class _LuminaBottomBar extends StatelessWidget {
     final lum = context.lum;
     final inModule = destIndex >= 0;
 
-    final tabs = <Widget>[
-      if (inModule) ...[
-        _BottomTab(
-          item: const _NavItem('Modules', LucideIcons.layoutGrid),
-          active: false,
-          onTap: () => _showModulesSheet(context),
-        ),
-        for (var i = 0; i < dests.length; i++)
-          _BottomTab(
-            item: _NavItem(dests[i].shortLabel, dests[i].icon),
-            active: i == destIndex,
-            onTap: () => context.go(dests[i].path),
-          ),
-      ] else
-        for (var i = 0; i < items.length; i++)
-          _BottomTab(
-            item: items[i],
-            active: i == selected,
-            onTap: () => onSelect(i),
-          ),
-    ];
+    final tabs = <Widget>[];
+    if (inModule) {
+      tabs.add(_BottomTab(
+        item: const _NavItem('Modules', LucideIcons.layoutGrid),
+        active: false,
+        onTap: () => _showModulesSheet(context),
+      ));
+      for (var i = 0; i < dests.length; i++) {
+        tabs.add(_BottomTab(
+          item: _NavItem(dests[i].shortLabel, dests[i].icon),
+          active: i == destIndex,
+          onTap: () => context.go(dests[i].path),
+        ));
+      }
+    } else if (items.length <= _kMaxBottomTabs) {
+      // Few enough modules to show them all — no overflow tab needed.
+      for (var i = 0; i < items.length; i++) {
+        tabs.add(_BottomTab(
+          item: items[i],
+          active: i == selected,
+          onTap: () => onSelect(i),
+        ));
+      }
+    } else {
+      // Too many modules for one row: keep the primary few, fold the rest into
+      // a "More" sheet. The More tab lights when the active module is folded.
+      for (var i = 0; i < _kPrimaryBottomTabs; i++) {
+        tabs.add(_BottomTab(
+          item: items[i],
+          active: i == selected,
+          onTap: () => onSelect(i),
+        ));
+      }
+      tabs.add(_BottomTab(
+        item: const _NavItem('More', LucideIcons.moreHorizontal),
+        active: selected >= _kPrimaryBottomTabs,
+        onTap: () => _showModulesSheet(context, showActive: true),
+      ));
+    }
 
     return Container(
       decoration: BoxDecoration(
@@ -735,7 +758,10 @@ class _LuminaBottomBar extends StatelessWidget {
     );
   }
 
-  void _showModulesSheet(BuildContext context) {
+  /// Bottom sheet of modules. In-module (Modules tab) hides the active module;
+  /// the "More" overflow tab passes [showActive] to list every module and light
+  /// the current one.
+  void _showModulesSheet(BuildContext context, {bool showActive = false}) {
     final lum = context.lum;
     showModalBottomSheet<void>(
       context: context,
@@ -744,43 +770,117 @@ class _LuminaBottomBar extends StatelessWidget {
         borderRadius:
             BorderRadius.vertical(top: Radius.circular(AppRadius.xl)),
       ),
-      builder: (sheetContext) => SafeArea(
-        top: false,
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.stretch,
-          children: [
-            Container(
-              margin: const EdgeInsets.only(top: 10, bottom: 6),
-              width: 40,
-              height: 5,
-              decoration: BoxDecoration(
-                color: lum.g300,
-                borderRadius: BorderRadius.circular(AppRadius.pill),
-              ),
+      builder: (sheetContext) {
+        final entries = [
+          for (var i = 0; i < items.length; i++)
+            if (showActive || i != selected) i,
+        ];
+        return SafeArea(
+          top: false,
+          // Bound to 70% of the screen so a long module list scrolls inside the
+          // grid instead of overflowing the sheet.
+          child: ConstrainedBox(
+            constraints: BoxConstraints(
+              maxHeight: MediaQuery.sizeOf(sheetContext).height * 0.7,
             ),
-            const Padding(
-              padding: EdgeInsets.only(left: 10, top: 6),
-              child: _RailEyebrow('Modules'),
-            ),
-            for (var i = 0; i < items.length; i++)
-              if (i != selected)
-                Padding(
-                  padding: const EdgeInsets.symmetric(
-                    horizontal: 16,
-                    vertical: 2,
-                  ),
-                  child: _RailItem(
-                    item: items[i],
-                    active: false,
-                    onTap: () {
-                      Navigator.of(sheetContext).pop();
-                      onSelect(i);
-                    },
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                Align(
+                  child: Container(
+                    margin: const EdgeInsets.only(top: 10, bottom: 6),
+                    width: 40,
+                    height: 5,
+                    decoration: BoxDecoration(
+                      color: lum.g300,
+                      borderRadius: BorderRadius.circular(AppRadius.pill),
+                    ),
                   ),
                 ),
-            const SizedBox(height: 12),
-          ],
+                const Padding(
+                  padding: EdgeInsets.only(left: 20, top: 6),
+                  child: _RailEyebrow('Modules'),
+                ),
+                Flexible(
+                  child: GridView.count(
+                    padding: const EdgeInsets.fromLTRB(16, 6, 16, 16),
+                    shrinkWrap: true,
+                    crossAxisCount: 3,
+                    mainAxisSpacing: 10,
+                    crossAxisSpacing: 10,
+                    childAspectRatio: 1.02,
+                    children: [
+                      for (final i in entries)
+                        _ModuleGridTile(
+                          item: items[i],
+                          active: showActive && i == selected,
+                          onTap: () {
+                            Navigator.of(sheetContext).pop();
+                            onSelect(i);
+                          },
+                        ),
+                    ],
+                  ),
+                ),
+              ],
+            ),
+          ),
+        );
+      },
+    );
+  }
+}
+
+/// Boxy module tile for the mobile "More" sheet: icon over label in a rounded
+/// card, accent-tinted when it is the active module.
+class _ModuleGridTile extends StatelessWidget {
+  const _ModuleGridTile({
+    required this.item,
+    required this.active,
+    required this.onTap,
+  });
+
+  final _NavItem item;
+  final bool active;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    final lum = context.lum;
+
+    return Semantics(
+      button: true,
+      selected: active,
+      label: item.label,
+      child: Material(
+        color: active ? lum.accentSoft : lum.g100,
+        borderRadius: BorderRadius.circular(AppRadius.md),
+        child: InkWell(
+          onTap: onTap,
+          borderRadius: BorderRadius.circular(AppRadius.md),
+          child: Padding(
+            padding: const EdgeInsets.all(8),
+            child: Column(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                Icon(item.icon,
+                    size: 24, color: active ? lum.accent : lum.g600),
+                const SizedBox(height: 8),
+                Text(
+                  item.label,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  textAlign: TextAlign.center,
+                  style: AppTypography.caption.copyWith(
+                    fontSize: 12,
+                    fontWeight: active ? FontWeight.w700 : FontWeight.w500,
+                    color: active ? lum.accentPress : lum.g600,
+                  ),
+                ),
+              ],
+            ),
+          ),
         ),
       ),
     );

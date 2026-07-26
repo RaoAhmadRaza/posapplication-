@@ -38,9 +38,18 @@ class DashboardAppBar extends ConsumerWidget implements PreferredSizeWidget {
     final editing = ref.watch(dashboardEditingProvider);
     final loading = ref.watch(dashboardProvider).isLoading;
 
+    // Scaffold reserves preferredSize.height + the status-bar inset for the
+    // appBar slot; fill that whole band so the surface sits under the status
+    // bar and pad the row down by the inset. Desktop inset is 0 — no change.
+    final topInset = MediaQuery.paddingOf(context).top;
+
     return Container(
-      height: preferredSize.height,
-      padding: EdgeInsets.only(left: isWide ? 24 : 18, right: isWide ? 24 : 8),
+      height: preferredSize.height + topInset,
+      padding: EdgeInsets.only(
+        top: topInset,
+        left: isWide ? 24 : 18,
+        right: isWide ? 24 : 8,
+      ),
       decoration: BoxDecoration(
         color: lum.surface,
         border: Border(bottom: BorderSide(color: lum.hairline)),
