@@ -531,7 +531,7 @@ class _Catalogue extends StatelessWidget {
             loading: () => const Center(child: CircularProgressIndicator()),
             error: (e, _) => SalesEmptyState(
               icon: LucideIcons.wifiOff,
-              message: "We couldn't load the catalogue. Check the connection "
+              message: "Unable to load the catalogue. Check the connection "
                   'and try the search again.',
             ),
             data: (list) {

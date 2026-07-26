@@ -85,7 +85,7 @@ class NotificationSettingsPage extends ConsumerWidget {
           child: Center(child: CircularProgressIndicator()),
         ),
         error: (e, _) => const AppInlineBanner(
-          message: 'Could not load preferences.',
+          message: 'Unable to load preferences.',
           type: BannerType.error,
         ),
         data: (prefs) {

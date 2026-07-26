@@ -67,8 +67,8 @@ class _EmployeeProfilePageState extends ConsumerState<EmployeeProfilePage> {
       error: (e, _) => shell(
         'Employee',
         const AppErrorState(
-          title: 'Could not load employee',
-          body: 'Something went wrong fetching this profile. Try again.',
+          title: 'Unable to load this profile',
+          body: 'Check your connection and try again.',
         ),
       ),
       data: (employee) => shell(
@@ -565,7 +565,7 @@ class _AttendanceTab extends ConsumerWidget {
     return async.when(
       loading: () => const _TabLoading(),
       error: (e, _) => const AppErrorState(
-        title: 'Could not load attendance',
+        title: 'Unable to load attendance',
         body: 'Attendance for this month is unavailable right now.',
       ),
       data: (rows) => Column(
@@ -709,7 +709,7 @@ class _LeavesTab extends ConsumerWidget {
     return async.when(
       loading: () => const _TabLoading(),
       error: (e, _) => const AppErrorState(
-        title: 'Could not load leaves',
+        title: 'Unable to load leaves',
         body: 'Leave history is unavailable right now.',
       ),
       data: (leaves) => Column(
@@ -763,7 +763,7 @@ class _PayrollTab extends ConsumerWidget {
     return async.when(
       loading: () => const _TabLoading(),
       error: (e, _) => const AppErrorState(
-        title: 'Could not load advances',
+        title: 'Unable to load advances',
         body: 'Salary advances are unavailable right now.',
       ),
       data: (advances) => Column(

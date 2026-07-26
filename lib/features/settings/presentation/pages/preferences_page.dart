@@ -80,7 +80,7 @@ class PreferencesPage extends ConsumerWidget {
                 children: [
                   _PrefRow(
                     title: 'Theme',
-                    description: 'More themes are on the way.',
+                    description: 'Interface appearance for this account.',
                     control: AppDropdown<String>(
                       value: prefs.theme,
                       enabled: canEdit,

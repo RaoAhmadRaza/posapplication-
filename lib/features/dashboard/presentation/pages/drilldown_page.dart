@@ -37,7 +37,7 @@ class DrilldownPage extends ConsumerWidget {
               ),
               error: (_, _) => _EmptyState(
                 icon: LucideIcons.cloudOff,
-                message: "Couldn't load this list",
+                message: "Unable to load this list",
                 action: AppButton(
                   label: 'Retry',
                   onPressed: () => ref.invalidate(drilldownProvider(args)),

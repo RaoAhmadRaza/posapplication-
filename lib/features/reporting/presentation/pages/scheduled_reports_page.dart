@@ -122,7 +122,7 @@ class _Body extends ConsumerWidget {
                     ],
                   AsyncError() => const [
                       AppErrorState(
-                        title: 'Couldn’t load schedules',
+                        title: 'Unable to load schedules',
                         body: 'We couldn’t reach the server. Please try again.',
                       ),
                     ],

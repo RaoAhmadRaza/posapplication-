@@ -116,9 +116,9 @@ class _EmployeesPageState extends ConsumerState<EmployeesPage> {
                 child: Padding(
                   padding: const EdgeInsets.all(16),
                   child: AppErrorState(
-                    title: "We couldn't load employees",
+                    title: "Unable to load employees",
                     body:
-                        "We couldn't reach the server. Check your connection and try again.",
+                        "Unable to reach the server. Check your connection and try again.",
                   ),
                 ),
               ),

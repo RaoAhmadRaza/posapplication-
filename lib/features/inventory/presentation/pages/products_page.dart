@@ -46,9 +46,11 @@ class _ProductsPageState extends ConsumerState<ProductsPage> {
   final _scrollController = ScrollController();
   Timer? _debounce;
   bool _loadingMore = false;
-  String? _filterCategoryId;
-  String? _filterBrandId;
-  String? _filterStatus;
+  // Replaced wholesale on change, never mutated in place: the picker hands the
+  // untouched groups straight back, so clear()+addAll() would empty them.
+  Set<String> _filterCategoryIds = {};
+  Set<String> _filterBrandIds = {};
+  Set<String> _filterStatuses = {};
   bool _isSearching = false;
   bool _selectionMode = false;
   final Set<String> _selectedIds = {};
@@ -89,7 +91,7 @@ class _ProductsPageState extends ConsumerState<ProductsPage> {
     setState(() => _loadingMore = false);
     if (failure != null) {
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Could not load more products.')),
+        const SnackBar(content: Text('Unable to load more products.')),
       );
     }
   }
@@ -108,17 +110,21 @@ class _ProductsPageState extends ConsumerState<ProductsPage> {
     final q = _searchController.text;
     ref.read(productsProvider.notifier).search(
           q,
-          categoryId: _filterCategoryId,
-          brandId: _filterBrandId,
-          status: _filterStatus,
+          categoryIds: _filterCategoryIds.toList(),
+          brandIds: _filterBrandIds.toList(),
+          statuses: _filterStatuses.toList(),
         );
   }
 
-  void _onFilterChanged({String? categoryId, String? brandId, String? status}) {
+  void _onFilterChanged({
+    required Set<String> categoryIds,
+    required Set<String> brandIds,
+    required Set<String> statuses,
+  }) {
     setState(() {
-      _filterCategoryId = categoryId;
-      _filterBrandId = brandId;
-      _filterStatus = status;
+      _filterCategoryIds = categoryIds;
+      _filterBrandIds = brandIds;
+      _filterStatuses = statuses;
     });
     _applyFilters();
   }
@@ -327,9 +333,9 @@ class _ProductsPageState extends ConsumerState<ProductsPage> {
                       _FilterRow(
                         categories: categories,
                         brands: brands,
-                        selectedCategoryId: _filterCategoryId,
-                        selectedBrandId: _filterBrandId,
-                        selectedStatus: _filterStatus,
+                        selectedCategoryIds: _filterCategoryIds,
+                        selectedBrandIds: _filterBrandIds,
+                        selectedStatuses: _filterStatuses,
                         onChanged: _onFilterChanged,
                       ),
                       const SizedBox(height: 12),
@@ -451,9 +457,8 @@ class _ProductsPageState extends ConsumerState<ProductsPage> {
         child: AppListSkeleton(),
       ),
       error: (e, _) => AppErrorState(
-        title: "We couldn't load products",
-        body: 'We couldn\'t reach the server. Your data is safe — '
-            'try again in a moment.',
+        title: "Unable to load products",
+        body: 'Unable to reach the server. Try again in a moment.',
         onRetry: _applyFilters,
       ),
       data: (products) {
@@ -601,26 +606,38 @@ class _ToolIcon extends StatelessWidget {
   }
 }
 
+const _statusOptions = [
+  ('ACTIVE', 'Active'),
+  ('INACTIVE', 'Inactive'),
+  ('DISCONTINUED', 'Discontinued'),
+];
+
 class _FilterRow extends StatelessWidget {
   const _FilterRow({
     required this.categories,
     required this.brands,
-    required this.selectedCategoryId,
-    required this.selectedBrandId,
-    required this.selectedStatus,
+    required this.selectedCategoryIds,
+    required this.selectedBrandIds,
+    required this.selectedStatuses,
     required this.onChanged,
   });
 
   final List<Category> categories;
   final List<Brand> brands;
-  final String? selectedCategoryId;
-  final String? selectedBrandId;
-  final String? selectedStatus;
-  final void Function({String? categoryId, String? brandId, String? status})
-      onChanged;
+  final Set<String> selectedCategoryIds;
+  final Set<String> selectedBrandIds;
+  final Set<String> selectedStatuses;
+  final void Function({
+    required Set<String> categoryIds,
+    required Set<String> brandIds,
+    required Set<String> statuses,
+  }) onChanged;
 
   @override
   Widget build(BuildContext context) {
+    final categoryOptions = [for (final c in categories) (c.id, c.name)];
+    final brandOptions = [for (final b in brands) (b.id, b.name)];
+
     return Align(
       alignment: Alignment.centerLeft,
       child: Wrap(
@@ -628,205 +645,181 @@ class _FilterRow extends StatelessWidget {
         runSpacing: 8,
         children: [
           _DropdownChip(
-            label: selectedCategoryId != null
-                ? categories
-                        .where((c) => c.id == selectedCategoryId)
-                        .firstOrNull
-                        ?.name ??
-                    'Category'
-                : 'Category',
-            active: selectedCategoryId != null,
-            onClear: selectedCategoryId != null
-                ? () => onChanged(
-                    categoryId: null,
-                    brandId: selectedBrandId,
-                    status: selectedStatus)
+            label: _chipLabel('Category', selectedCategoryIds, categoryOptions),
+            active: selectedCategoryIds.isNotEmpty,
+            onClear: selectedCategoryIds.isNotEmpty
+                ? () => _emit(categoryIds: const {})
                 : null,
-            onTap: () => _showCategoryPicker(context),
+            onTap: () => _pick(
+              context,
+              title: 'Category',
+              allLabel: 'All categories',
+              hint: 'Search categories',
+              options: categoryOptions,
+              selected: selectedCategoryIds,
+              apply: (picked) => _emit(categoryIds: picked),
+            ),
           ),
           _DropdownChip(
-            label: selectedBrandId != null
-                ? brands
-                        .where((b) => b.id == selectedBrandId)
-                        .firstOrNull
-                        ?.name ??
-                    'Brand'
-                : 'Brand',
-            active: selectedBrandId != null,
-            onClear: selectedBrandId != null
-                ? () => onChanged(
-                    categoryId: selectedCategoryId,
-                    brandId: null,
-                    status: selectedStatus)
+            label: _chipLabel('Brand', selectedBrandIds, brandOptions),
+            active: selectedBrandIds.isNotEmpty,
+            onClear: selectedBrandIds.isNotEmpty
+                ? () => _emit(brandIds: const {})
                 : null,
-            onTap: () => _showBrandPicker(context),
+            onTap: () => _pick(
+              context,
+              title: 'Brand',
+              allLabel: 'All brands',
+              hint: 'Search brands',
+              options: brandOptions,
+              selected: selectedBrandIds,
+              apply: (picked) => _emit(brandIds: picked),
+            ),
           ),
           _DropdownChip(
-            label: _statusLabel(selectedStatus),
-            active: selectedStatus != null,
-            onClear: selectedStatus != null
-                ? () => onChanged(
-                    categoryId: selectedCategoryId,
-                    brandId: selectedBrandId,
-                    status: null)
+            label: _chipLabel('Status', selectedStatuses, _statusOptions),
+            active: selectedStatuses.isNotEmpty,
+            onClear: selectedStatuses.isNotEmpty
+                ? () => _emit(statuses: const {})
                 : null,
-            onTap: () => _showStatusPicker(context),
+            onTap: () => _pick(
+              context,
+              title: 'Status',
+              allLabel: 'All statuses',
+              hint: 'Search statuses',
+              options: _statusOptions,
+              selected: selectedStatuses,
+              apply: (picked) => _emit(statuses: picked),
+            ),
           ),
         ],
       ),
     );
   }
 
-  String _statusLabel(String? status) {
-    switch (status) {
-      case 'ACTIVE':
-        return 'Active';
-      case 'INACTIVE':
-        return 'Inactive';
-      case 'DISCONTINUED':
-        return 'Discontinued';
-      default:
-        return 'Status';
+  /// Emits all three groups, replacing only the one that changed.
+  void _emit({
+    Set<String>? categoryIds,
+    Set<String>? brandIds,
+    Set<String>? statuses,
+  }) =>
+      onChanged(
+        categoryIds: categoryIds ?? selectedCategoryIds,
+        brandIds: brandIds ?? selectedBrandIds,
+        statuses: statuses ?? selectedStatuses,
+      );
+
+  /// One pick → its name; several → "Brand · 3"; none → the group name.
+  String _chipLabel(
+    String base,
+    Set<String> selected,
+    List<(String, String)> options,
+  ) {
+    if (selected.isEmpty) return base;
+    if (selected.length == 1) {
+      return options.where((o) => o.$1 == selected.first).firstOrNull?.$2 ??
+          base;
     }
+    return '$base · ${selected.length}';
   }
 
-  void _showCategoryPicker(BuildContext context) {
-    showAppSheet<void>(
+  Future<void> _pick(
+    BuildContext context, {
+    required String title,
+    required String allLabel,
+    required String hint,
+    required List<(String, String)> options,
+    required Set<String> selected,
+    required void Function(Set<String>) apply,
+  }) async {
+    final picked = await showAppSheet<Set<String>>(
       context: context,
-      builder: (ctx) => _PickerSheet(
-        title: 'Category',
-        allLabel: 'All categories',
-        onAll: () {
-          Navigator.of(ctx).pop();
-          onChanged(
-              categoryId: null,
-              brandId: selectedBrandId,
-              status: selectedStatus);
-        },
-        options: [
-          for (final c in categories)
-            _PickerOption(
-              label: c.name,
-              selected: c.id == selectedCategoryId,
-              onTap: () {
-                Navigator.of(ctx).pop();
-                onChanged(
-                    categoryId: c.id,
-                    brandId: selectedBrandId,
-                    status: selectedStatus);
-              },
-            ),
-        ],
+      builder: (_) => _MultiPickerSheet(
+        title: title,
+        allLabel: allLabel,
+        searchHint: hint,
+        options: options,
+        selected: selected,
       ),
     );
-  }
-
-  void _showBrandPicker(BuildContext context) {
-    showAppSheet<void>(
-      context: context,
-      builder: (ctx) => _PickerSheet(
-        title: 'Brand',
-        allLabel: 'All brands',
-        onAll: () {
-          Navigator.of(ctx).pop();
-          onChanged(
-              categoryId: selectedCategoryId,
-              brandId: null,
-              status: selectedStatus);
-        },
-        options: [
-          for (final b in brands)
-            _PickerOption(
-              label: b.name,
-              selected: b.id == selectedBrandId,
-              onTap: () {
-                Navigator.of(ctx).pop();
-                onChanged(
-                    categoryId: selectedCategoryId,
-                    brandId: b.id,
-                    status: selectedStatus);
-              },
-            ),
-        ],
-      ),
-    );
-  }
-
-  void _showStatusPicker(BuildContext context) {
-    showAppSheet<void>(
-      context: context,
-      builder: (ctx) => _PickerSheet(
-        title: 'Status',
-        allLabel: 'All',
-        onAll: () {
-          Navigator.of(ctx).pop();
-          onChanged(
-              categoryId: selectedCategoryId,
-              brandId: selectedBrandId,
-              status: null);
-        },
-        options: [
-          for (final s in const ['ACTIVE', 'INACTIVE', 'DISCONTINUED'])
-            _PickerOption(
-              label: _statusLabel(s),
-              selected: s == selectedStatus,
-              onTap: () {
-                Navigator.of(ctx).pop();
-                onChanged(
-                    categoryId: selectedCategoryId,
-                    brandId: selectedBrandId,
-                    status: s);
-              },
-            ),
-        ],
-      ),
-    );
+    // Dismissed without applying — leave the filter as it was.
+    if (picked == null) return;
+    apply(picked);
   }
 }
 
-class _PickerOption {
-  const _PickerOption(
-      {required this.label, required this.selected, required this.onTap});
-  final String label;
-  final bool selected;
-  final VoidCallback onTap;
-}
-
-class _PickerSheet extends StatelessWidget {
-  const _PickerSheet({
+/// Searchable multi-select sheet. Picks are held locally and only handed back
+/// on Apply, so toggling five options costs one query instead of five.
+class _MultiPickerSheet extends StatefulWidget {
+  const _MultiPickerSheet({
     required this.title,
     required this.allLabel,
-    required this.onAll,
+    required this.searchHint,
     required this.options,
+    required this.selected,
   });
 
   final String title;
   final String allLabel;
-  final VoidCallback onAll;
-  final List<_PickerOption> options;
+  final String searchHint;
+  final List<(String, String)> options;
+  final Set<String> selected;
+
+  @override
+  State<_MultiPickerSheet> createState() => _MultiPickerSheetState();
+}
+
+class _MultiPickerSheetState extends State<_MultiPickerSheet> {
+  final _search = TextEditingController();
+  late final Set<String> _sel = {...widget.selected};
+
+  @override
+  void initState() {
+    super.initState();
+    _search.addListener(_onQueryChanged);
+  }
+
+  @override
+  void dispose() {
+    _search.removeListener(_onQueryChanged);
+    _search.dispose();
+    super.dispose();
+  }
+
+  void _onQueryChanged() => setState(() {});
+
+  void _toggle(String id) => setState(() {
+        if (!_sel.remove(id)) _sel.add(id);
+      });
 
   @override
   Widget build(BuildContext context) {
     final lum = context.lum;
+    final q = _search.text.trim().toLowerCase();
+    final visible = q.isEmpty
+        ? widget.options
+        : widget.options
+            .where((o) => o.$2.toLowerCase().contains(q))
+            .toList();
+
     Widget row(String label, bool selected, VoidCallback onTap) => InkWell(
           onTap: onTap,
           borderRadius: BorderRadius.circular(AppRadius.md),
           child: Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 14),
+            padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 12),
             child: Row(
               children: [
+                AppCheckbox(value: selected, onChanged: (_) => onTap()),
+                const SizedBox(width: 12),
                 Expanded(
                   child: Text(
                     label,
                     style: AppTypography.body.copyWith(
                       color: lum.textPrimary,
-                      fontWeight:
-                          selected ? FontWeight.w600 : FontWeight.w400,
+                      fontWeight: selected ? FontWeight.w600 : FontWeight.w400,
                     ),
                   ),
                 ),
-                if (selected)
-                  Icon(LucideIcons.check, size: 18, color: lum.accent),
               ],
             ),
           ),
@@ -834,11 +827,55 @@ class _PickerSheet extends StatelessWidget {
 
     return Column(
       mainAxisSize: MainAxisSize.min,
+      crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
-        AppSheetHeader(title: title),
-        row(allLabel, options.every((o) => !o.selected), onAll),
-        for (final o in options) row(o.label, o.selected, o.onTap),
-        const SizedBox(height: 8),
+        AppSheetHeader(title: widget.title),
+        AppSearchField(controller: _search, hint: widget.searchHint),
+        const SizedBox(height: 6),
+        // Bounded so a long list scrolls inside the sheet instead of growing it.
+        ConstrainedBox(
+          constraints: const BoxConstraints(maxHeight: 320),
+          child: visible.isEmpty
+              ? Padding(
+                  padding: const EdgeInsets.symmetric(vertical: 24),
+                  child: Text(
+                    'No matches',
+                    textAlign: TextAlign.center,
+                    style: AppTypography.subhead.copyWith(color: lum.g500),
+                  ),
+                )
+              : ListView.builder(
+                  shrinkWrap: true,
+                  // The "all" row only makes sense on the unfiltered list.
+                  itemCount: visible.length + (q.isEmpty ? 1 : 0),
+                  itemBuilder: (_, i) {
+                    if (q.isEmpty && i == 0) {
+                      return row(
+                        widget.allLabel,
+                        _sel.isEmpty,
+                        () => setState(_sel.clear),
+                      );
+                    }
+                    final o = visible[q.isEmpty ? i - 1 : i];
+                    return row(o.$2, _sel.contains(o.$1), () => _toggle(o.$1));
+                  },
+                ),
+        ),
+        const SizedBox(height: 12),
+        Row(
+          children: [
+            Text(
+              _sel.isEmpty ? 'None selected' : '${_sel.length} selected',
+              style: AppTypography.footnote.copyWith(color: lum.g500),
+            ),
+            const Spacer(),
+            AppButton(
+              label: 'Apply',
+              size: AppButtonSize.sm,
+              onPressed: () => Navigator.of(context).pop(_sel),
+            ),
+          ],
+        ),
       ],
     );
   }

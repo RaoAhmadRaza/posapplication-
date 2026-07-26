@@ -75,7 +75,7 @@ class _AdjustmentsPageState extends ConsumerState<AdjustmentsPage> {
     return state.when(
       loading: () => const AppListSkeleton(),
       error: (e, _) => AppErrorState(
-        title: "We couldn't load adjustments",
+        title: "Unable to load adjustments",
         body: 'Please try again in a moment.',
         onRetry: () => ref.invalidate(adjustmentsProvider),
       ),

@@ -9,6 +9,7 @@ import '../../domain/usecases/submit_po.dart';
 import '../../domain/usecases/approve_po.dart';
 import '../../domain/usecases/cancel_po.dart';
 import '../../domain/usecases/receive_goods.dart';
+import 'purchase_order_detail_provider.dart';
 
 final purchaseOrdersProvider =
     AsyncNotifierProvider<PurchaseOrdersController, List<PurchaseOrder>>(
@@ -92,6 +93,11 @@ class PurchaseOrdersController extends AsyncNotifier<List<PurchaseOrder>> {
         .call(poId: poId, notes: notes, items: items);
     if (failure != null) return (null, failure);
     ref.invalidateSelf();
+    // The receipt changes this PO's status, per-line received qtys and GRN
+    // list — invalidate here, not at the call site, so every screen showing
+    // the PO (detail, receive, invoice match) reloads whoever triggered it.
+    ref.invalidate(purchaseOrderDetailProvider(poId));
+    ref.invalidate(poGrnsProvider(poId));
     return (result, null);
   }
 }

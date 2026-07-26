@@ -9,17 +9,21 @@ import '../../../../core/design/widgets/app_card.dart';
 import '../../../../core/widgets/module_scaffold.dart';
 import '../../../../core/widgets/permission_gate.dart';
 
-/// One report entry on the hub.
+/// One report card on the hub.
 class _Row {
-  const _Row(this.icon, this.title, this.desc, this.route, {this.external = false});
+  const _Row(this.icon, this.title, this.desc, this.route,
+      {this.external = false, this.isNew = false});
   final IconData icon;
   final String title;
   final String desc;
   final String route;
 
-  /// True for rows that leave the module (open in Accounting) — shown with an
-  /// up-right chevron instead of the in-module right chevron.
+  /// True for cards that leave the module (open in Accounting) — marked with a
+  /// small up-right arrow in the card's top corner.
   final bool external;
+
+  /// Draws an accent border + "New" pill. One card at most, by design.
+  final bool isNew;
 }
 
 class ReportsHubPage extends StatelessWidget {
@@ -38,7 +42,7 @@ class ReportsHubPage extends StatelessWidget {
         _Row(LucideIcons.lineChart, 'Forecasting', '7-day sales projection',
             '/reports/forecast'),
         _Row(LucideIcons.sparkles, 'Smart insights', 'Suggested actions',
-            '/reports/insights'),
+            '/reports/insights', isNew: true),
       ],
     ),
     (
@@ -92,7 +96,7 @@ class ReportsHubPage extends StatelessWidget {
           children: [
             Center(
               child: ConstrainedBox(
-                constraints: const BoxConstraints(maxWidth: 720),
+                constraints: const BoxConstraints(maxWidth: 960),
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.stretch,
                   children: [
@@ -134,13 +138,21 @@ class _Section extends StatelessWidget {
             ),
           ),
         ),
-        AppCard(
-          padding: EdgeInsets.zero,
-          child: Column(
-            children: [
-              for (var i = 0; i < rows.length; i++)
-                _HubRow(row: rows[i], first: i == 0),
-            ],
+        LayoutBuilder(
+          builder: (context, c) => GridView.builder(
+            shrinkWrap: true,
+            padding: EdgeInsets.zero,
+            physics: const NeverScrollableScrollPhysics(),
+            itemCount: rows.length,
+            gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
+              crossAxisCount: c.maxWidth >= 700 ? 3 : (c.maxWidth >= 460 ? 2 : 1),
+              mainAxisSpacing: 14,
+              crossAxisSpacing: 14,
+              // Fixed extent rather than an aspect ratio so a card is the same
+              // height whatever the column width (~square at 3-up desktop).
+              mainAxisExtent: 152,
+            ),
+            itemBuilder: (context, i) => _HubCard(row: rows[i]),
           ),
         ),
       ],
@@ -148,29 +160,25 @@ class _Section extends StatelessWidget {
   }
 }
 
-class _HubRow extends StatelessWidget {
-  const _HubRow({required this.row, required this.first});
+class _HubCard extends StatelessWidget {
+  const _HubCard({required this.row});
 
   final _Row row;
-  final bool first;
 
   @override
   Widget build(BuildContext context) {
     final lum = context.lum;
-    return Semantics(
-      button: true,
-      label: row.title,
-      child: InkWell(
-        onTap: () => context.push(row.route),
-        borderRadius: BorderRadius.circular(AppRadius.lg),
-        child: Container(
-          padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 15),
-          decoration: BoxDecoration(
-            border: first
-                ? null
-                : Border(top: BorderSide(color: lum.hairline)),
-          ),
-          child: Row(
+    final Widget card = AppCard(
+      padding: const EdgeInsets.all(16),
+      onTap: () => context.push(row.route),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        // Icon pinned top, text pinned bottom, so cards keep the same visual
+        // weight however long the subtitle runs.
+        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+        children: [
+          Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               ClayContainer(
                 variant: ClayVariant.soft,
@@ -181,37 +189,66 @@ class _HubRow extends StatelessWidget {
                 height: 42,
                 child: Icon(row.icon, size: 20, color: lum.accent),
               ),
-              const SizedBox(width: 15),
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      row.title,
-                      style: AppTypography.callout.copyWith(
-                        fontSize: 15,
-                        fontWeight: FontWeight.w600,
-                        color: lum.textPrimary,
-                      ),
+              const Spacer(),
+              if (row.isNew)
+                Container(
+                  padding:
+                      const EdgeInsets.symmetric(horizontal: 7, vertical: 3),
+                  decoration: BoxDecoration(
+                    color: lum.accentSoft,
+                    borderRadius: BorderRadius.circular(AppRadius.pill),
+                  ),
+                  child: Text(
+                    'New',
+                    style: AppTypography.caption.copyWith(
+                      fontSize: 10,
+                      fontWeight: FontWeight.w700,
+                      color: lum.accent,
                     ),
-                    const SizedBox(height: 2),
-                    Text(
-                      row.desc,
-                      style: AppTypography.footnote.copyWith(color: lum.g500),
-                    ),
-                  ],
+                  ),
+                )
+              else if (row.external)
+                Icon(LucideIcons.arrowUpRight, size: 16, color: lum.g400),
+            ],
+          ),
+          Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                row.title,
+                style: AppTypography.callout.copyWith(
+                  fontSize: 15,
+                  fontWeight: FontWeight.w600,
+                  color: lum.textPrimary,
                 ),
               ),
-              const SizedBox(width: 12),
-              Icon(
-                row.external ? LucideIcons.arrowUpRight : LucideIcons.chevronRight,
-                size: 18,
-                color: lum.g400,
+              const SizedBox(height: 3),
+              Text(
+                row.desc,
+                maxLines: 2,
+                overflow: TextOverflow.ellipsis,
+                style: AppTypography.footnote.copyWith(color: lum.g500),
               ),
             ],
           ),
-        ),
+        ],
       ),
+    );
+    return Semantics(
+      button: true,
+      label: row.title,
+      child: row.isNew
+          ? DecoratedBox(
+              position: DecorationPosition.foreground,
+              decoration: BoxDecoration(
+                borderRadius: BorderRadius.circular(AppRadius.lg),
+                border: Border.all(
+                  color: lum.accent.withValues(alpha: 0.45),
+                ),
+              ),
+              child: card,
+            )
+          : card,
     );
   }
 }

@@ -187,7 +187,7 @@ class _ReceiptSlip extends ConsumerWidget {
             _MetaLine(label: 'Paid', value: paidAmount),
           const _DashedRule(),
           Text(
-            'Thank you — see you again.',
+            'Thank you for your business.',
             textAlign: TextAlign.center,
             style: AppTypography.caption.copyWith(
               height: 1.6,

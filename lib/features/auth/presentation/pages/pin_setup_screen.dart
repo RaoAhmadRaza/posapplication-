@@ -53,7 +53,7 @@ class _PinSetupScreenState extends State<PinSetupScreen> {
       setState(() {
         _loading = false;
         _firstPin = null;
-        _errorMessage = 'Could not save your PIN. Please try again.';
+        _errorMessage = 'Unable to save your PIN. Please try again.';
       });
       return;
     }

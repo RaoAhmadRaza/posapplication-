@@ -1,12 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:lucide_icons_flutter/lucide_icons.dart';
-import '../../../../core/design/widgets/app_button.dart';
 import '../../../../core/design/widgets/app_pill.dart';
 import '../../../../core/design/widgets/app_states.dart';
-import '../../../../core/design/widgets/app_toast.dart';
 import '../../../../core/design/widgets/app_detail_scaffold.dart';
-import '../../../../core/widgets/permission_gate.dart';
 import '../controllers/reports_controller.dart';
 import '../widgets/acct_report_table.dart';
 import '../widgets/report_filters.dart';
@@ -30,20 +26,6 @@ class _TrialBalancePageState extends ConsumerState<TrialBalancePage> {
     return AppDetailScaffold(
       eyebrow: 'Accounting',
       title: 'Trial balance',
-      actions: [
-        PermissionGate(
-          module: 'accounting',
-          action: 'export',
-          child: AppButton(
-            label: 'Export',
-            variant: AppButtonVariant.tinted,
-            size: AppButtonSize.sm,
-            icon: LucideIcons.download,
-            onPressed: () =>
-                showAppToast(context, 'Export coming soon'),
-          ),
-        ),
-      ],
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
@@ -69,8 +51,8 @@ class _TrialBalancePageState extends ConsumerState<TrialBalancePage> {
             error: (e, _) => Padding(
               padding: const EdgeInsets.only(top: 30),
               child: AppErrorState(
-                title: 'Couldn\'t load report',
-                body: 'Your data is safe. Check the connection and try again.',
+                title: 'Unable to load report',
+                body: 'Check your connection and try again.',
                 onRetry: () => ref.invalidate(
                     trialBalanceProvider((asOf: _asOf, branchId: _branchId))),
               ),

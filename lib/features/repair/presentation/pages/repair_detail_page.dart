@@ -77,7 +77,7 @@ class RepairDetailPage extends ConsumerWidget {
         loading: () => const Center(child: CircularProgressIndicator()),
         error: (e, _) => const Center(
           child: AppInlineBanner(
-            message: 'Could not load this job.',
+            message: 'Unable to load this job.',
             type: BannerType.error,
           ),
         ),

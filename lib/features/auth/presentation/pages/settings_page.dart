@@ -84,7 +84,7 @@ class _ProfileCard extends ConsumerWidget {
 
     if (profileState.hasError || profileState.value == null) {
       return const AppInlineBanner(
-        message: 'Could not load profile.',
+        message: 'Unable to load profile.',
         type: BannerType.error,
       );
     }
@@ -209,13 +209,13 @@ class _SignInSectionState extends ConsumerState<_SignInSection> {
   Widget build(BuildContext context) {
     final themeRow = AppSettingsRow(
       icon: LucideIcons.moon,
-      title: 'Counter mode (dark)',
+      title: 'Dark mode',
       subtitle: 'Easier on the eyes during long or low-light shifts.',
       trailing: ValueListenableBuilder<ThemeMode>(
         valueListenable: ThemeController.mode,
         builder: (context, mode, _) => AppToggle(
           value: mode == ThemeMode.dark,
-          semanticLabel: 'Counter mode',
+          semanticLabel: 'Dark mode',
           onChanged: (on) =>
               ThemeController.set(on ? ThemeMode.dark : ThemeMode.light),
         ),

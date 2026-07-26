@@ -4,7 +4,7 @@ sealed class SettingsFailure {
 
 class SettingsLoadFailure extends SettingsFailure {
   @override
-  String get message => 'Could not load settings.';
+  String get message => 'Unable to load settings.';
 }
 
 class SettingsPermissionFailure extends SettingsFailure {

@@ -52,7 +52,7 @@ class CountsPage extends ConsumerWidget {
       child: state.when(
         loading: () => const AppListSkeleton(),
         error: (e, _) => AppErrorState(
-          title: "We couldn't load counts",
+          title: "Unable to load counts",
           body: 'Please try again in a moment.',
           onRetry: () => ref.invalidate(countsProvider),
         ),

@@ -48,8 +48,8 @@ class ExpensesPage extends ConsumerWidget {
         error: (e, _) => Padding(
           padding: const EdgeInsets.only(top: 30),
           child: AppErrorState(
-            title: 'Couldn\'t load expenses',
-            body: 'Your data is safe. Check the connection and try again.',
+            title: 'Unable to load expenses',
+            body: 'Check your connection and try again.',
             onRetry: () => ref.read(expensesProvider.notifier).refresh(),
           ),
         ),

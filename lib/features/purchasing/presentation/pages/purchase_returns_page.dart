@@ -47,8 +47,8 @@ class PurchaseReturnsPage extends ConsumerWidget {
           const SizedBox(height: 18),
           switch (state) {
             AsyncError() => AppErrorState(
-                title: 'Could not load purchase returns',
-                body: 'Something went wrong. Check your connection and retry.',
+                title: 'Unable to load purchase returns',
+                body: 'Unable to load suggestions. Check your connection and try again.',
                 onRetry: () =>
                     ref.read(purchaseReturnsProvider.notifier).refresh(),
               ),

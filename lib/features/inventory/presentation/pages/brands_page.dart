@@ -44,7 +44,7 @@ class BrandsPage extends ConsumerWidget {
       child: state.when(
         loading: () => const AppListSkeleton(),
         error: (e, _) => AppErrorState(
-          title: "We couldn't load brands",
+          title: "Unable to load brands",
           body: 'Please try again in a moment.',
           onRetry: () => ref.read(brandsProvider.notifier).refresh(),
         ),

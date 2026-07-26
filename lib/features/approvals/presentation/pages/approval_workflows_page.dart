@@ -57,9 +57,9 @@ class ApprovalWorkflowsPage extends ConsumerWidget {
           async.when(
             loading: () => const AppListSkeleton(rows: 4, rowHeight: 80),
             error: (e, _) => AppErrorState(
-              title: "We couldn't load workflows",
+              title: "Unable to load workflows",
               body:
-                  "We couldn't reach the server. Try again once you're back online.",
+                  "Unable to reach the server. Try again once you're back online.",
               onRetry: () => ref.invalidate(workflowsControllerProvider),
             ),
             data: (rows) {

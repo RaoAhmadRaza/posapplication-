@@ -108,16 +108,16 @@ class _AttendanceGridPageState extends ConsumerState<AttendanceGridPage> {
       loading: () => const Center(child: CircularProgressIndicator()),
       error: (e, _) => const _CenteredState(
         icon: LucideIcons.cloudOff,
-        title: "Couldn't load employees",
-        body: 'Something went wrong reaching the server. Try again in a moment.',
+        title: "Unable to load employees",
+        body: 'Unable to reach the server. Try again in a moment.',
       ),
       data: (employees) => attendanceAsync.when(
         loading: () => const Center(child: CircularProgressIndicator()),
         error: (e, _) => const _CenteredState(
           icon: LucideIcons.cloudOff,
-          title: "Couldn't load attendance",
+          title: "Unable to load attendance",
           body:
-              'Something went wrong reaching the server. Try again in a moment.',
+              'Unable to reach the server. Try again in a moment.',
         ),
         data: (rows) {
           if (employees.isEmpty) {

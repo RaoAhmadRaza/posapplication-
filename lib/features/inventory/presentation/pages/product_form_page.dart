@@ -276,7 +276,7 @@ class _ProductFormPageState extends ConsumerState<ProductFormPage> {
             child: Padding(
               padding: EdgeInsets.all(24),
               child: AppErrorState(
-                title: "We couldn't load the product",
+                title: "Unable to load the product",
                 body: 'Please go back and try again.',
               ),
             ),
@@ -318,7 +318,8 @@ class _ProductFormPageState extends ConsumerState<ProductFormPage> {
           const SizedBox(height: 14),
           AppSectionCard(eyebrow: 'Inventory', child: _buildInventorySection()),
           const SizedBox(height: 14),
-          AppSectionCard(eyebrow: 'Extra info', child: _buildExtraSection()),
+          AppSectionCard(
+              eyebrow: 'Additional details', child: _buildExtraSection()),
           if (!_subSectionsEnabled) ...[
             const SizedBox(height: 12),
             _saveHint(lum),

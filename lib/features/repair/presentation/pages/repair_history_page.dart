@@ -68,7 +68,7 @@ class _RepairHistoryPageState extends ConsumerState<RepairHistoryPage> {
             child: async.when(
               loading: () => const AppListSkeleton(rows: 5, rowHeight: 66),
               error: (e, _) => RepairErrorState(
-                title: 'Could not load history',
+                title: 'Unable to load history',
                 body: 'The closed jobs did not come back. Check the '
                     'connection and try again.',
                 onRetry: () => ref.invalidate(closedRepairJobsProvider),

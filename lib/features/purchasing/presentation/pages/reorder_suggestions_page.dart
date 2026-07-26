@@ -53,8 +53,8 @@ class _ReorderSuggestionsPageState
       description: description,
       child: switch (state) {
         AsyncError() => AppErrorState(
-            title: 'Could not load products',
-            body: 'Something went wrong. Check your connection and retry.',
+            title: 'Unable to load suggestions',
+            body: 'Check your connection and try again.',
             onRetry: () => ref.read(productsProvider.notifier).refresh(),
           ),
         AsyncData() when low.isEmpty => const AppEmptyState(

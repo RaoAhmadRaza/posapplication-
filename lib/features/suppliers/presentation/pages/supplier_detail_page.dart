@@ -67,9 +67,8 @@ class SupplierDetailPage extends ConsumerWidget {
         loading: () => const Center(child: CircularProgressIndicator()),
         error: (e, _) => AppErrorState(
           icon: LucideIcons.cloudOff,
-          title: "We couldn't load this supplier",
-          body: 'Something went wrong reaching the server. Your data is safe '
-              '— try again in a moment.',
+          title: "Unable to load this supplier",
+          body: 'Unable to reach the server. Try again in a moment.',
           retryLabel: 'Retry',
           onRetry: () => ref.invalidate(_supplierProvider(supplierId)),
         ),
@@ -124,7 +123,7 @@ class _Body extends ConsumerWidget {
             child: Center(child: CircularProgressIndicator()),
           ),
           error: (e, _) => AppInlineBanner(
-              message: 'Could not load supplier ledger.',
+              message: 'Unable to load supplier ledger.',
               type: BannerType.error),
           data: (ledger) => SupplierLedgerCard(
             ledger: ledger,

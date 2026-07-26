@@ -41,7 +41,7 @@ class StaffInvitesPage extends ConsumerWidget {
           child: Center(child: CircularProgressIndicator()),
         ),
         error: (e, _) => AppErrorState(
-          title: "Couldn't load invites",
+          title: "Unable to load invites",
           body: e is StaffFailure ? e.message : 'Please try again.',
           onRetry: () => ref.read(invitesControllerProvider.notifier).refresh(),
         ),

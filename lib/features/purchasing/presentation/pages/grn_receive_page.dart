@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:go_router/go_router.dart';
 import 'package:lucide_icons_flutter/lucide_icons.dart';
 import '../../../../core/design/app_colors.dart';
 import '../../../../core/design/app_radius.dart';
@@ -184,7 +185,9 @@ class _GrnReceivePageState extends ConsumerState<GrnReceivePage> {
 
     showAppToast(context, 'GRN ${result!.grnNumber} — PO ${result.poStatus}',
         type: BannerType.success);
-    Navigator.of(context).pop();
+    // Straight on to billing: replace (not push) this page so back from the
+    // invoice screen returns to the PO, not to a receive form that is now spent.
+    context.pushReplacement('/purchasing/orders/${widget.poId}/invoice');
   }
 
   @override
@@ -202,7 +205,7 @@ class _GrnReceivePageState extends ConsumerState<GrnReceivePage> {
           child: Center(child: CircularProgressIndicator()),
         ),
         error: (_, _) => AppErrorState(
-          title: 'Could not load',
+          title: 'Unable to load',
           body: 'The purchase order could not be loaded.',
           onRetry: () =>
               ref.invalidate(purchaseOrderDetailProvider(widget.poId)),

@@ -74,7 +74,7 @@ class _ImportProductsPageState extends ConsumerState<ImportProductsPage> {
       // instead of looking like nothing happened.
       if (!mounted) return;
       setState(
-        () => _error = "Couldn't open the file picker. ${e.message ?? e.code}",
+        () => _error = "Unable to open the file picker. ${e.message ?? e.code}",
       );
       return;
     }
@@ -99,7 +99,7 @@ class _ImportProductsPageState extends ConsumerState<ImportProductsPage> {
     }
 
     if (content.trim().isEmpty) {
-      setState(() => _error = 'Could not read file contents.');
+      setState(() => _error = 'Unable to read file contents.');
       return;
     }
 

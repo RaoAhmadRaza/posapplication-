@@ -22,7 +22,7 @@ class SecurityLogsController extends Notifier<AsyncValue<List<Map<String, dynami
       final logs = await ref.read(loadAuditLogsUseCaseProvider).call();
       state = AsyncValue.data(logs);
     } catch (_) {
-      state = AsyncValue.error('Could not load logs.', StackTrace.current);
+      state = AsyncValue.error('Unable to load logs.', StackTrace.current);
     }
   }
 }

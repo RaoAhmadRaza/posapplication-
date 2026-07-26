@@ -153,8 +153,8 @@ class _PurchaseInvoiceMatchPageState
         title: 'Match invoice',
         description: '3-way match',
         child: AppErrorState(
-          title: 'Could not load purchase order',
-          body: 'Something went wrong. Check your connection and retry.',
+          title: 'Unable to load purchase order',
+          body: 'Unable to load suggestions. Check your connection and try again.',
           onRetry: () =>
               ref.invalidate(purchaseOrderDetailProvider(widget.poId)),
         ),
@@ -507,7 +507,7 @@ class _InvoiceFormColumn extends StatelessWidget {
         ),
       ),
       error: (_, _) => AppInlineBanner(
-          message: 'Could not load GRNs.', type: BannerType.info),
+          message: 'Unable to load GRNs.', type: BannerType.info),
       data: (grns) => AppDropdown<String?>(
         value: grnId,
         placeholder: 'None',

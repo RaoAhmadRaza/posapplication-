@@ -9,7 +9,7 @@ Future<void> _openStatusSheet(
       mainAxisSize: MainAxisSize.min,
       children: [
         const RepairSheetHeader(
-          title: 'Move to',
+          title: 'Move to stage',
           subtitle: 'Pick the next stage for this job.',
         ),
         for (final s in RepairStatus.values)
@@ -245,7 +245,7 @@ Future<void> _openAddPart(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       mainAxisSize: MainAxisSize.min,
       children: [
-        RepairSheetHeader(title: product.name, subtitle: 'How many?'),
+        RepairSheetHeader(title: product.name, subtitle: 'Quantity'),
         AppTextField(
           controller: qtyCtrl,
           label: 'Quantity',
@@ -298,7 +298,7 @@ Future<void> _viewSignature(
   if (!context.mounted) return;
   if (failure != null || url == null) {
     ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-        content: Text(failure?.message ?? 'Could not load signature.')));
+        content: Text(failure?.message ?? 'Unable to load signature.')));
     return;
   }
   await showRepairSheet<void>(

@@ -71,9 +71,8 @@ class _CommunicationLogsPageState extends ConsumerState<CommunicationLogsPage> {
               child: Center(child: CircularProgressIndicator()),
             ),
             error: (e, _) => AppErrorState(
-              title: 'Could not load logs',
-              body: 'Something went wrong while loading the message history. '
-                  'Try again.',
+              title: 'Unable to load the message history',
+              body: 'Check your connection and try again.',
               onRetry: () =>
                   ref.read(communicationLogProvider.notifier).refresh(),
             ),

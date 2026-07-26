@@ -33,7 +33,7 @@ class TechnicianWorkloadPage extends ConsumerWidget {
       child: async.when(
         loading: () => const Center(child: CircularProgressIndicator()),
         error: (e, _) => RepairErrorState(
-          title: 'Could not load workload',
+          title: 'Unable to load workload',
           body: 'The technician figures did not come back. Check the '
               'connection and try again.',
           onRetry: () => ref.invalidate(technicianWorkloadProvider),

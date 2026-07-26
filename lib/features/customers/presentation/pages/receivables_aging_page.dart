@@ -57,9 +57,8 @@ class ReceivablesAgingPage extends ConsumerWidget {
         loading: () => const Center(child: CircularProgressIndicator()),
         error: (e, _) => AppErrorState(
           icon: LucideIcons.cloudOff,
-          title: "We couldn't load receivables",
-          body: 'Something went wrong reaching the server. Your data is safe '
-              '— try again in a moment.',
+          title: "Unable to load receivables",
+          body: 'Unable to reach the server. Try again in a moment.',
           retryLabel: 'Retry',
           onRetry: () => ref.invalidate(receivablesAgingProvider),
         ),

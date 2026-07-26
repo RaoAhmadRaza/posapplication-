@@ -41,9 +41,9 @@ class ApprovalDetailPage extends ConsumerWidget {
         eyebrow: 'Approvals',
         title: 'Request',
         child: AppErrorState(
-          title: "We couldn't load this request",
+          title: "Unable to load this request",
           body:
-              "We couldn't reach the server. Try again once you're back online.",
+              "Unable to reach the server. Try again once you're back online.",
           onRetry: () => ref.invalidate(approvalDetailProvider(requestId)),
         ),
       ),

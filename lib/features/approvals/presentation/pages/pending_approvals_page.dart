@@ -81,9 +81,9 @@ class _PendingApprovalsPageState extends ConsumerState<PendingApprovalsPage> {
                 ),
                 error: (e, _) => _scrollable(
                   AppErrorState(
-                    title: "We couldn't load approvals",
+                    title: "Unable to load approvals",
                     body:
-                        "We couldn't reach the server. Nothing is lost — pull to refresh once you're back online.",
+                        "Unable to reach the server. Pull to refresh once you are back online.",
                     onRetry: () => ref
                         .read(pendingApprovalsControllerProvider.notifier)
                         .refresh(),

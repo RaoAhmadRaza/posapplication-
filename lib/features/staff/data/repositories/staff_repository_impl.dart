@@ -276,7 +276,7 @@ class StaffRepositoryImpl implements StaffRepository {
         return (
           null,
           StaffValidationFailure(
-              'Could not create your account. The email may already be in use, or the password is too weak.')
+              'Unable to create your account. The email may already be in use, or the password is too weak.')
         );
       }
       return (null, _mapError(e));

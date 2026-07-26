@@ -42,7 +42,7 @@ class BarcodeTemplatesPage extends ConsumerWidget {
       child: state.when(
         loading: () => const AppListSkeleton(),
         error: (e, _) => AppErrorState(
-          title: "We couldn't load templates",
+          title: "Unable to load templates",
           body: 'Please try again in a moment.',
           onRetry: () => ref.read(barcodeTemplatesProvider.notifier).refresh(),
         ),

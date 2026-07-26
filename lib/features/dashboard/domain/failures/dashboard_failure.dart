@@ -4,7 +4,7 @@ sealed class DashboardFailure {
 
 class DashboardLoadFailure extends DashboardFailure {
   @override
-  String get message => 'Could not load dashboard data.';
+  String get message => 'Unable to load dashboard data.';
 }
 
 class DashboardUnknownFailure extends DashboardFailure {

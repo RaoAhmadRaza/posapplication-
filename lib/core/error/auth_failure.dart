@@ -69,7 +69,7 @@ class RecoverySessionExpiredFailure extends AuthFailure {
 
 class ServerErrorFailure extends AuthFailure {
   @override
-  String get message => 'Something went wrong. Please try again later.';
+  String get message => 'The request could not be completed. Please try again later.';
 }
 
 class AccountLockedException implements Exception {

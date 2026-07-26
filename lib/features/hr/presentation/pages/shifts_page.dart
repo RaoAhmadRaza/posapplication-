@@ -48,7 +48,7 @@ class ShiftsPage extends ConsumerWidget {
           child: Center(child: CircularProgressIndicator()),
         ),
         error: (e, _) => const AppInlineBanner(
-          message: 'Could not load shifts.',
+          message: 'Unable to load shifts.',
           type: BannerType.error,
         ),
         data: (shifts) {

@@ -72,9 +72,9 @@ class _PayrollRunsPageState extends ConsumerState<PayrollRunsPage> {
               loading: () =>
                   const Center(child: CircularProgressIndicator()),
               error: (e, _) => AppErrorState(
-                title: "We couldn't load payroll runs",
+                title: "Unable to load payroll runs",
                 body:
-                    "We couldn't reach the server. Try again once you're back online.",
+                    "Unable to reach the server. Try again once you're back online.",
                 onRetry: () => ref.invalidate(payrollRunsProvider),
               ),
               data: (runs) {

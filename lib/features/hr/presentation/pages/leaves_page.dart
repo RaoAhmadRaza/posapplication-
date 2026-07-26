@@ -88,9 +88,8 @@ class _LeavesPageState extends ConsumerState<LeavesPage> {
               ),
               error: (e, _) => AppErrorState(
                 icon: LucideIcons.cloudOff,
-                title: "We couldn't load leave requests",
-                body: 'Something went wrong reaching the server. Your data is '
-                    'safe — try again in a moment.',
+                title: "Unable to load leave requests",
+                body: 'Unable to reach the server. Try again in a moment.',
                 retryLabel: 'Retry',
                 onRetry: () => ref.invalidate(leavesProvider(query)),
               ),

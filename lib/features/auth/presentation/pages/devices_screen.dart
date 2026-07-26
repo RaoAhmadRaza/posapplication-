@@ -74,7 +74,7 @@ class _DevicesContentState extends ConsumerState<_DevicesContent> {
               mainAxisSize: MainAxisSize.min,
               children: [
                 const AppInlineBanner(
-                  message: 'Could not load devices.',
+                  message: 'Unable to load devices.',
                   type: BannerType.error,
                 ),
                 const SizedBox(height: AppSpacing.md),

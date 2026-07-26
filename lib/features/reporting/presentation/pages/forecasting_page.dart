@@ -52,7 +52,7 @@ class ForecastingPage extends ConsumerWidget {
             child: Center(child: CircularProgressIndicator()),
           ),
           error: (_, _) => const AppErrorState(
-            title: 'Couldn’t load the forecast',
+            title: 'Unable to load the forecast',
             body: 'We couldn’t reach the server. Please try again.',
           ),
           data: (rows) => rows.length < 2

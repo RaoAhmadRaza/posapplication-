@@ -35,7 +35,7 @@ class ClockInOutPage extends ConsumerWidget {
           child: Center(child: CircularProgressIndicator()),
         ),
         error: (e, _) => const AppInlineBanner(
-          message: 'Could not load your record.',
+          message: 'Unable to load your record.',
           type: BannerType.error,
         ),
         data: (me) {
@@ -120,7 +120,7 @@ class _ClockBodyState extends ConsumerState<_ClockBody> {
         child: Center(child: CircularProgressIndicator()),
       ),
       error: (e, _) => const AppInlineBanner(
-        message: 'Could not load today.',
+        message: 'Unable to load today.',
         type: BannerType.error,
       ),
       data: (rows) {

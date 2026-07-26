@@ -116,7 +116,7 @@ class _RepairKanbanPageState extends ConsumerState<RepairKanbanPage> {
                   loading: () =>
                       const Center(child: CircularProgressIndicator()),
                   error: (e, _) => RepairErrorState(
-                    title: "We couldn't load repair jobs",
+                    title: "Unable to load repair jobs",
                     body: 'Check your connection and try again. Any jobs you '
                         'created are saved.',
                     onRetry: () =>

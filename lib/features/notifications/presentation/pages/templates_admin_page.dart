@@ -35,7 +35,7 @@ class TemplatesAdminPage extends ConsumerWidget {
           child: Center(child: CircularProgressIndicator()),
         ),
         error: (e, _) => const AppInlineBanner(
-          message: 'Could not load templates.',
+          message: 'Unable to load templates.',
           type: BannerType.error,
         ),
         data: (templates) {

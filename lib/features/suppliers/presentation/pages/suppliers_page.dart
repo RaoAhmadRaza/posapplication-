@@ -89,6 +89,7 @@ class _SuppliersPageState extends ConsumerState<SuppliersPage> {
     return ModuleScaffold(
       title: 'Suppliers',
       maxContentWidth: 1080,
+      leading: _BackToPurchasing(),
       actions: [if (isWide && showControls) newSupplierButton],
       floatingActionButton:
           !isWide && showControls ? _NewSupplierFab() : null,
@@ -127,9 +128,8 @@ class _SuppliersPageState extends ConsumerState<SuppliersPage> {
               ),
               error: (e, _) => AppErrorState(
                 icon: LucideIcons.cloudOff,
-                title: "We couldn't load suppliers",
-                body: 'Something went wrong reaching the server. Your data is '
-                    'safe — try again in a moment.',
+                title: "Unable to load suppliers",
+                body: 'Unable to reach the server. Try again in a moment.',
                 retryLabel: 'Retry',
                 onRetry: () => ref.read(suppliersProvider.notifier).refresh(),
               ),
@@ -202,6 +202,35 @@ class _SuppliersList extends ConsumerWidget {
 }
 
 /// The design's floating pill CTA for narrow layouts.
+/// Suppliers is a rail destination, not a pushed page — there is usually
+/// nothing beneath it to pop to, so this goes to the purchasing hub instead.
+class _BackToPurchasing extends StatelessWidget {
+  @override
+  Widget build(BuildContext context) {
+    final lum = context.lum;
+    return Padding(
+      padding: const EdgeInsets.only(right: 12),
+      child: Semantics(
+        button: true,
+        label: 'Back to purchasing',
+        child: GestureDetector(
+          behavior: HitTestBehavior.opaque,
+          onTap: () => context.go('/purchasing'),
+          child: ClayContainer(
+            variant: ClayVariant.soft,
+            color: lum.surface,
+            borderRadius: AppRadius.sm,
+            isDark: lum.isDark,
+            width: 44,
+            height: 44,
+            child: Icon(LucideIcons.arrowLeft, size: 20, color: lum.g600),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
 class _NewSupplierFab extends StatelessWidget {
   @override
   Widget build(BuildContext context) {

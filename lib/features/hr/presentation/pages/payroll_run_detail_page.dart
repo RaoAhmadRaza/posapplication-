@@ -47,9 +47,9 @@ class PayrollRunDetailPage extends ConsumerWidget {
         eyebrow: 'HR · Payroll',
         title: 'Payroll run',
         child: AppErrorState(
-          title: "We couldn't load the run",
+          title: "Unable to load the run",
           body:
-              "We couldn't reach the server. Try again once you're back online.",
+              "Unable to reach the server. Try again once you're back online.",
           onRetry: () => ref.invalidate(payrollRunDetailProvider(runId)),
         ),
       ),

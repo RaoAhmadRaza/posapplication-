@@ -227,7 +227,7 @@ class _ErrorBody extends StatelessWidget {
       padding: metrics.pad,
       children: [
         AppInlineBanner(
-          message: 'Could not load dashboard.',
+          message: 'Unable to load dashboard.',
           type: BannerType.error,
         ),
         const SizedBox(height: AppSpacing.md),

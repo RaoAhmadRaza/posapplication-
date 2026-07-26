@@ -77,7 +77,7 @@ class _ForgotPasswordPageState extends ConsumerState<ForgotPasswordPage> {
     if (next.hasError && mounted) {
       final msg = next.error is AuthFailure
           ? (next.error as AuthFailure).message
-          : 'Something went wrong. Please try again.';
+          : 'Unable to complete the request. Please try again.';
       setState(() => _errorMessage = msg);
       ref.read(forgotControllerProvider.notifier).clear();
     }

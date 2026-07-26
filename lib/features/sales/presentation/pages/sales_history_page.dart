@@ -117,7 +117,7 @@ class _SalesHistoryPageState extends ConsumerState<SalesHistoryPage> {
       error: (e, _) => const Padding(
         padding: EdgeInsets.only(top: 8),
         child: AppInlineBanner(
-          message: "We couldn't load the sales history. Pull the filters again "
+          message: "Unable to load the sales history. Pull the filters again "
               'once the connection is back.',
         ),
       ),

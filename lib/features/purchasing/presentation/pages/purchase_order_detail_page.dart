@@ -40,8 +40,8 @@ class PurchaseOrderDetailPage extends ConsumerWidget {
           eyebrow: 'Purchase order',
           title: 'Purchase order',
           child: AppErrorState(
-            title: 'Could not load purchase order',
-            body: 'Something went wrong. Check your connection and retry.',
+            title: 'Unable to load purchase order',
+            body: 'Unable to load suggestions. Check your connection and try again.',
             onRetry: () => ref.invalidate(purchaseOrderDetailProvider(poId)),
           ),
         ),

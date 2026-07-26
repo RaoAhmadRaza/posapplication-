@@ -76,7 +76,7 @@ class _UserRolePageState extends ConsumerState<UserRolePage> {
           rolesAsync.when(
             loading: () => const LinearProgressIndicator(),
             error: (_, _) => AppInlineBanner(
-                message: 'Could not load roles.', type: BannerType.error),
+                message: 'Unable to load roles.', type: BannerType.error),
             data: (roles) => Column(
               children: [
                 for (final r in roles)

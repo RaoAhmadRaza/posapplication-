@@ -140,7 +140,7 @@ class ReceiptPdfService {
     return pw.Column(
       crossAxisAlignment: pw.CrossAxisAlignment.center,
       children: [
-        pw.Text('Thank you for your purchase!', style: const pw.TextStyle(fontSize: 9)),
+        pw.Text('Thank you for your business.', style: const pw.TextStyle(fontSize: 9)),
         pw.SizedBox(height: 4),
         pw.Text('Software by Lumina POS', style: pw.TextStyle(fontSize: 7, color: PdfColors.grey600)),
       ],
@@ -171,7 +171,7 @@ class ReceiptPdfService {
     );
 
     if (customerPhone != null && customerPhone.isNotEmpty) {
-      final text = 'Thank you for your purchase!\nInvoice: $invoiceNumber';
+      final text = 'Thank you for your business.\nInvoice: $invoiceNumber';
       final encoded = Uri.encodeComponent('$text — Lumina POS');
       final uri = Uri.parse('https://wa.me/$customerPhone?text=$encoded');
       if (await canLaunchUrl(uri)) {

@@ -255,9 +255,8 @@ class _StockLevelsPageState extends ConsumerState<StockLevelsPage> {
         child: AppListSkeleton(),
       ),
       error: (e, _) => AppErrorState(
-        title: "We couldn't load stock levels",
-        body: 'We couldn\'t reach the server. Your data is safe — '
-            'try again in a moment.',
+        title: "Unable to load stock levels",
+        body: 'Unable to reach the server. Try again in a moment.',
         onRetry: () => ref
             .read(stockLevelsProvider.notifier)
             .load(warehouseId: _selectedWarehouseId),

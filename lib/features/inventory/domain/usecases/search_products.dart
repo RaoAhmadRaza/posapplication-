@@ -10,15 +10,15 @@ class SearchProducts {
 
   Future<(List<Product>, InventoryFailure?)> call(
     String q, {
-    String? categoryId,
-    String? brandId,
-    String? status,
+    List<String>? categoryIds,
+    List<String>? brandIds,
+    List<String>? statuses,
   }) async {
     return _repo.searchProducts(
       q,
-      categoryId: categoryId,
-      brandId: brandId,
-      status: status,
+      categoryIds: categoryIds,
+      brandIds: brandIds,
+      statuses: statuses,
     );
   }
 }

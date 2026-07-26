@@ -55,11 +55,7 @@ class InventoryHubPage extends StatelessWidget {
         child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Text(
-            'One light. Every operation.',
-            style: AppTypography.subhead.copyWith(color: lum.g500),
-          ),
-          const SizedBox(height: 20),
+          const SizedBox(height: 4),
           for (final g in groups) ...[
             Padding(
               padding: const EdgeInsets.only(left: 2, bottom: 12),

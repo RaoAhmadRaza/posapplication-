@@ -393,7 +393,7 @@ class _LevelEditor extends ConsumerWidget {
           const SizedBox(height: 7),
           rolesAsync.hasError
               ? Text(
-                  'Could not load roles.',
+                  'Unable to load roles.',
                   style:
                       AppTypography.caption.copyWith(color: lum.dangerText),
                 )

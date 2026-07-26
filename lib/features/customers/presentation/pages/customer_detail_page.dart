@@ -82,9 +82,8 @@ class CustomerDetailPage extends ConsumerWidget {
         loading: () => const Center(child: CircularProgressIndicator()),
         error: (e, _) => AppErrorState(
           icon: LucideIcons.cloudOff,
-          title: "We couldn't load this customer",
-          body: 'Something went wrong reaching the server. Your data is safe '
-              '— try again in a moment.',
+          title: "Unable to load this customer",
+          body: 'Unable to reach the server. Try again in a moment.',
           retryLabel: 'Retry',
           onRetry: () => ref.invalidate(_customerProvider(customerId)),
         ),
@@ -138,7 +137,7 @@ class _Body extends ConsumerWidget {
             child: Center(child: CircularProgressIndicator()),
           ),
           error: (e, _) => AppInlineBanner(
-              message: 'Could not load customer ledger.',
+              message: 'Unable to load customer ledger.',
               type: BannerType.error),
           data: (ledger) => Column(
             children: [

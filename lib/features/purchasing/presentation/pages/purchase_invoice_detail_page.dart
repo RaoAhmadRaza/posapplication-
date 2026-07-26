@@ -87,7 +87,7 @@ class _Body extends ConsumerWidget {
               padding: EdgeInsets.symmetric(vertical: 16),
               child: Center(child: CircularProgressIndicator()),
             ),
-            error: (e, _) => Text('Could not load payment history.',
+            error: (e, _) => Text('Unable to load payment history.',
                 style: AppTypography.footnote.copyWith(color: lum.dangerText)),
             data: (payments) => payments.isEmpty
                 ? Text('No payments recorded yet.',

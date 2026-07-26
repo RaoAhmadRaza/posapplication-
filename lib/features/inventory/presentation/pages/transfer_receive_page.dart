@@ -114,7 +114,7 @@ class _TransferReceivePageState extends ConsumerState<TransferReceivePage> {
 
     if (_error != null && _items == null) {
       return AppErrorState(
-        title: "We couldn't load this transfer",
+        title: "Unable to load this transfer",
         body: _error!,
         onRetry: _load,
       );

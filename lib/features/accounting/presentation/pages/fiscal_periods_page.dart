@@ -77,8 +77,8 @@ class FiscalPeriodsPage extends ConsumerWidget {
           child: Center(child: CircularProgressIndicator()),
         ),
         error: (e, _) => AppErrorState(
-          title: 'Couldn\'t load periods',
-          body: 'Your data is safe. Check the connection and try again.',
+          title: 'Unable to load periods',
+          body: 'Check your connection and try again.',
           onRetry: () => ref.read(fiscalPeriodsProvider.notifier).refresh(),
         ),
         data: (periods) => periods.isEmpty

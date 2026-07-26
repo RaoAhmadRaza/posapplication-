@@ -193,7 +193,7 @@ class _PurchaseOrderFormPageState
       if (!mounted) return;
       setState(() {
         _loadingExisting = false;
-        _error = 'Could not load purchase order. $e';
+        _error = 'Unable to load purchase order. $e';
       });
     }
   }
@@ -617,7 +617,7 @@ class _PurchaseOrderFormPageState
   /// Everything optional — dates, rate, landed-cost charges, notes.
   Widget _extraInfoCard(BuildContext context) {
     return AppSectionCard(
-      eyebrow: 'Extra info',
+      eyebrow: 'Additional details',
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [

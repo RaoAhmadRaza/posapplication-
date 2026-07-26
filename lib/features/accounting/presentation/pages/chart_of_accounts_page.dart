@@ -78,8 +78,8 @@ class _ChartOfAccountsPageState extends ConsumerState<ChartOfAccountsPage> {
             error: (e, _) => Padding(
               padding: const EdgeInsets.only(top: 40),
               child: AppErrorState(
-                title: 'Couldn\'t load accounts',
-                body: 'Your data is safe. Check the connection and try again.',
+                title: 'Unable to load accounts',
+                body: 'Check your connection and try again.',
                 onRetry: () =>
                     ref.read(chartOfAccountsProvider.notifier).refresh(),
               ),

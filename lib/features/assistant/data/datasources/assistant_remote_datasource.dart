@@ -137,7 +137,7 @@ class AssistantRemoteDataSource {
         return AssistantDone(data['conversation_id'] as String?);
       case 'error':
         return AssistantStreamError(
-            data['message'] as String? ?? 'Something went wrong.');
+            data['message'] as String? ?? 'The request could not be completed.');
       default:
         return null;
     }

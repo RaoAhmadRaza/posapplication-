@@ -132,9 +132,8 @@ class _CustomersPageState extends ConsumerState<CustomersPage> {
               ),
               error: (e, _) => AppErrorState(
                 icon: LucideIcons.cloudOff,
-                title: "We couldn't load customers",
-                body: 'Something went wrong reaching the server. Your data is '
-                    'safe — try again in a moment.',
+                title: "Unable to load customers",
+                body: 'Unable to reach the server. Try again in a moment.',
                 retryLabel: 'Retry',
                 onRetry: () => ref.read(customersProvider.notifier).refresh(),
               ),

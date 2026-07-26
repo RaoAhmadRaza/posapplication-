@@ -30,17 +30,17 @@ abstract class InventoryRepository {
   Future<(bool, InventoryFailure?)> deleteBrand(String id);
 
   Future<(List<Product>, InventoryFailure?)> loadProducts({
-    String? categoryId,
-    String? brandId,
-    String? status,
+    List<String>? categoryIds,
+    List<String>? brandIds,
+    List<String>? statuses,
     int page,
     int pageSize,
   });
   Future<(List<Product>, InventoryFailure?)> searchProducts(
     String q, {
-    String? categoryId,
-    String? brandId,
-    String? status,
+    List<String>? categoryIds,
+    List<String>? brandIds,
+    List<String>? statuses,
   });
   Future<(Product?, InventoryFailure?)> getProduct(String id);
   Future<(Product?, InventoryFailure?)> createProduct(Map<String, dynamic> data);

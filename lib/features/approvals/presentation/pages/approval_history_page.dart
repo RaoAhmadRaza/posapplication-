@@ -56,9 +56,9 @@ class _ApprovalHistoryPageState extends ConsumerState<ApprovalHistoryPage> {
           async.when(
             loading: () => const AppListSkeleton(rows: 4, rowHeight: 96),
             error: (e, _) => AppErrorState(
-              title: "We couldn't load history",
+              title: "Unable to load history",
               body:
-                  "We couldn't reach the server. Try again once you're back online.",
+                  "Unable to reach the server. Try again once you're back online.",
               onRetry: () => ref.invalidate(approvalHistoryProvider),
             ),
             data: (rows) {

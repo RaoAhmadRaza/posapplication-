@@ -88,7 +88,7 @@ class _LoginPageState extends ConsumerState<LoginPage> {
 
     final msg = next.error is AuthFailure
         ? (next.error as AuthFailure).message
-        : 'Something went wrong. Please try again.';
+        : 'Unable to complete the request. Please try again.';
 
     if (next.error is InvalidCredentialsFailure) {
       _startCooldownCheck(_emailController.text.trim());

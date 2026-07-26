@@ -31,8 +31,8 @@ class PurchaseReturnDetailPage extends ConsumerWidget {
           eyebrow: 'Purchase return',
           title: 'Purchase return',
           child: AppErrorState(
-            title: 'Could not load purchase return',
-            body: 'Something went wrong. Check your connection and retry.',
+            title: 'Unable to load purchase return',
+            body: 'Unable to load suggestions. Check your connection and try again.',
             onRetry: () =>
                 ref.invalidate(purchaseReturnDetailProvider(returnId)),
           ),

@@ -66,7 +66,7 @@ class InvoiceDetailPage extends ConsumerWidget {
                   }
                   return const SalesEmptyState(
                     icon: LucideIcons.receiptText,
-                    message: "We couldn't load this invoice. Try again once "
+                    message: "Unable to load this invoice. Try again once "
                         'the connection is back.',
                   );
                 }
@@ -259,7 +259,7 @@ class InvoiceDetailPage extends ConsumerWidget {
                 ),
                 const SizedBox(height: 8),
                 AppButton(
-                  label: 'Keep it',
+                  label: 'Cancel',
                   fullWidth: true,
                   variant: AppButtonVariant.plain,
                   onPressed: () => Navigator.pop(dialogContext, false),

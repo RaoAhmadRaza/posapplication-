@@ -24,7 +24,7 @@ class SessionsController extends Notifier<AsyncValue<List<Map<String, dynamic>>>
       final sessions = await ref.read(listSessionsUseCaseProvider).call();
       state = AsyncValue.data(sessions);
     } catch (_) {
-      state = AsyncValue.error('Could not load sessions.', StackTrace.current);
+      state = AsyncValue.error('Unable to load sessions.', StackTrace.current);
     }
   }
 

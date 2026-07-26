@@ -69,7 +69,7 @@ class _RolesTab extends ConsumerWidget {
         child: Center(child: CircularProgressIndicator()),
       ),
       error: (e, _) => AppErrorState(
-        title: "Couldn't load roles",
+        title: "Unable to load roles",
         body: e is StaffFailure ? e.message : 'Please try again.',
         onRetry: () => ref.read(rolesControllerProvider.notifier).refresh(),
       ),
@@ -105,7 +105,7 @@ class _MembersTab extends ConsumerWidget {
         child: Center(child: CircularProgressIndicator()),
       ),
       error: (e, _) => AppErrorState(
-        title: "Couldn't load members",
+        title: "Unable to load members",
         body: e is StaffFailure ? e.message : 'Please try again.',
         onRetry: () => ref.read(tenantUsersControllerProvider.notifier).refresh(),
       ),

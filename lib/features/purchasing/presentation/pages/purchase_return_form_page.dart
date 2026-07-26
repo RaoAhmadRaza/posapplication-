@@ -213,7 +213,7 @@ class _PurchaseReturnFormPageState
       loading: () => _scaffold(child: const _Loading()),
       error: (_, _) => _scaffold(
         child: AppErrorState(
-          title: 'Could not load order',
+          title: 'Unable to load order',
           body: 'The purchase order could not be loaded.',
           onRetry: () =>
               ref.invalidate(purchaseOrderDetailProvider(widget.poId)),
@@ -225,7 +225,7 @@ class _PurchaseReturnFormPageState
         error: (_, _) => _scaffold(
           description: 'PO ${data.po.poNumber}',
           child: AppErrorState(
-            title: 'Could not load returns',
+            title: 'Unable to load returns',
             body: 'Prior returns for this order could not be loaded.',
             onRetry: () =>
                 ref.invalidate(poReturnedQtysProvider(widget.poId)),

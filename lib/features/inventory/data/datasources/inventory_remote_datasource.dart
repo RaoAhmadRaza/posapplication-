@@ -111,16 +111,23 @@ class InventoryRemoteDataSource {
       ' reorder_qty, weight, is_active, status, image_url, tags';
 
   Future<List<Map<String, dynamic>>> loadProducts({
-    String? categoryId,
-    String? brandId,
-    String? status,
+    List<String>? categoryIds,
+    List<String>? brandIds,
+    List<String>? statuses,
     int page = 0,
     int pageSize = 200,
   }) async {
     var query = _client.from('products').select(_productCols);
-    if (categoryId != null) query = query.eq('category_id', categoryId);
-    if (brandId != null) query = query.eq('brand_id', brandId);
-    if (status != null) query = query.eq('status', status);
+    // Empty list = no filter, same as null (a chip cleared to zero picks).
+    if (categoryIds != null && categoryIds.isNotEmpty) {
+      query = query.inFilter('category_id', categoryIds);
+    }
+    if (brandIds != null && brandIds.isNotEmpty) {
+      query = query.inFilter('brand_id', brandIds);
+    }
+    if (statuses != null && statuses.isNotEmpty) {
+      query = query.inFilter('status', statuses);
+    }
     final from = page * pageSize;
     // Tiebreak on id: created_at alone is not unique (bulk imports share a
     // timestamp), and range() pagination over a non-total order returns the
@@ -133,9 +140,9 @@ class InventoryRemoteDataSource {
 
   Future<List<Map<String, dynamic>>> searchProducts(
     String q, {
-    String? categoryId,
-    String? brandId,
-    String? status,
+    List<String>? categoryIds,
+    List<String>? brandIds,
+    List<String>? statuses,
   }) async {
     final trimmed = q.trim();
     if (trimmed.isEmpty) {
@@ -146,9 +153,15 @@ class InventoryRemoteDataSource {
         .from('products')
         .select(_productCols)
         .or('name.ilike.*$trimmed*,sku.ilike.*$trimmed*,barcode.ilike.$trimmed');
-    if (categoryId != null) query = query.eq('category_id', categoryId);
-    if (brandId != null) query = query.eq('brand_id', brandId);
-    if (status != null) query = query.eq('status', status);
+    if (categoryIds != null && categoryIds.isNotEmpty) {
+      query = query.inFilter('category_id', categoryIds);
+    }
+    if (brandIds != null && brandIds.isNotEmpty) {
+      query = query.inFilter('brand_id', brandIds);
+    }
+    if (statuses != null && statuses.isNotEmpty) {
+      query = query.inFilter('status', statuses);
+    }
     return query.order('name').limit(50);
   }
 

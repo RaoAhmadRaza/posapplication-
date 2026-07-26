@@ -207,7 +207,7 @@ class _RoleFormPageState extends ConsumerState<RoleFormPage> {
               child: Center(child: CircularProgressIndicator()),
             ),
             error: (_, _) => AppInlineBanner(
-                message: 'Could not load permissions.', type: BannerType.error),
+                message: 'Unable to load permissions.', type: BannerType.error),
             data: (items) {
               final byModule = <String, List<String>>{};
               for (final it in items) {

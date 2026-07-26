@@ -455,7 +455,7 @@ class _PriorsCard extends StatelessWidget {
               ),
             ),
             error: (e, _) => AppInlineBanner(
-              message: 'Could not load reconciliations.',
+              message: 'Unable to load reconciliations.',
               type: BannerType.error,
             ),
             data: (items) => items.isEmpty

@@ -17,9 +17,9 @@ class ProductsController extends AsyncNotifier<List<Product>> {
   int _page = 0;
   bool _hasMore = false;
   bool _isSearching = false;
-  String? _curCat;
-  String? _curBrand;
-  String? _curStatus;
+  List<String>? _curCats;
+  List<String>? _curBrands;
+  List<String>? _curStatuses;
 
   /// True only in the paginated browse path (not while searching).
   bool get hasMore => _hasMore && !_isSearching;
@@ -29,7 +29,7 @@ class ProductsController extends AsyncNotifier<List<Product>> {
     final branch = ref.watch(currentBranchProvider);
     _page = 0;
     _isSearching = false;
-    _curCat = _curBrand = _curStatus = null;
+    _curCats = _curBrands = _curStatuses = null;
     final (products, failure) =
         await ref.read(loadProductsUseCaseProvider).call(pageSize: _pageSize);
     if (failure != null) throw failure;
@@ -41,47 +41,51 @@ class ProductsController extends AsyncNotifier<List<Product>> {
   void refresh() => ref.invalidateSelf();
 
   Future<void> load({
-    String? categoryId,
-    String? brandId,
-    String? status,
+    List<String>? categoryIds,
+    List<String>? brandIds,
+    List<String>? statuses,
   }) async {
-    _query(categoryId: categoryId, brandId: brandId, status: status);
+    _query(categoryIds: categoryIds, brandIds: brandIds, statuses: statuses);
   }
 
   Future<void> search(
     String q, {
-    String? categoryId,
-    String? brandId,
-    String? status,
+    List<String>? categoryIds,
+    List<String>? brandIds,
+    List<String>? statuses,
   }) async {
-    _query(q: q, categoryId: categoryId, brandId: brandId, status: status);
+    _query(
+        q: q,
+        categoryIds: categoryIds,
+        brandIds: brandIds,
+        statuses: statuses);
   }
 
   Future<void> _query({
     String? q,
-    String? categoryId,
-    String? brandId,
-    String? status,
+    List<String>? categoryIds,
+    List<String>? brandIds,
+    List<String>? statuses,
   }) async {
     _page = 0;
     _isSearching = q != null && q.trim().isNotEmpty;
-    _curCat = categoryId;
-    _curBrand = brandId;
-    _curStatus = status;
+    _curCats = categoryIds;
+    _curBrands = brandIds;
+    _curStatuses = statuses;
     state = const AsyncValue.loading();
     state = await AsyncValue.guard(() async {
       final branch = ref.read(currentBranchProvider);
       final (results, failure) = _isSearching
           ? await ref.read(searchProductsUseCaseProvider).call(
                 q!.trim(),
-                categoryId: categoryId,
-                brandId: brandId,
-                status: status,
+                categoryIds: categoryIds,
+                brandIds: brandIds,
+                statuses: statuses,
               )
           : await ref.read(loadProductsUseCaseProvider).call(
-                categoryId: categoryId,
-                brandId: brandId,
-                status: status,
+                categoryIds: categoryIds,
+                brandIds: brandIds,
+                statuses: statuses,
                 pageSize: _pageSize,
               );
       if (failure != null) throw failure;
@@ -98,9 +102,9 @@ class ProductsController extends AsyncNotifier<List<Product>> {
     if (_isSearching || !_hasMore) return null;
     final next = _page + 1;
     final (rows, failure) = await ref.read(loadProductsUseCaseProvider).call(
-          categoryId: _curCat,
-          brandId: _curBrand,
-          status: _curStatus,
+          categoryIds: _curCats,
+          brandIds: _curBrands,
+          statuses: _curStatuses,
           page: next,
           pageSize: _pageSize,
         );

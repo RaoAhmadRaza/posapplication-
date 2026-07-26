@@ -16,8 +16,6 @@ class PurchaseHubPage extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final lum = context.lum;
-
     final tiles = <_HubTileData>[
       _HubTileData(
         icon: LucideIcons.clipboardList,
@@ -73,11 +71,7 @@ class PurchaseHubPage extends StatelessWidget {
         child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Text(
-            'One light. Every operation.',
-            style: AppTypography.subhead.copyWith(color: lum.g500),
-          ),
-          const SizedBox(height: 20),
+          const SizedBox(height: 4),
           LayoutBuilder(
             builder: (context, c) {
               final w = c.maxWidth;

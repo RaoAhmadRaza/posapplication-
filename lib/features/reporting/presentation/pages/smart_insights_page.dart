@@ -48,7 +48,7 @@ class SmartInsightsPage extends ConsumerWidget {
       error: (_, _) => const Padding(
         padding: EdgeInsets.all(AppSpacing.screenPadding),
         child: AppErrorState(
-          title: 'Couldn’t load insights',
+          title: 'Unable to load insights',
           body: 'We couldn’t reach the server. Please try again.',
         ),
       ),

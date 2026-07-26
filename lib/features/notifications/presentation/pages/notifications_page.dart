@@ -74,9 +74,8 @@ class _NotificationsPageState extends ConsumerState<NotificationsPage> {
               child: Center(child: CircularProgressIndicator()),
             ),
             error: (e, _) => AppErrorState(
-              title: 'Could not load notifications',
-              body: 'Something went wrong while loading your alerts. '
-                  'Your data is safe — try again.',
+              title: 'Unable to load notifications',
+              body: 'Check your connection and try again.',
               onRetry: () =>
                   ref.read(notificationsControllerProvider.notifier).refresh(),
             ),

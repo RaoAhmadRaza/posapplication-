@@ -206,9 +206,8 @@ class _ImeiLookupPageState extends ConsumerState<ImeiLookupPage> {
     }
     if (_error) {
       return AppErrorState(
-        title: "We couldn't run the lookup",
-        body: 'We couldn\'t reach the server. Your data is safe — '
-            'try again in a moment.',
+        title: "Unable to run the lookup",
+        body: 'Unable to reach the server. Try again in a moment.',
         onRetry: _searchController.text.trim().isEmpty ? _loadAll : _search,
       );
     }

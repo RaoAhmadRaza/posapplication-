@@ -237,7 +237,7 @@ class _ResultsPanel extends ConsumerWidget {
           constraints: const BoxConstraints(maxHeight: 420),
           child: switch (state) {
             AsyncValue(hasError: true) =>
-              _Message(text: "Couldn't run that search"),
+              _Message(text: "Unable to run that search"),
             AsyncValue(:final value?) => value.isEmpty
                 ? const _Message(text: 'No matches')
                 : SingleChildScrollView(

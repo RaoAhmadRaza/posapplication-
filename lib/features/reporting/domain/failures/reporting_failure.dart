@@ -4,7 +4,7 @@ sealed class ReportingFailure {
 
 class ReportingLoadFailure extends ReportingFailure {
   @override
-  String get message => 'Could not load report data.';
+  String get message => 'Unable to load report data.';
 }
 
 class ReportingUnknownFailure extends ReportingFailure {

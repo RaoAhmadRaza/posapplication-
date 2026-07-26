@@ -120,12 +120,30 @@ scratchpad — reference only, NOT importable). Frontend-only; backend/routing/c
 Presentation-only. New shared `core/design/widgets/app_field.dart`: `AppFieldLabel` (one definition of
 the red-asterisk required marker; AppTextField gained `isRequired`) + `AppFieldRow` (fields on one line,
 auto-stacked under `minFieldWidth`). Both forms now lead with required fields and push every optional
-one into a trailing **Extra info** card:
+one into a trailing **Additional details** card:
 - PO form: Supplier*/Order date*/Currency* on one row; line items 4-across (Qty*, Unit cost*, Tax, Disc);
-  Extra info = expected date, exch. rate, freight, insurance, custom duty, order discount, notes.
+  Additional details = expected date, exch. rate, freight, insurance, custom duty, order discount, notes.
 - Product form: Name*/Barcode, Type*/Category/Brand, Cost*/Selling*/Tax/Margin, UoM/reorder pair, Status*;
-  Extra info = description, min price, wholesale, weight, tags. Cost + selling price are now *enforced*
+  Additional details = description, min price, wholesale, weight, tags. Cost + selling price are now *enforced*
   in `_requiredFieldError()` (shared by both save buttons) so the asterisks aren't decorative.
+
+## Copy tone pass — app-wide user-facing strings (DONE 2026-07-26)
+Presentation-only, no logic. ~110 strings across 108 files. Conventions now in force:
+- **One failure vocabulary.** `We couldn't X` / `Couldn't X` / `Could not X` (three spellings, 49 files)
+  all normalised to **`Unable to X`**. Use it for every new error title.
+- **No reassurance padding.** `Your data is safe` (20 files) and `Nothing is lost` deleted — an error
+  screen can't verify the claim. Body is now just the recovery step (`Check your connection and try again.`).
+- **No `Something went wrong`** (24 uses) — name what failed: `Unable to complete the request.`,
+  `Unable to reach the server.`, `Unable to load the message history.`
+- Error title/body must not repeat each other (title = what failed, body = what to do).
+- Dead UI removed: trial balance's `Export coming soon` button (+ its now-orphan imports), the
+  `More themes are on the way.` roadmap line in preferences.
+- Tagline "One light. Every operation." is **splash + auth hero only** — removed from the inventory
+  and purchasing hubs. Not for operational screens.
+- `Counter mode` → `Dark mode` (settings title + toggle semanticLabel). Invented jargon, screen-read aloud.
+- Ambiguous labels: `Move to`→`Move to stage`, `How many?`→`Quantity`, `Extra info`→`Additional details`,
+  `Keep it`→`Cancel` (void-invoice dismiss), `No filter`→`None selected`, IMEI hint spelled out.
+- Receipt (screen + PDF + WhatsApp text): `Thank you for your business.`
 
 ## UI Redesign — dashboard + nav (DONE 2026-07-21; detail in DECISIONS)
 Second design export, SAME design-system UUID as the auth zip → tokens/theme/clay reused UNCHANGED; pure
@@ -397,6 +415,11 @@ Material Scaffold/AppBar — now zero static-colour refs, zero raw chrome, works
   deep-links to `/reports` (hub) via go (a go'd sub-page has no route beneath it, so its back would be
   dead). PermissionGate keys (`reports:read` ×7, `reports:export` ×2) + the `/purchasing/orders/create`
   seed contract unchanged.
+- **Hub = card grid, not rows** (2026-07-26). `reports_hub_page.dart` sections now render a
+  `GridView` (3-up ≥700px, 2-up ≥460, else 1) of 152px-tall cards: 42px accentSoft clay icon badge
+  top, title + subtitle bottom-anchored, no trailing chevron (whole card taps). Smart insights
+  carries an accent foreground border + "New" pill; external (Accounting) cards keep a top-right
+  arrowUpRight. Section overlines, routes and PermissionGate untouched; body measure 720→960.
 - **Charts: fl_chart restyled, not hand-rolled** (user choice). New module widgets wrap fl_chart
   theme-aware: `ReportingBarChart` (rounded rods, value labels via always-on tooltips so they track
   the rod not the container, hairline baseline, no gridbox) and `ReportingLineChart` (2.5px strokes,
@@ -726,6 +749,11 @@ No partials on the Voxa path (tap to start, tap to stop→transcribe). Mics gate
 NOT verified on-device; needs Voxa running/reachable on the Windows box.
 
 ## Known Issues
+- ✓ FIXED 2026-07-26 (DECISIONS): intermittent red-screen on logout (notifyClients "is not our descendant"
+  assertion). AuthController.signOut() cleared the router gate flags before killing the session, so the redirect
+  bounced the still-logged-in user through /workspace-init on the way out — that screen mounted, started loading,
+  then died when SIGNED_OUT landed. Now signOut() only signs out; router.dart's SIGNED_OUT handler owns the reset
+  (currentSession null ⇒ /login in one hop). resetUserScopedState() has one caller now.
 - ✓ FIXED 2026-07-24 (customer-module audit, DECISIONS): (a) customer RLS gate was DEAD — the ungated
   `customers_tenant` ALL-command policy (20260618114258) was never dropped when the gated policies were added
   (20260710134809), so OR'd permissive policies let any tenant user UPDATE/DELETE customers regardless of
@@ -911,6 +939,15 @@ PO-form validation fix (2026-07-20): a line with qty/cost but no product looked 
 silently dropped by _save; if it was the only line the generic "add at least one line" error confused users. Now every
 line is validated individually (product required, qty>0, cost≥0) with a precise message, and the product selector is a
 proper required field that highlights red ("Product required") on save when unset. Device re-run owed.
+Supplier quick-create (2026-07-26): the PO supplier picker (`supplier_picker_sheet.dart`) leads with a "Create new
+supplier" tile opening a nested `showAppSheet` form — required fields only (name, payment terms, currency, opening
+balance; status forced ACTIVE), each `isRequired` so AppFieldLabel's red *, same validation as the full form, plus a
+footnote pointing at the Suppliers page for the rest. Calls `createSupplierUseCaseProvider` directly (needs the created
+row back to auto-select it), then refreshes `suppliersProvider` and pops the picker with the new supplier. Device run owed.
+GRN receipt staleness fix (2026-07-26): `receive()` invalidated only the PO list, so the detail page it pops back to kept
+its cached "Approved"/no-GRN state. It now also invalidates `purchaseOrderDetailProvider(poId)` + `poGrnsProvider(poId)`
+(in the controller — the detail page's own `_refresh` only covered submit/approve/cancel), and on success the receive page
+`pushReplacement`s `/purchasing/orders/:id/invoice` so the flow continues into invoice match. Device run owed.
 
 ### Suppliers CRM (Flutter) — COMPLETE
 `lib/features/suppliers/` full clean-arch: Supplier/SupplierStatus + SupplierLedger/PayablesAging entities; sealed

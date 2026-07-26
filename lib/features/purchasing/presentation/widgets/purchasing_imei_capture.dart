@@ -97,7 +97,7 @@ class PurchasingImeiCapture extends StatelessWidget {
                 controller: input,
                 label: 'Enter IMEI',
                 prefixIcon: LucideIcons.hash,
-                hint: 'Type then add',
+                hint: 'Type the number, then tap Add',
                 keyboardType: TextInputType.number,
                 textInputAction: TextInputAction.done,
                 onSubmitted: onAdd,

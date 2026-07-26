@@ -113,7 +113,7 @@ class _ProductStockDetailPageState
   ) {
     if (_error != null) {
       return AppErrorState(
-        title: "We couldn't load stock",
+        title: "Unable to load stock",
         body: _error!,
         onRetry: _load,
       );

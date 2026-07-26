@@ -219,7 +219,7 @@ class _CountSessionPageState extends ConsumerState<CountSessionPage> {
     if (_loading) return const AppListSkeleton();
     if (_error != null && _items == null) {
       return AppErrorState(
-        title: "We couldn't load this count",
+        title: "Unable to load this count",
         body: _error!,
         onRetry: _load,
       );

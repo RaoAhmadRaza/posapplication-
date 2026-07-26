@@ -61,7 +61,7 @@ class _MfaChallengeScreenState extends ConsumerState<MfaChallengeScreen> {
     if (challengeFailure != null || challengeId == null) {
       setState(() {
         _errorMessage =
-            challengeFailure?.message ?? 'Could not start authentication.';
+            challengeFailure?.message ?? 'Unable to start authentication.';
         _loading = false;
       });
       return;

@@ -145,7 +145,7 @@ class MigrationImportController extends Notifier<MigrationImportState> {
       // instead of looking like nothing happened.
       state = state.copyWith(
         failure: UnknownFailure(
-          "Couldn't open the file picker. ${e.message ?? e.code}",
+          "Unable to open the file picker. ${e.message ?? e.code}",
         ),
       );
       return;

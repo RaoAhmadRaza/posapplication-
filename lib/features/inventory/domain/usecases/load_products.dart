@@ -9,16 +9,16 @@ class LoadProducts {
   LoadProducts(this._repo);
 
   Future<(List<Product>, InventoryFailure?)> call({
-    String? categoryId,
-    String? brandId,
-    String? status,
+    List<String>? categoryIds,
+    List<String>? brandIds,
+    List<String>? statuses,
     int page = 0,
     int pageSize = 200,
   }) async {
     return _repo.loadProducts(
-      categoryId: categoryId,
-      brandId: brandId,
-      status: status,
+      categoryIds: categoryIds,
+      brandIds: brandIds,
+      statuses: statuses,
       page: page,
       pageSize: pageSize,
     );

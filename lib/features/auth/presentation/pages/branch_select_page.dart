@@ -51,7 +51,7 @@ class _BranchSelectPageState extends ConsumerState<BranchSelectPage> {
               mainAxisSize: MainAxisSize.min,
               children: [
                 const AppInlineBanner(
-                  message: 'Could not load branches.',
+                  message: 'Unable to load branches.',
                   type: BannerType.error,
                 ),
                 const SizedBox(height: AppSpacing.md),

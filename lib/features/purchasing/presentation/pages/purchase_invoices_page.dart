@@ -48,8 +48,8 @@ class PurchaseInvoicesPage extends ConsumerWidget {
           const SizedBox(height: 18),
           switch (state) {
             AsyncError() => AppErrorState(
-                title: 'Could not load invoices',
-                body: 'Something went wrong. Check your connection and retry.',
+                title: 'Unable to load invoices',
+                body: 'Unable to load suggestions. Check your connection and try again.',
                 onRetry: () =>
                     ref.read(purchaseInvoicesProvider.notifier).refresh(),
               ),

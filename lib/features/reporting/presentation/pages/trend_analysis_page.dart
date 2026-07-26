@@ -95,7 +95,7 @@ class _TrendAnalysisPageState extends ConsumerState<TrendAnalysisPage> {
                 child: Center(child: CircularProgressIndicator()),
               ),
               error: (_, _) => const AppErrorState(
-                title: 'Couldn’t load the report',
+                title: 'Unable to load the report',
                 body: 'We couldn’t reach the server. Please try again.',
               ),
               data: (rows) => rows.isEmpty

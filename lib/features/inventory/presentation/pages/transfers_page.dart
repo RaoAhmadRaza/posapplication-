@@ -75,7 +75,7 @@ class _TransfersPageState extends ConsumerState<TransfersPage> {
     return state.when(
       loading: () => const AppListSkeleton(),
       error: (e, _) => AppErrorState(
-        title: "We couldn't load transfers",
+        title: "Unable to load transfers",
         body: 'Please try again in a moment.',
         onRetry: () => ref.invalidate(transfersProvider),
       ),

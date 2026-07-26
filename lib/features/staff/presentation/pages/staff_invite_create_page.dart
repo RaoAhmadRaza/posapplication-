@@ -121,7 +121,7 @@ class _StaffInviteCreatePageState extends ConsumerState<StaffInviteCreatePage> {
           const SizedBox(height: 10),
           rolesAsync.when(
             loading: () => const LinearProgressIndicator(),
-            error: (_, _) => _loadError(lum, 'Could not load roles.'),
+            error: (_, _) => _loadError(lum, 'Unable to load roles.'),
             data: (roles) => Column(
               children: [
                 for (final r in roles)
@@ -142,7 +142,7 @@ class _StaffInviteCreatePageState extends ConsumerState<StaffInviteCreatePage> {
           const SizedBox(height: 10),
           branchesAsync.when(
             loading: () => const LinearProgressIndicator(),
-            error: (_, _) => _loadError(lum, 'Could not load branches.'),
+            error: (_, _) => _loadError(lum, 'Unable to load branches.'),
             data: (branches) => Column(
               children: [
                 for (final b in branches)

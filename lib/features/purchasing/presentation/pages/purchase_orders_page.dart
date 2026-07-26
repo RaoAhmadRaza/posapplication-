@@ -69,8 +69,8 @@ class PurchaseOrdersPage extends ConsumerWidget {
           const SizedBox(height: 18),
           switch (state) {
             AsyncError() => AppErrorState(
-                title: 'Could not load purchase orders',
-                body: 'Something went wrong. Check your connection and retry.',
+                title: 'Unable to load purchase orders',
+                body: 'Unable to load suggestions. Check your connection and try again.',
                 onRetry: () =>
                     ref.read(purchaseOrdersProvider.notifier).refresh(),
               ),

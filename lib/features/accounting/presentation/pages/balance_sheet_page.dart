@@ -52,8 +52,8 @@ class _BalanceSheetPageState extends ConsumerState<BalanceSheetPage> {
             error: (e, _) => Padding(
               padding: const EdgeInsets.only(top: 30),
               child: AppErrorState(
-                title: 'Couldn\'t load report',
-                body: 'Your data is safe. Check the connection and try again.',
+                title: 'Unable to load report',
+                body: 'Check your connection and try again.',
                 onRetry: () => ref.invalidate(
                     balanceSheetProvider((asOf: _asOf, branchId: _branchId))),
               ),
