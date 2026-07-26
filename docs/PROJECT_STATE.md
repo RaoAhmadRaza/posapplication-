@@ -153,6 +153,11 @@ controller/provider binding byte-identical.
   identical so router.dart untouched). ≥900px = 244px left rail (wordmark, clay-soft active item, Settings
   below a hairline, user block); <900px = bottom bar with the accentSoft pill behind the active icon.
   branchMap/goBranch/permission gating lifted VERBATIM. Theme-aware + Semantics/44dp.
+  2026-07-25: mobile bottom bar caps at 5 tabs — first 4 modules inline + a **"More" (three-dots) tab**
+  that opens the modules sheet (reuses _showModulesSheet, now `showActive` lists all + lights the current
+  one); >5 modules only, ≤5 still show inline. Sheet is a **boxy 3-col grid** (_ModuleGridTile) bounded to
+  70% height + scrollable (was a non-scrolling Column that overflowed). Dashboard app bar reserves the inset
+  (MediaQuery top) so the title clears the notch; desktop inset 0 → unchanged.
 - **Dashboard** 772-line page → ~260-line root + 10 widgets in presentation/widgets/. Bespoke app bar
   (edit + spinning refresh + bell + sync pill, no search — dead control, deliberately omitted). Two real
   bugs fixed: KPI grid is a GridView at **5 cols wide / 2 narrow** (was hardcoded 2-up = 2 giant desktop
