@@ -448,6 +448,11 @@ Material Scaffold/AppBar — now zero static-colour refs, zero raw chrome, works
   light + dark, bar value-label placement, line area-fill + dashed projection + forecast split shade,
   stat-card grid at each breakpoint, the schedule sheet (dropdowns/toggle), empty/error states, and a
   screenshot diff vs the export renders.
+- FIXED 2026-07-26: report Export PDF/CSV did nothing on desktop — `ReportExport` now writes both
+  through `FilePicker.saveFile` (native save dialog) instead of Printing.sharePdf / share_plus, and
+  the menu awaits the result and toasts saved-path / cancel / failure. PDF also needed
+  `maxPages: 5000` (one spanning table over 20 pages trips MultiPage's default guard) — covered by
+  test/reporting/report_export_test.dart (1200 rows). Test run BLOCKED: C: has 43 MB free.
 
 ## UI Redesign — accounting module (DONE 2026-07-23; detail in DECISIONS)
 Tenth design export ("Accounting screens"), SAME design-system UUID (5cd3f8f0-…) → tokens untouched;
@@ -802,6 +807,10 @@ Server-side (covers online + walk-in + offline-synced uniformly). 6 migrations
   (created out-of-band, never in a migration). Then `supabase db push` + `functions deploy receipt-sender`.
 - Limitation: pdf-lib does no Urdu/Arabic shaping — Latin receipt fields in v1 (Urdu header = future image).
 - No Flutter changes; on-device ReceiptPage/ReceiptPdfService unchanged. `flutter analyze` clean (baseline 8).
+- 2026-07-26 FIX: on-device receipt PDF never built — `pw.MultiPage` asserts on roll80's infinite height,
+  so Print & share (and invoice-detail Reprint) threw before any dialog. Now `pw.Page`; regression test
+  `test/sales/receipt_pdf_test.dart`. Known gap: PdfGoogleFonts fetches OpenSans at build time and falls
+  back to Latin-1 Helvetica when gstatic is unreachable (non-ASCII names blank) — bundle the font to fix.
 
 ## Tenant Provisioning — COMPLETE (creation-time, gate-proven; full detail in DECISIONS.md)
 `provision_tenant()` seeds the golden set (20 CoA / 10 number_series / 4 tax / OPEN fiscal / 3+3 comms templates /

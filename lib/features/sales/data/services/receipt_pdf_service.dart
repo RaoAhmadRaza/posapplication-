@@ -18,27 +18,33 @@ class ReceiptPdfService {
     );
 
     doc.addPage(
-      pw.MultiPage(
+      // pw.Page, not pw.MultiPage: roll80 has an infinite height, which
+      // MultiPage asserts against. Page grows the roll to fit the content.
+      pw.Page(
         pageFormat: PdfPageFormat.roll80,
         theme: theme,
         margin: const pw.EdgeInsets.symmetric(horizontal: 8, vertical: 12),
-        build: (ctx) => [
-          _header(invoice),
-          pw.SizedBox(height: 8),
-          _divider(),
-          pw.SizedBox(height: 8),
-          ...items.map((item) => _lineItem(item as Map<String, dynamic>)),
-          pw.SizedBox(height: 4),
-          _divider(),
-          pw.SizedBox(height: 8),
-          _totals(invoice),
-          pw.SizedBox(height: 8),
-          _divider(),
-          pw.SizedBox(height: 8),
-          ...payments.map((p) => _paymentLine(p as Map<String, dynamic>)),
-          pw.SizedBox(height: 16),
-          _footer(),
-        ],
+        build: (ctx) => pw.Column(
+          mainAxisSize: pw.MainAxisSize.min,
+          crossAxisAlignment: pw.CrossAxisAlignment.stretch,
+          children: [
+            _header(invoice),
+            pw.SizedBox(height: 8),
+            _divider(),
+            pw.SizedBox(height: 8),
+            ...items.map((item) => _lineItem(item as Map<String, dynamic>)),
+            pw.SizedBox(height: 4),
+            _divider(),
+            pw.SizedBox(height: 8),
+            _totals(invoice),
+            pw.SizedBox(height: 8),
+            _divider(),
+            pw.SizedBox(height: 8),
+            ...payments.map((p) => _paymentLine(p as Map<String, dynamic>)),
+            pw.SizedBox(height: 16),
+            _footer(),
+          ],
+        ),
       ),
     );
 
@@ -164,8 +170,10 @@ class ReceiptPdfService {
     }
   }
 
-  Future<void> shareReceipt(Uint8List pdfBytes, String invoiceNumber, {String? customerPhone}) async {
-    await Printing.sharePdf(
+  /// Returns false when the platform declined to share (Windows returns false
+  /// with no exception when no app is registered for .pdf).
+  Future<bool> shareReceipt(Uint8List pdfBytes, String invoiceNumber, {String? customerPhone}) async {
+    final shared = await Printing.sharePdf(
       bytes: pdfBytes,
       filename: 'receipt_$invoiceNumber.pdf',
     );
@@ -178,5 +186,7 @@ class ReceiptPdfService {
         await launchUrl(uri, mode: LaunchMode.externalApplication);
       }
     }
+
+    return shared;
   }
 }

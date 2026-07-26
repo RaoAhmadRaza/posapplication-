@@ -4,6 +4,8 @@ import '../../../../core/design/app_colors.dart';
 import '../../../../core/design/app_radius.dart';
 import '../../../../core/design/app_typography.dart';
 import '../../../../core/design/clay.dart';
+import '../../../../core/design/widgets/app_inline_banner.dart';
+import '../../../../core/design/widgets/app_toast.dart';
 import '../../data/services/report_export.dart';
 
 /// Header action: exports the current report table to PDF or CSV. Presented as
@@ -34,13 +36,24 @@ class ReportExportButton extends StatelessWidget {
         borderRadius: BorderRadius.circular(AppRadius.md),
         side: BorderSide(color: lum.hairline),
       ),
-      onSelected: (v) {
+      onSelected: (v) async {
         final rows = rowsBuilder();
-        if (rows.isEmpty) return;
-        if (v == 'pdf') {
-          ReportExport.pdf(title: title, headers: headers, rows: rows);
-        } else {
-          ReportExport.csv(title: title, headers: headers, rows: rows);
+        if (rows.isEmpty) {
+          showAppToast(context, 'Nothing to export yet',
+              type: BannerType.warning);
+          return;
+        }
+        try {
+          final path = v == 'pdf'
+              ? await ReportExport.pdf(
+                  title: title, headers: headers, rows: rows)
+              : await ReportExport.csv(
+                  title: title, headers: headers, rows: rows);
+          if (!context.mounted || path == null) return;
+          showAppToast(context, 'Saved to $path', type: BannerType.success);
+        } catch (e) {
+          if (!context.mounted) return;
+          showAppToast(context, 'Export failed: $e', type: BannerType.error);
         }
       },
       itemBuilder: (context) => [

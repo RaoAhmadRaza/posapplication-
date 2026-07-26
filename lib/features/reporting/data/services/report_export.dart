@@ -1,14 +1,28 @@
 import 'dart:convert';
 import 'dart:typed_data';
 
+import 'package:file_picker/file_picker.dart';
 import 'package:pdf/pdf.dart';
 import 'package:pdf/widgets.dart' as pw;
-import 'package:printing/printing.dart';
-import 'package:share_plus/share_plus.dart';
 
-/// Exports a report table to PDF (via Printing) or CSV (via share sheet).
+/// Exports a report table to PDF or CSV through the platform save dialog.
+/// Returns the saved path, or null if the user cancelled.
+///
+/// Save dialog rather than a share sheet: this is a desktop-first app, and
+/// share_plus rejects files on Windows/Linux while Printing.sharePdf only
+/// shells a temp file open.
 class ReportExport {
-  static Future<void> pdf({
+  static Future<String?> pdf({
+    required String title,
+    required List<String> headers,
+    required List<List<String>> rows,
+  }) async =>
+      _save(title, 'pdf', await buildPdfBytes(
+          title: title, headers: headers, rows: rows));
+
+  /// Renders the table to PDF bytes. Split out from [pdf] so it is testable
+  /// without a save dialog.
+  static Future<Uint8List> buildPdfBytes({
     required String title,
     required List<String> headers,
     required List<List<String>> rows,
@@ -18,6 +32,10 @@ class ReportExport {
       pw.MultiPage(
         pageFormat: PdfPageFormat.a4,
         margin: const pw.EdgeInsets.all(24),
+        // A spanning table counts one "same widget" page per page it covers,
+        // so the default cap of 20 rejects any report past ~700 rows.
+        // ponytail: flat cap, paginate the export if a report ever exceeds it.
+        maxPages: 5000,
         build: (context) => [
           pw.Text(title,
               style:
@@ -34,25 +52,29 @@ class ReportExport {
         ],
       ),
     );
-    final bytes = await doc.save();
-    await Printing.sharePdf(bytes: bytes, filename: '${_slug(title)}.pdf');
+    return doc.save();
   }
 
-  static Future<void> csv({
+  static Future<String?> csv({
     required String title,
     required List<String> headers,
     required List<List<String>> rows,
-  }) async {
-    final lines = [_csvRow(headers), ...rows.map(_csvRow)].join('\r\n');
-    final bytes = Uint8List.fromList(utf8.encode(lines));
-    await SharePlus.instance.share(
-      ShareParams(
-        files: [
-          XFile.fromData(bytes, mimeType: 'text/csv', name: '${_slug(title)}.csv'),
-        ],
-      ),
-    );
+  }) {
+    // Leading BOM so Excel reads the file as UTF-8.
+    final text =
+        '﻿${[_csvRow(headers), ...rows.map(_csvRow)].join('\r\n')}';
+    return _save(title, 'csv', Uint8List.fromList(utf8.encode(text)));
   }
+
+  static Future<String?> _save(String title, String ext, Uint8List bytes) =>
+      FilePicker.saveFile(
+        dialogTitle: 'Save ${ext.toUpperCase()} export',
+        fileName: '${_slug(title)}.$ext',
+        type: FileType.custom,
+        allowedExtensions: [ext],
+        bytes: bytes,
+        lockParentWindow: true,
+      );
 
   static String _csvRow(List<String> cells) =>
       cells.map((c) => '"${c.replaceAll('"', '""')}"').join(',');

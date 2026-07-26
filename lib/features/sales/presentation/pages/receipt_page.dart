@@ -8,6 +8,8 @@ import '../../../../core/design/app_typography.dart';
 import '../../../../core/design/clay.dart';
 import '../../../../core/design/format.dart';
 import '../../../../core/design/widgets/app_button.dart';
+import '../../../../core/design/widgets/app_inline_banner.dart';
+import '../../../../core/design/widgets/app_toast.dart';
 import '../../../../core/design/widgets/lumina_brand.dart';
 import '../../../../core/widgets/no_access_scaffold.dart';
 import '../../../../core/widgets/permission_gate.dart';
@@ -54,7 +56,7 @@ class ReceiptPage extends ConsumerWidget {
                           child: AppButton(
                             label: 'Print & share',
                             onPressed: () =>
-                                _printAndShare(detail, invoiceNumber),
+                                _printAndShare(context, detail, invoiceNumber),
                             icon: LucideIcons.printer,
                           ),
                         ),
@@ -79,16 +81,31 @@ class ReceiptPage extends ConsumerWidget {
   }
 
   Future<void> _printAndShare(
+    BuildContext context,
     Map<String, dynamic> detail,
     String number,
   ) async {
-    final service = ReceiptPdfService();
-    final pdfBytes = await service.buildReceipt(detail);
-    await Printing.layoutPdf(
-      onLayout: (_) => pdfBytes,
-      name: 'receipt_$number',
-    );
-    await service.shareReceipt(pdfBytes, number);
+    try {
+      final service = ReceiptPdfService();
+      final pdfBytes = await service.buildReceipt(detail);
+      await Printing.layoutPdf(
+        onLayout: (_) => pdfBytes,
+        name: 'receipt_$number',
+      );
+      final shared = await service.shareReceipt(pdfBytes, number);
+      if (!shared && context.mounted) {
+        showAppToast(
+          context,
+          'Printed. Unable to share the PDF on this device.',
+          type: BannerType.warning,
+        );
+      }
+    } catch (e) {
+      // Without this the whole flow fails silently and the button reads as dead.
+      if (context.mounted) {
+        showAppToast(context, 'Print failed: $e', type: BannerType.error);
+      }
+    }
   }
 }
 
