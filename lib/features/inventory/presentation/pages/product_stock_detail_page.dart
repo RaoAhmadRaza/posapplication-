@@ -26,8 +26,12 @@ import '../../domain/entities/stock_balance.dart';
 import '../../domain/entities/stock_ledger_entry.dart';
 import '../../domain/entities/stock_movement_type.dart';
 import '../../domain/entities/warehouse.dart';
+import '../../domain/entities/product_variant.dart';
+import '../../domain/entities/pricing_tier.dart';
 import '../../domain/usecases/load_stock_balances.dart';
 import '../../domain/usecases/load_product_ledger.dart';
+import '../../domain/usecases/load_variants.dart';
+import '../../domain/usecases/load_pricing_tiers.dart';
 import '../controllers/brands_controller.dart';
 import '../controllers/categories_controller.dart';
 import '../controllers/warehouses_controller.dart';
@@ -48,6 +52,8 @@ class _ProductStockDetailPageState
     extends ConsumerState<ProductStockDetailPage> {
   List<StockBalance>? _balances;
   List<StockLedgerEntry>? _ledger;
+  List<ProductVariant>? _variants;
+  List<PricingTier>? _tiers;
   String? _error;
 
   @override
@@ -63,6 +69,8 @@ class _ProductStockDetailPageState
     setState(() {
       _balances = null;
       _ledger = null;
+      _variants = null;
+      _tiers = null;
       _error = null;
     });
 
@@ -75,6 +83,12 @@ class _ProductStockDetailPageState
               widget.productId,
               branchId: branch.id,
             );
+    // Variants + pricing tiers are secondary — a failure here leaves them empty
+    // rather than blocking the whole page.
+    final (variants, _) =
+        await ref.read(loadVariantsUseCaseProvider).call(widget.productId);
+    final (tiers, _) =
+        await ref.read(loadPricingTiersUseCaseProvider).call(widget.productId);
 
     if (!mounted) return;
 
@@ -86,6 +100,8 @@ class _ProductStockDetailPageState
     setState(() {
       _balances = bals;
       _ledger = ledger;
+      _variants = variants;
+      _tiers = tiers;
     });
   }
 
@@ -127,6 +143,8 @@ class _ProductStockDetailPageState
 
     final totalOnHand =
         _balances!.fold<double>(0, (sum, b) => sum + b.qtyOnHand);
+    final tiers = (_tiers ?? []).where((t) => t.isActive).toList();
+    final variants = (_variants ?? []).where((v) => v.isActive).toList();
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -150,6 +168,14 @@ class _ProductStockDetailPageState
               extra: <String>[widget.productId]),
         ),
         const SizedBox(height: 16),
+        if (variants.isNotEmpty) ...[
+          _VariantsCard(variants: variants),
+          const SizedBox(height: 16),
+        ],
+        if (tiers.isNotEmpty) ...[
+          _PricingTiersCard(tiers: tiers),
+          const SizedBox(height: 16),
+        ],
         _StockTrendCard(
           ledger: _ledger,
           reorderPoint: product.reorderPoint,
@@ -836,6 +862,123 @@ class _SparklinePainter extends CustomPainter {
   @override
   bool shouldRepaint(covariant _SparklinePainter old) =>
       old.values != values || old.reorder != reorder;
+}
+
+/// Active variants for the product — name, SKU + attributes, and selling price.
+class _VariantsCard extends StatelessWidget {
+  const _VariantsCard({required this.variants});
+
+  final List<ProductVariant> variants;
+
+  @override
+  Widget build(BuildContext context) {
+    return AppCard(
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          _sectionHeader(context, LucideIcons.layers, 'Variants'),
+          for (int i = 0; i < variants.length; i++)
+            _row(context, variants[i], showTop: i > 0),
+        ],
+      ),
+    );
+  }
+
+  Widget _row(BuildContext context, ProductVariant v, {required bool showTop}) {
+    final lum = context.lum;
+    final attrs = v.attributes.values
+        .map((x) => '$x')
+        .where((s) => s.trim().isNotEmpty)
+        .join(' · ');
+    final meta = [v.sku, if (attrs.isNotEmpty) attrs].join(' · ');
+    return Container(
+      padding: const EdgeInsets.symmetric(vertical: 12),
+      decoration: BoxDecoration(
+        border: showTop ? Border(top: BorderSide(color: lum.hairline)) : null,
+      ),
+      child: Row(
+        children: [
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(v.variantName,
+                    style: AppTypography.body.copyWith(
+                        color: lum.textPrimary, fontWeight: FontWeight.w500),
+                    overflow: TextOverflow.ellipsis),
+                const SizedBox(height: 2),
+                Text(meta,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: AppTypography.caption.copyWith(color: lum.g500)),
+              ],
+            ),
+          ),
+          const SizedBox(width: 12),
+          AppMoneyText(v.sellingPrice, size: 15),
+        ],
+      ),
+    );
+  }
+}
+
+/// Quantity-break pricing tiers — tier name, qty range (+ discount), unit price.
+class _PricingTiersCard extends StatelessWidget {
+  const _PricingTiersCard({required this.tiers});
+
+  final List<PricingTier> tiers;
+
+  @override
+  Widget build(BuildContext context) {
+    // Ascending min-qty reads like a price ladder.
+    final sorted = [...tiers]..sort((a, b) => a.minQty.compareTo(b.minQty));
+    return AppCard(
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          _sectionHeader(context, LucideIcons.tags, 'Pricing tiers'),
+          for (int i = 0; i < sorted.length; i++)
+            _row(context, sorted[i], showTop: i > 0),
+        ],
+      ),
+    );
+  }
+
+  Widget _row(BuildContext context, PricingTier t, {required bool showTop}) {
+    final lum = context.lum;
+    final qty = t.maxQty != null ? '${t.minQty}–${t.maxQty}' : '${t.minQty}+';
+    final discount =
+        t.discountPct != null ? ' · ${_pct(t.discountPct!)} off' : '';
+    return Container(
+      padding: const EdgeInsets.symmetric(vertical: 12),
+      decoration: BoxDecoration(
+        border: showTop ? Border(top: BorderSide(color: lum.hairline)) : null,
+      ),
+      child: Row(
+        children: [
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(t.tierName,
+                    style: AppTypography.body.copyWith(
+                        color: lum.textPrimary, fontWeight: FontWeight.w500),
+                    overflow: TextOverflow.ellipsis),
+                const SizedBox(height: 2),
+                Text('Qty $qty$discount',
+                    style: AppTypography.caption.copyWith(color: lum.g500)),
+              ],
+            ),
+          ),
+          const SizedBox(width: 12),
+          AppMoneyText(t.unitPrice, size: 15),
+        ],
+      ),
+    );
+  }
+
+  String _pct(double p) =>
+      '${p.toStringAsFixed(p.truncateToDouble() == p ? 0 : 1)}%';
 }
 
 Widget _sectionHeader(BuildContext context, IconData icon, String title) {
