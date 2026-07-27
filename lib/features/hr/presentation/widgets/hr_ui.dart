@@ -112,6 +112,14 @@ AppPillTone payrollStatusTone(PayrollStatus s) => switch (s) {
       PayrollStatus.cancelled => AppPillTone.danger,
     };
 
+/// Whether an app login is linked to this employee. `userId` is written by
+/// consume_staff_invite when the invitee redeems, so this reads "an account
+/// exists", not "an invite was sent" — a pending invite still shows no login.
+/// Lumen, not success: the employee-status pill beside it is already green.
+(String, AppPillTone) employeeLoginUi(String? userId) => userId == null
+    ? ('No login', AppPillTone.neutral)
+    : ('Login', AppPillTone.lumen);
+
 // ── Attendance cell colours (grid + tab markers use a tinted tile, not a pill)─
 
 /// (background, foreground) pair for an attendance marker tile in the current
