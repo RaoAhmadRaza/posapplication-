@@ -80,10 +80,20 @@ class BranchRouterState extends ChangeNotifier {
 }
 
 class UserBranchesController extends Notifier<AsyncValue<List<Branch>>> {
+  String? _userId;
+
   @override
   AsyncValue<List<Branch>> build() => const AsyncValue.loading();
 
+  /// Load [userId]'s branches unless already loaded. Level-triggered for the
+  /// same reason as [PermissionController.ensureLoadedFor].
+  void ensureLoadedFor(String userId) {
+    if (_userId == userId && !state.hasError) return;
+    load(userId);
+  }
+
   Future<void> load(String userId) async {
+    _userId = userId;
     state = const AsyncValue.loading();
     final (branches, failure) =
         await ref.read(loadUserBranchesUseCaseProvider).call(userId);
