@@ -8,6 +8,7 @@ import '../../../../core/design/app_typography.dart';
 import '../../../../core/design/clay.dart';
 import '../../../../core/design/widgets/app_card.dart';
 import '../../../../core/widgets/module_scaffold.dart';
+import '../../../../core/widgets/permission_gate.dart';
 
 /// Inventory landing menu — a launcher into every sub-area. Branch root, so no
 /// back button (the nav rail / bottom bar is the way out). Two groups mirror the
@@ -51,7 +52,19 @@ class InventoryHubPage extends StatelessWidget {
       title: 'Inventory',
       maxContentWidth: 940,
       padding: const EdgeInsets.fromLTRB(20, 22, 20, 40),
-      child: SingleChildScrollView(
+      // The nav branch is intentionally ungated, but the hub links to
+      // warehouses/adjustments/transfers — gate the page itself so a deep link
+      // can't hand those to a role without inventory access.
+      child: PermissionGate(
+        module: 'inventory',
+        action: 'read',
+        fallback: Center(
+          child: Text(
+            'You don’t have access to inventory.',
+            style: AppTypography.subhead.copyWith(color: lum.g500),
+          ),
+        ),
+        child: SingleChildScrollView(
         child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
@@ -87,6 +100,7 @@ class InventoryHubPage extends StatelessWidget {
             const SizedBox(height: 26),
           ],
         ],
+        ),
         ),
       ),
     );
