@@ -8,6 +8,7 @@ import '../../../../core/design/clay.dart';
 import '../../../../core/design/widgets/app_card.dart';
 import '../../../../core/design/widgets/app_pill.dart';
 import '../../../../core/widgets/module_scaffold.dart';
+import '../../../../core/widgets/permission_gate.dart';
 
 /// Purchasing landing menu — a launcher into every sub-area. Branch root, so no
 /// back button (the nav rail is the way out).
@@ -16,6 +17,7 @@ class PurchaseHubPage extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final lum = context.lum;
     final tiles = <_HubTileData>[
       _HubTileData(
         icon: LucideIcons.clipboardList,
@@ -67,7 +69,18 @@ class PurchaseHubPage extends StatelessWidget {
       title: 'Purchasing',
       maxContentWidth: 1000,
       padding: const EdgeInsets.fromLTRB(20, 22, 20, 40),
-      child: SingleChildScrollView(
+      // Nav hides this module without purchase:read, but the route stays
+      // reachable by deep link — gate the page too.
+      child: PermissionGate(
+        module: 'purchase',
+        action: 'read',
+        fallback: Center(
+          child: Text(
+            'You don’t have access to purchasing.',
+            style: AppTypography.subhead.copyWith(color: lum.g500),
+          ),
+        ),
+        child: SingleChildScrollView(
         child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
@@ -89,6 +102,7 @@ class PurchaseHubPage extends StatelessWidget {
             },
           ),
         ],
+        ),
         ),
       ),
     );
