@@ -129,6 +129,23 @@ class _WorkspaceInitScreenState extends ConsumerState<WorkspaceInitScreen> {
       }
     });
 
+    // Level-triggered companion to the ref.listen above. That listener is
+    // edge-triggered and only exists while this screen is mounted, so when the
+    // profile resolved BEFORE the mount (the account-switch path) it never
+    // fires and the loads never happen — previously that left the previous
+    // user's matrix in place, and now it would hang here on loading. Both
+    // calls are no-ops once loaded for the current user.
+    final profile = ref.watch(profileControllerProvider).value;
+    final currentUserId = supabase.auth.currentUser?.id;
+    if (profile?.roleId != null) {
+      ref.read(permissionMatrixProvider.notifier).ensureLoadedFor(
+            profile!.roleId!,
+          );
+    }
+    if (currentUserId != null) {
+      ref.read(userBranchesProvider.notifier).ensureLoadedFor(currentUserId);
+    }
+
     final permsReady = ref.watch(permissionsReadyProvider);
     final branchesReady = ref.watch(branchesReadyProvider);
 
