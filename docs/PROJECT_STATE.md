@@ -820,6 +820,18 @@ No partials on the Voxa path (tap to start, tap to stop→transcribe). Mics gate
 NOT verified on-device; needs Voxa running/reachable on the Windows box.
 
 ## Known Issues
+- ⚠ PARTIAL 2026-07-27 (Android perf): "app feels laggy" was measured, not guessed. Profile build on the Redmi 10
+  (MT6769H / Helio G88, Android 12, 1.3GB in swap) vs the debug build: onStart 1470ms vs 5532ms, one skipped-frame
+  event vs five, zero `Davey!` vs one. So debug mode was the bulk of it and the rest is the hardware. Startup trace
+  (build/start_up_info.json): 936.8ms engine+VM init, 521.9ms for main(), 1458.6ms to first frame. The 521.9ms is
+  the part we own — trimmed it by making PinService._maybeMigrateGlobalKeys' three global-key reads concurrent and
+  memoising the check per process (it ran on every hasPin/verifyPin/isBiometricsEnabled), and by overlapping
+  ThemeController.load() with Supabase init. NOT re-measured on device — the phone left USB before the re-trace.
+  Re-run `flutter run --profile --trace-startup` and compare against 1458.6ms. Note `dumpsys gfxinfo` reports
+  0 frames for this app and CANNOT measure Flutter jank — Flutter bypasses HWUI; use DevTools Performance instead.
+  Untouched, worth a look later: 34 SingleChildScrollView (product_form_page is 1269 lines) and ~150 sort/where
+  calls inside presentation build methods. Also unfixed: if _maybeMigrateGlobalKeys runs while uid is null it
+  deletes the global keys without copying them anywhere — pre-existing, would drop a legacy PIN.
 - ✓ FIXED 2026-07-27 (physical Android run): two runtime errors. (a) workspace_init_screen.dart called
   permissionMatrix/userBranches `ensureLoadedFor` directly in build() — both set provider state synchronously,
   which throws "Tried to modify a provider while the widget tree was building"; now deferred in an
