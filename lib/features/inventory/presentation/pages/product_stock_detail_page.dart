@@ -448,7 +448,8 @@ class _HeaderCard extends StatelessWidget {
           Expanded(child: adjust),
         ]),
         const SizedBox(height: 4),
-        Row(children: [opening, const Spacer(), print]),
+        // Wrap, not Row: at md size these two exceed a narrow phone width.
+        Wrap(spacing: 8, runSpacing: 8, children: [opening, print]),
       ],
     );
   }
