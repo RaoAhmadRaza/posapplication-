@@ -158,6 +158,29 @@ export const TOOLS: Record<string, ToolDef> = {
     },
     run: (sb) => sb.rpc("payables_aging").then(unwrap),
   },
+  count_suppliers: {
+    schema: {
+      name: "count_suppliers",
+      description:
+        "How many suppliers this store has, with the first few names. Call for 'how many " +
+        "suppliers do I have', 'list my suppliers', 'who are my suppliers'. Use this instead " +
+        "of find_supplier when no particular supplier was named — find_supplier caps at 10 " +
+        "matches and cannot be counted from.",
+      input_schema: { type: "object", properties: {} },
+    },
+    run: (sb) =>
+      sb
+          .from("suppliers")
+          .select("name", { count: "exact" })
+          .order("name")
+          .limit(50)
+          .then((r: Any) => {
+            // Same contract as unwrap(): surface the failure rather than
+            // returning a zero the model would report as fact.
+            if (r.error) throw new Error(r.error.message ?? "suppliers query failed");
+            return { total: r.count ?? 0, names: (r.data ?? []).map((s: Any) => s.name) };
+          }),
+  },
   find_supplier: {
     schema: {
       name: "find_supplier",
