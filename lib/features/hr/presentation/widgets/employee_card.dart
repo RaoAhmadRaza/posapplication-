@@ -24,6 +24,8 @@ class EmployeeCard extends StatelessWidget {
     final subtitle = [employee.designation, employee.department]
         .where((e) => e != null && e.isNotEmpty)
         .join(' · ');
+    final (loginLabel, loginTone) = employeeLoginUi(employee.userId);
+    final hasLogin = employee.userId != null;
 
     return AppCard(
       padding: const EdgeInsets.fromLTRB(15, 13, 15, 13),
@@ -57,14 +59,32 @@ class EmployeeCard extends StatelessWidget {
                     ),
                   ],
                 ),
-                if (subtitle.isNotEmpty) ...[
+                // The login pill rides the subtitle line, not the name row:
+                // there the code text and the pill are both unshrinkable, so a
+                // pill would squeeze the name to zero and overflow on a phone.
+                if (subtitle.isNotEmpty || hasLogin) ...[
                   const SizedBox(height: 2),
-                  Text(
-                    subtitle,
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                    style: AppTypography.caption
-                        .copyWith(color: lum.textSecondary),
+                  Row(
+                    children: [
+                      if (subtitle.isNotEmpty)
+                        Flexible(
+                          child: Text(
+                            subtitle,
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                            style: AppTypography.caption
+                                .copyWith(color: lum.textSecondary),
+                          ),
+                        ),
+                      if (hasLogin) ...[
+                        if (subtitle.isNotEmpty) const SizedBox(width: 8),
+                        AppPill(
+                          label: loginLabel,
+                          tone: loginTone,
+                          showDot: false,
+                        ),
+                      ],
+                    ],
                   ),
                 ],
               ],
