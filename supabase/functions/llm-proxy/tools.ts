@@ -118,6 +118,27 @@ export const TOOLS: Record<string, ToolDef> = {
     },
     run: (sb) => sb.rpc("receivables_aging").then(unwrap),
   },
+  count_customers: {
+    schema: {
+      name: "count_customers",
+      description:
+        "How many customers this store has, with the first few names. Call for 'how many " +
+        "customers do I have', 'list my customers'. Use this instead of find_customer when no " +
+        "particular customer was named — find_customer caps at 10 matches and cannot be " +
+        "counted from.",
+      input_schema: { type: "object", properties: {} },
+    },
+    run: (sb) =>
+      sb
+          .from("customers")
+          .select("name", { count: "exact" })
+          .order("name")
+          .limit(50)
+          .then((r: Any) => {
+            if (r.error) throw new Error(r.error.message ?? "customers query failed");
+            return { total: r.count ?? 0, names: (r.data ?? []).map((c: Any) => c.name) };
+          }),
+  },
   find_customer: {
     schema: {
       name: "find_customer",
