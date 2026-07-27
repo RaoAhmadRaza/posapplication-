@@ -126,6 +126,64 @@ one into a trailing **Additional details** card:
 - Product form: Name*/Barcode, Type*/Category/Brand, Cost*/Selling*/Tax/Margin, UoM/reorder pair, Status*;
   Additional details = description, min price, wholesale, weight, tags. Cost + selling price are now *enforced*
   in `_requiredFieldError()` (shared by both save buttons) so the asterisks aren't decorative.
+- Employee form (2026-07-27): same treatment, 5 cards → 3. Basic info (Status edit-only, Name*, Employee
+  code* create-only, Phone, Email) / Role & pay (Designation, Department, Joining date create-only, Salary
+  type, Base salary*) / Additional details (CNIC create-only, Address, Bank name, Account number, Notes).
+  Local `_grid`/`_LabelledField` deleted for `AppFieldRow`/`AppFieldLabel`. Joining date + salary type are
+  deliberately NOT asterisked — both default silently and neither is validated.
+
+## Session isolation — SessionScope (2026-07-27)
+`main.dart` runs **`SessionScope(child: App())`**, not a bare `ProviderScope`. It owns the
+`ProviderContainer` and swaps in a fresh one whenever the auth uid changes, disposing the old one
+post-frame — so nothing any provider cached can outlive the session that fetched it.
+**Why:** ~80 controllers are non-autoDispose; their `build()` runs once and caches for the process
+lifetime, so after an account switch the next user saw the previous user's dashboard figures, POS
+cart, customer lists — a cross-tenant disclosure when the two accounts are in different tenants.
+**Why a container swap:** an explicit invalidate-list (82 entries, 2 duplicate names) rots on the next
+new controller; keying the `ProviderScope` rebuilds `MaterialApp.router` and risks GoRouter's
+duplicate-navigator-key crash; a nested scope doesn't isolate. Swapping the container on an
+`UncontrolledProviderScope` disposes everything while the tree stays mounted.
+**Implication for new code:** you no longer need per-provider reset logic for user-scoped data — but
+do not assume a provider survives a sign-in, and never cache user data outside Riverpod.
+
+## RBAC: stale-matrix fix + known gaps (2026-07-27)
+**Fixed.** A cashier saw every module after an in-process account switch. Root cause was NOT
+desktop-vs-mobile (both read the same `_branchMapFor` list) and NOT bad data (cashier role = the
+seeded 6): `permissionMatrixProvider` / `userBranchesProvider` are non-autoDispose and survived the
+sign-out, while `permissionsReadyProvider` (`!isLoading && !hasError`) reads true on the *stale*
+AsyncData — so workspace-init released the router before the new user's matrix was ever requested.
+- `core/state/reset_on_user_change.dart` — `resetOnUserChange(ref, cb)`, shaped like `subscribeReload`;
+  fires only on a real auth uid change. Both controllers clear themselves through it (branches also
+  clear `currentBranchProvider`).
+- Both gained level-triggered `ensureLoadedFor(id)`, called from workspace_init's build. **Required** —
+  the reset alone would hang `/workspace-init` when the profile resolves before that screen mounts.
+- Hub pages that were ungated `StatelessWidget`s (inventory, purchasing, accounting) now carry the same
+  page-level `PermissionGate` reports_hub already used.
+
+**Known gaps, NOT closed (each needs its own reviewed change):**
+- **Read RLS is tenant-scoped, not permission-scoped** — e.g. `"accounts tenant read" … using (tenant_id
+  = public.auth_tenant_id())`, no `auth_has_permission`. Writes *are* gated. So every read permission in
+  this app is enforced client-side only, and a deep link still reads the data.
+- **No route-level authorization** — `_redirect` has no permission logic; 3 of ~150 routes gate a builder.
+- Sub-rail `_ModuleDest` entries carry no permission key; 4 nav branches (Dashboard, Inventory, Assistant,
+  Settings) are hardcoded past the filter — both deliberate, documented.
+
+## HR ↔ Staff flow simplification (DONE 2026-07-27)
+Presentation-only; no data/domain/migration change, RPC payloads byte-identical.
+- **Login badge.** `employeeLoginUi(userId)` in `hr_ui.dart` → `AppPill`. Employee list shows it only when a
+  login exists (subtitle line — the name row's code text and the pill are both unshrinkable and overflow a
+  360px card); the profile shows both states in the identity Wrap. Reads `Employee.userId`, already in
+  `_empCols`, so zero query change. Not permission-gated: it's information, not an action, so roles without
+  `users:create` can finally see who has an account. Note `user_id` lands on *redemption*, so a sent-but-
+  unredeemed invite still reads "No login".
+- **Branch prefill.** `/staff/invite` `extra` gained `branchId`; HR's "Create login" passes
+  `employee.branchId`. Seeded in `initState` (the branch list's `data:` builder re-runs on every setState and
+  would re-tick an unticked branch). `valid` + submit now intersect with *visible* branch ids —
+  `listBranches()` returns every tenant branch but `create_staff_invite` demands the caller be assigned,
+  so a cross-branch employee could otherwise enable the button with nothing ticked.
+- **Inline login creation.** Create form has an "Also create an app login" checkbox (`PermissionGate`
+  users:create, create-mode only); on success it `go`s to the profile then `push`es the prefilled invite, so
+  Back lands on the saved employee rather than a spent form.
 
 ## Copy tone pass — app-wide user-facing strings (DONE 2026-07-26)
 Presentation-only, no logic. ~110 strings across 108 files. Conventions now in force:
