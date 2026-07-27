@@ -425,6 +425,9 @@ Material Scaffold/AppBar — now zero static-colour refs, zero raw chrome, works
   top, title + subtitle bottom-anchored, no trailing chevron (whole card taps). Smart insights
   carries an accent foreground border + "New" pill; external (Accounting) cards keep a top-right
   arrowUpRight. Section overlines, routes and PermissionGate untouched; body measure 720→960.
+- **Smart insights paginates client-side** (2026-07-27). 10 cards, then "Load more (N left)" reveals
+  10 more (`_RecommendationList` in `smart_insights_page.dart`). Slice of the already-loaded provider
+  list — no RPC limit/offset, no controller change.
 - **Charts: fl_chart restyled, not hand-rolled** (user choice). New module widgets wrap fl_chart
   theme-aware: `ReportingBarChart` (rounded rods, value labels via always-on tooltips so they track
   the rod not the container, hairline baseline, no gridbox) and `ReportingLineChart` (2.5px strokes,
