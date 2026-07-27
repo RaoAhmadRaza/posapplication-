@@ -228,6 +228,7 @@ class _IdentityCard extends StatelessWidget {
                       'employeeId': employee.id,
                       'name': employee.name,
                       'email': employee.email,
+                      'branchId': employee.branchId,
                     }),
                   ),
                 ),
