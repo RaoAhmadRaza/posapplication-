@@ -108,6 +108,7 @@ class _IdentityCard extends StatelessWidget {
     final lum = context.lum;
     final subtitle = '${employee.designation ?? '—'} · '
         '${employee.department ?? '—'} · ';
+    final (loginLabel, loginTone) = employeeLoginUi(employee.userId);
 
     return AppCard(
       raised: true,
@@ -167,6 +168,14 @@ class _IdentityCard extends StatelessWidget {
                         AppPill(
                           label: employeeStatusLabels[employee.status]!,
                           tone: employeeStatusTone(employee.status),
+                        ),
+                        // Both states here, unlike the list: this is the screen
+                        // offering "Create login", so "No login" is the cue for
+                        // it rather than noise.
+                        AppPill(
+                          label: loginLabel,
+                          tone: loginTone,
+                          showDot: false,
                         ),
                         Row(
                           mainAxisSize: MainAxisSize.min,
