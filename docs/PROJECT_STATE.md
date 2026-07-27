@@ -820,6 +820,14 @@ No partials on the Voxa path (tap to start, tap to stop→transcribe). Mics gate
 NOT verified on-device; needs Voxa running/reachable on the Windows box.
 
 ## Known Issues
+- ✓ FIXED 2026-07-27 (physical Android run): two runtime errors. (a) workspace_init_screen.dart called
+  permissionMatrix/userBranches `ensureLoadedFor` directly in build() — both set provider state synchronously,
+  which throws "Tried to modify a provider while the widget tree was building"; now deferred in an
+  addPostFrameCallback (mounted-guarded), same pattern as the `_complete()` call below it. (b) 32px RenderFlex
+  overflow on product_stock_detail_page.dart narrow layout — `Row(opening, Spacer, print)` needed 344px in 313px;
+  now a Wrap, so the tail flows to a second line. NOT code: `PGRST303 JWT issued at future` on that run is device
+  clock skew (set the phone to network time); the java `source/target value 8 is obsolete` lines are Gradle
+  warnings, not errors.
 - ✓ FIXED 2026-07-26 (DECISIONS): intermittent red-screen on logout (notifyClients "is not our descendant"
   assertion). AuthController.signOut() cleared the router gate flags before killing the session, so the redirect
   bounced the still-logged-in user through /workspace-init on the way out — that screen mounted, started loading,
