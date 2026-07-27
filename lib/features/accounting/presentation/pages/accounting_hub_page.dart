@@ -2,7 +2,9 @@ import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import 'package:lucide_icons_flutter/lucide_icons.dart';
 import '../../../../core/design/app_colors.dart';
+import '../../../../core/design/app_typography.dart';
 import '../../../../core/widgets/module_scaffold.dart';
+import '../../../../core/widgets/permission_gate.dart';
 import '../widgets/acct_hub_grid.dart';
 
 /// Accounting hub — the module's branch root. Grouped destination tiles over the
@@ -120,9 +122,21 @@ class AccountingHubPage extends StatelessWidget {
       // stranding the cards in a narrow centred column.
       maxContentWidth: 1180,
       padding: EdgeInsets.zero,
-      child: SingleChildScrollView(
-        padding: const EdgeInsets.fromLTRB(24, 24, 24, 48),
-        child: AcctHubGrid(items: items()),
+      // Nav hides this module without accounting:read, but the route stays
+      // reachable by deep link — gate the page too.
+      child: PermissionGate(
+        module: 'accounting',
+        action: 'read',
+        fallback: Center(
+          child: Text(
+            'You don’t have access to accounting.',
+            style: AppTypography.subhead.copyWith(color: lum.g500),
+          ),
+        ),
+        child: SingleChildScrollView(
+          padding: const EdgeInsets.fromLTRB(24, 24, 24, 48),
+          child: AcctHubGrid(items: items()),
+        ),
       ),
     );
   }
