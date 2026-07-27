@@ -19,11 +19,16 @@ class StaffInviteCreatePage extends ConsumerStatefulWidget {
     this.employeeId,
     this.prefillName,
     this.prefillEmail,
+    this.branchId,
   });
 
   final String? employeeId;
   final String? prefillName;
   final String? prefillEmail;
+
+  /// The employee's branch when arriving from HR — preselected so the caller
+  /// doesn't re-pick a branch the employee record already carries.
+  final String? branchId;
 
   @override
   ConsumerState<StaffInviteCreatePage> createState() =>
@@ -52,6 +57,11 @@ class _StaffInviteCreatePageState extends ConsumerState<StaffInviteCreatePage> {
     super.initState();
     _nameCtrl.text = widget.prefillName ?? '';
     _emailCtrl.text = widget.prefillEmail ?? '';
+    // Seeded here, not in the branch list's data builder: that closure re-runs
+    // on every setState (role tap, expiry change), which would re-tick a branch
+    // the user deliberately unticked. The tile reads _branchIds via contains,
+    // so seeding before the list resolves is fine — it lights up on arrival.
+    if (widget.branchId != null) _branchIds.add(widget.branchId!);
   }
 
   @override
@@ -61,14 +71,24 @@ class _StaffInviteCreatePageState extends ConsumerState<StaffInviteCreatePage> {
     super.dispose();
   }
 
+  /// Branch ids the picker is actually showing — empty while the list loads.
+  Set<String> _visibleBranchIds() =>
+      ref.read(branchOptionsProvider).asData?.value.map((b) => b.id).toSet() ??
+      const <String>{};
+
   Future<void> _submit() async {
     setState(() {
       _saving = true;
       _error = null;
     });
+    // Only send branches the caller can see: listBranches returns every tenant
+    // branch, but create_staff_invite requires the caller be assigned to each.
+    // A seeded branch outside that set would fail with a raw
+    // "branch not assigned" the user cannot act on.
+    final visible = _visibleBranchIds();
     final (created, failure) = await ref.read(staffActionsProvider).createInvite(
           roleId: _roleId!,
-          branchIds: _branchIds.toList(),
+          branchIds: _branchIds.where(visible.contains).toList(),
           fullName: _nameCtrl.text.trim().isEmpty ? null : _nameCtrl.text.trim(),
           email: _emailCtrl.text.trim().isEmpty ? null : _emailCtrl.text.trim(),
           employeeId: widget.employeeId,
@@ -91,14 +111,26 @@ class _StaffInviteCreatePageState extends ConsumerState<StaffInviteCreatePage> {
     final rolesAsync = ref.watch(rolesControllerProvider);
     final branchesAsync = ref.watch(branchOptionsProvider);
     final prefilled = (widget.prefillName ?? widget.prefillEmail) != null;
-    final valid = _roleId != null && _branchIds.isNotEmpty;
+    // Gate on a branch the picker is showing, so a seeded-but-unassignable
+    // branch can't enable the button with nothing visibly ticked.
+    final visibleBranchIds =
+        branchesAsync.asData?.value.map((b) => b.id).toSet() ?? const <String>{};
+    final valid = _roleId != null && _branchIds.any(visibleBranchIds.contains);
+    // True only while the seeded branch is both visible and still ticked, so
+    // the copy below disappears the moment the user unticks it.
+    final branchSeeded = widget.branchId != null &&
+        visibleBranchIds.contains(widget.branchId) &&
+        _branchIds.contains(widget.branchId);
     final expiryIndex = _expiry.indexWhere((e) => e.$1 == _expiryHours);
 
     return AppDetailScaffold(
       eyebrow: 'Invites',
       title: 'Invite a teammate',
       description: prefilled
-          ? 'Prefilled from the HR profile for ${widget.prefillName ?? 'this employee'}.'
+          ? 'Prefilled from the HR profile for '
+              '${widget.prefillName ?? 'this employee'}.'
+              '${branchSeeded ? ' Their branch is already selected — add more '
+                  'if they work across branches.' : ''}'
           : 'Send a one-time code that locks to their role and branches.',
       maxContentWidth: 640,
       child: Column(
