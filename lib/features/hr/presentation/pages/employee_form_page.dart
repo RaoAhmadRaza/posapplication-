@@ -90,20 +90,37 @@ class _EmployeeFormPageState extends ConsumerState<EmployeeFormPage> {
     if (picked != null) setState(() => _joiningDate = picked);
   }
 
-  Future<void> _submit() async {
-    if (_nameCtrl.text.trim().isEmpty) {
-      setState(() => _error = 'Name is required.');
-      return;
-    }
+  /// The fields the form marks with a red asterisk — checked in one place so
+  /// the labels and the guards cannot drift apart. Keeps the numeric parse: an
+  /// unparseable salary would otherwise reach coalesce(p_base_salary, 0) and
+  /// create the employee on zero pay with a success toast.
+  String? _requiredFieldError() {
+    if (_nameCtrl.text.trim().isEmpty) return 'Name is required.';
     final salary = double.tryParse(_salaryCtrl.text.trim());
-    if (salary == null || salary < 0) {
-      setState(() => _error = 'Enter a valid base salary.');
-      return;
-    }
+    if (salary == null || salary < 0) return 'Enter a valid base salary.';
     if (!_isEdit && _codeCtrl.text.trim().isEmpty) {
-      setState(() => _error = 'Employee code is required.');
+      return 'Employee code is required.';
+    }
+    return null;
+  }
+
+  Future<void> _submit() async {
+    final invalid = _requiredFieldError();
+    if (invalid != null) {
+      setState(() => _error = invalid);
       return;
     }
+    // Guaranteed to parse by _requiredFieldError above.
+    final salary = double.parse(_salaryCtrl.text.trim());
+
+    // Resolved before the saving flip so a missing branch surfaces the error
+    // without flashing the button's spinner.
+    final branchId = _isEdit ? null : ref.read(currentBranchProvider)?.id;
+    if (!_isEdit && branchId == null) {
+      setState(() => _error = 'No branch selected.');
+      return;
+    }
+
     setState(() {
       _saving = true;
       _error = null;
@@ -138,16 +155,8 @@ class _EmployeeFormPageState extends ConsumerState<EmployeeFormPage> {
       return;
     }
 
-    final branch = ref.read(currentBranchProvider);
-    if (branch == null) {
-      setState(() {
-        _saving = false;
-        _error = 'No branch selected.';
-      });
-      return;
-    }
     final (id, failure) = await controller.create({
-      'p_branch_id': branch.id,
+      'p_branch_id': branchId,
       'p_employee_code': _codeCtrl.text.trim(),
       'p_name': _nameCtrl.text.trim(),
       'p_cnic': _emptyToNull(_cnicCtrl.text),
