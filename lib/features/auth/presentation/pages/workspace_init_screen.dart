@@ -135,15 +135,24 @@ class _WorkspaceInitScreenState extends ConsumerState<WorkspaceInitScreen> {
     // fires and the loads never happen — previously that left the previous
     // user's matrix in place, and now it would hang here on loading. Both
     // calls are no-ops once loaded for the current user.
+    // Deferred to after the frame: both calls can set provider state
+    // synchronously, which Riverpod forbids during a build.
     final profile = ref.watch(profileControllerProvider).value;
     final currentUserId = supabase.auth.currentUser?.id;
-    if (profile?.roleId != null) {
-      ref.read(permissionMatrixProvider.notifier).ensureLoadedFor(
-            profile!.roleId!,
-          );
-    }
-    if (currentUserId != null) {
-      ref.read(userBranchesProvider.notifier).ensureLoadedFor(currentUserId);
+    if (profile?.roleId != null || currentUserId != null) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (!mounted) return;
+        if (profile?.roleId != null) {
+          ref.read(permissionMatrixProvider.notifier).ensureLoadedFor(
+                profile!.roleId!,
+              );
+        }
+        if (currentUserId != null) {
+          ref
+              .read(userBranchesProvider.notifier)
+              .ensureLoadedFor(currentUserId);
+        }
+      });
     }
 
     final permsReady = ref.watch(permissionsReadyProvider);
