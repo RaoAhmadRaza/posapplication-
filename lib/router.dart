@@ -419,6 +419,7 @@ final appRouter = GoRouter(
           employeeId: m?['employeeId'] as String?,
           prefillName: m?['name'] as String?,
           prefillEmail: m?['email'] as String?,
+          branchId: m?['branchId'] as String?,
         );
       },
     ),
