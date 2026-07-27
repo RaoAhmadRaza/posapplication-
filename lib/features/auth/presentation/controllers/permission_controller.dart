@@ -33,7 +33,21 @@ class PermissionController extends Notifier<AsyncValue<Set<String>>> {
       final roleId = _roleId;
       if (roleId != null) load(roleId);
     });
+    // Note: a sign-out/sign-in cannot leave the previous user's matrix behind —
+    // SessionScope throws away the whole container on a user change, so this
+    // controller is rebuilt from scratch and starts here, on loading.
     return const AsyncValue.loading();
+  }
+
+  /// Load [roleId]'s matrix unless it is already loaded. Level-triggered, so a
+  /// screen that mounts *after* the profile resolved still gets a matrix — the
+  /// edge-triggered `ref.listen` in workspace-init alone can miss the emission
+  /// and leave this stuck on loading forever.
+  void ensureLoadedFor(String roleId) {
+    // load() sets _roleId synchronously, so an in-flight load for the same role
+    // is a no-op here; a failed one retries.
+    if (_roleId == roleId && !state.hasError) return;
+    load(roleId);
   }
 
   Future<void> load(String roleId) async {
