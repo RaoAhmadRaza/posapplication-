@@ -2,7 +2,6 @@ import 'dart:async';
 
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
-import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:sqflite_common_ffi/sqflite_ffi.dart';
 import 'package:window_manager/window_manager.dart';
@@ -11,6 +10,7 @@ import 'core/services/pin_service.dart';
 import 'core/services/voice_support.dart';
 import 'core/services/voxa_stt_service.dart';
 import 'core/state/app_flow_state.dart';
+import 'core/state/session_scope.dart';
 import 'core/state/theme_controller.dart';
 import 'core/supabase.dart';
 import 'app.dart';
@@ -55,5 +55,7 @@ Future<void> main() async {
   // Restore the saved light/dark choice before the first frame.
   await ThemeController.load();
 
-  runApp(const ProviderScope(child: App()));
+  // SessionScope, not a bare ProviderScope: it drops every cached provider when
+  // the signed-in user changes, so one account never sees another's data.
+  runApp(const SessionScope(child: App()));
 }
