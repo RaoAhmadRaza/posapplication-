@@ -66,16 +66,49 @@ class SmartInsightsPage extends ConsumerWidget {
             ),
           );
         }
-        return Column(
-          crossAxisAlignment: CrossAxisAlignment.stretch,
-          children: [
-            for (final rec in recs) ...[
-              _RecommendationCard(rec: rec),
-              const SizedBox(height: AppSpacing.md),
-            ],
-          ],
-        );
+        return _RecommendationList(recs: recs);
       },
+    );
+  }
+}
+
+/// Shows [_kPageSize] cards at a time; the button reveals the next batch.
+/// The provider already holds every pending recommendation, so this is a
+/// client-side slice — no extra fetch.
+const int _kPageSize = 10;
+
+class _RecommendationList extends StatefulWidget {
+  const _RecommendationList({required this.recs});
+
+  final List<AiRecommendation> recs;
+
+  @override
+  State<_RecommendationList> createState() => _RecommendationListState();
+}
+
+class _RecommendationListState extends State<_RecommendationList> {
+  int _visible = _kPageSize;
+
+  @override
+  Widget build(BuildContext context) {
+    final total = widget.recs.length;
+    final shown = _visible.clamp(0, total);
+    final remaining = total - shown;
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        for (final rec in widget.recs.take(shown)) ...[
+          _RecommendationCard(rec: rec),
+          const SizedBox(height: AppSpacing.md),
+        ],
+        if (remaining > 0)
+          AppButton(
+            label: 'Load more ($remaining left)',
+            variant: AppButtonVariant.tinted,
+            onPressed: () => setState(() => _visible += _kPageSize),
+          ),
+      ],
     );
   }
 }
