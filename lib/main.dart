@@ -36,6 +36,11 @@ Future<void> main() async {
     }
   }
 
+  // Started here, awaited last: reading the saved theme touches only
+  // SharedPreferences, so it has no reason to wait behind Supabase init and the
+  // PIN check. Still resolved before runApp, so the first frame is unchanged.
+  final themeLoad = ThemeController.load();
+
   await Supabase.initialize(
     url: Env.supabaseUrl,
     publishableKey: Env.supabaseAnonKey,
@@ -53,7 +58,7 @@ Future<void> main() async {
   }
 
   // Restore the saved light/dark choice before the first frame.
-  await ThemeController.load();
+  await themeLoad;
 
   // SessionScope, not a bare ProviderScope: it drops every cached provider when
   // the signed-in user changes, so one account never sees another's data.

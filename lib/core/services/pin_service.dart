@@ -34,13 +34,30 @@ class PinService {
     return '${base}_$uid';
   }
 
-  Future<void> _maybeMigrateGlobalKeys() async {
-    final uid = supabase.auth.currentUser?.id;
-    final oldHash = await _storage.read(key: _pinHashBase);
-    final oldSalt = await _storage.read(key: _pinSaltBase);
-    final oldBio = await _storage.read(key: _biometricsBase);
+  // Set once this process has confirmed the global keys are gone. The migration
+  // moves process-wide (non-uid) keys to uid-scoped ones and deletes the
+  // originals, so once it has run there is nothing left to migrate for any user
+  // — re-reading three secure-storage keys on every hasPin/verifyPin/
+  // isBiometricsEnabled call is pure cost. Each read is an Android Keystore
+  // round-trip, measured at up to ~1.1s on a loaded low-end device.
+  bool _migrationChecked = false;
 
-    if (oldHash == null && oldSalt == null && oldBio == null) return;
+  Future<void> _maybeMigrateGlobalKeys() async {
+    if (_migrationChecked) return;
+
+    final uid = supabase.auth.currentUser?.id;
+    // Concurrent, not sequential: three independent reads that used to cost
+    // three serialised Keystore round-trips before the first frame.
+    final [oldHash, oldSalt, oldBio] = await Future.wait([
+      _storage.read(key: _pinHashBase),
+      _storage.read(key: _pinSaltBase),
+      _storage.read(key: _biometricsBase),
+    ]);
+
+    if (oldHash == null && oldSalt == null && oldBio == null) {
+      _migrationChecked = true;
+      return;
+    }
 
     if (uid != null) {
       if (oldHash != null) {
@@ -57,6 +74,8 @@ class PinService {
     await _storage.delete(key: _pinHashBase);
     await _storage.delete(key: _pinSaltBase);
     await _storage.delete(key: _biometricsBase);
+
+    _migrationChecked = true;
   }
 
   Future<bool> hasPin() async {
