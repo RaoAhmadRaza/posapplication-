@@ -6,13 +6,17 @@ import '../../../../core/design/app_colors.dart';
 import '../../../../core/design/app_radius.dart';
 import '../../../../core/design/app_typography.dart';
 import '../../../../core/design/clay.dart';
+import '../../../../core/design/app_spacing.dart';
 import '../../../../core/design/widgets/app_button.dart';
+import '../../../../core/design/widgets/app_checkbox.dart';
 import '../../../../core/design/widgets/app_detail_scaffold.dart';
+import '../../../../core/design/widgets/app_field.dart';
 import '../../../../core/design/widgets/app_filter_chips.dart';
 import '../../../../core/design/widgets/app_inline_banner.dart';
 import '../../../../core/design/widgets/app_section_card.dart';
 import '../../../../core/design/widgets/app_text_field.dart';
 import '../../../../core/design/widgets/app_toast.dart';
+import '../../../../core/widgets/permission_gate.dart';
 import '../../../auth/presentation/controllers/branch_controller.dart';
 import '../../domain/entities/employee.dart';
 import '../../data/models/employee_model.dart';
@@ -52,6 +56,7 @@ class _EmployeeFormPageState extends ConsumerState<EmployeeFormPage> {
   late DateTime _joiningDate = _e?.joiningDate ?? DateTime.now();
 
   bool _saving = false;
+  bool _createLogin = false;
   String? _error;
 
   Employee? get _e => widget.employee;
@@ -182,8 +187,21 @@ class _EmployeeFormPageState extends ConsumerState<EmployeeFormPage> {
       return;
     }
     if (id != null) {
+      // Router captured first: go() can dispose this widget's context before
+      // the push runs. go-then-push (not pushReplacement) so backing out of the
+      // invite lands on the new employee's profile — where "Create login" still
+      // waits — rather than on a spent form that could create a second record.
+      final router = GoRouter.of(context);
       showAppToast(context, 'Employee created', type: BannerType.success);
-      context.go('/hr/employees/$id');
+      router.go('/hr/employees/$id');
+      if (_createLogin) {
+        router.push('/staff/invite', extra: {
+          'employeeId': id,
+          'name': _nameCtrl.text.trim(),
+          'email': _emptyToNull(_emailCtrl.text),
+          'branchId': branchId,
+        });
+      }
     } else {
       _done('Employee created');
     }
@@ -199,79 +217,65 @@ class _EmployeeFormPageState extends ConsumerState<EmployeeFormPage> {
     return AppDetailScaffold(
       eyebrow: 'HR · Employees',
       title: _isEdit ? 'Edit Employee' : 'New Employee',
-      description:
-          'Fields marked * are required. New employees are added to the '
-          'current branch.',
+      description: _isEdit
+          ? 'Fields marked * are required.'
+          : 'Fields marked * are required. New employees are added to the '
+              'current branch.',
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          if (_isEdit) ...[
-            AppSectionCard(
-              eyebrow: 'Status',
-              child: _StatusSelector(
-                value: _status,
-                onChanged: (s) => setState(() => _status = s),
-              ),
-            ),
-            const SizedBox(height: 16),
-          ],
-          if (!_isEdit) ...[
-            AppSectionCard(
-              eyebrow: 'Identity',
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.stretch,
-                children: [
-                  _grid([
+          // Employee code, CNIC and joining date stay create-only: the
+          // update_employee RPC has no parameter for any of them, so an
+          // editable field here would discard the edit and still toast success.
+          AppSectionCard(
+            eyebrow: 'Basic info',
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                if (_isEdit) ...[
+                  _labeled(
+                    'Status',
+                    _StatusSelector(
+                      value: _status,
+                      onChanged: (s) => setState(() => _status = s),
+                    ),
+                  ),
+                  const SizedBox(height: AppSpacing.fieldGap),
+                ],
+                AppFieldRow(children: [
+                  AppTextField(
+                    controller: _nameCtrl,
+                    label: 'Full name',
+                    isRequired: true,
+                    prefixIcon: LucideIcons.user,
+                  ),
+                  if (!_isEdit)
                     AppTextField(
                       controller: _codeCtrl,
                       label: 'Employee code',
+                      isRequired: true,
                       prefixIcon: LucideIcons.hash,
                     ),
-                    AppTextField(
-                      controller: _cnicCtrl,
-                      label: 'CNIC',
-                      prefixIcon: LucideIcons.fingerprint,
-                    ),
-                  ]),
-                  const SizedBox(height: 14),
-                  _LabelledField(
-                    label: 'Joining date',
-                    child: _DateWell(
-                      date: _joiningDate,
-                      onTap: _pickJoiningDate,
-                    ),
+                ]),
+                const SizedBox(height: AppSpacing.fieldGap),
+                AppFieldRow(children: [
+                  AppTextField(
+                    controller: _phoneCtrl,
+                    label: 'Phone',
+                    hint: 'Optional',
+                    prefixIcon: LucideIcons.phone,
+                    keyboardType: TextInputType.phone,
                   ),
-                ],
-              ),
+                  AppTextField(
+                    controller: _emailCtrl,
+                    label: 'Email',
+                    hint: 'Optional',
+                    prefixIcon: LucideIcons.mail,
+                    keyboardType: TextInputType.emailAddress,
+                  ),
+                ]),
+              ],
             ),
-            const SizedBox(height: 16),
-          ],
-          AppSectionCard(
-            eyebrow: 'Personal & contact',
-            child: _grid([
-              AppTextField(
-                controller: _nameCtrl,
-                label: 'Full name *',
-                prefixIcon: LucideIcons.user,
-              ),
-              AppTextField(
-                controller: _phoneCtrl,
-                label: 'Phone',
-                prefixIcon: LucideIcons.phone,
-                keyboardType: TextInputType.phone,
-              ),
-              AppTextField(
-                controller: _emailCtrl,
-                label: 'Email',
-                prefixIcon: LucideIcons.mail,
-                keyboardType: TextInputType.emailAddress,
-              ),
-              AppTextField(
-                controller: _addressCtrl,
-                label: 'Address',
-                prefixIcon: LucideIcons.mapPin,
-              ),
-            ]),
           ),
           const SizedBox(height: 16),
           AppSectionCard(
@@ -279,30 +283,40 @@ class _EmployeeFormPageState extends ConsumerState<EmployeeFormPage> {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.stretch,
               children: [
-                _grid([
+                AppFieldRow(children: [
                   AppTextField(
                     controller: _designationCtrl,
                     label: 'Designation',
+                    hint: 'Optional',
                     prefixIcon: LucideIcons.briefcase,
                   ),
                   AppTextField(
                     controller: _departmentCtrl,
                     label: 'Department',
+                    hint: 'Optional',
                     prefixIcon: LucideIcons.building2,
                   ),
                 ]),
-                const SizedBox(height: 14),
-                _LabelledField(
-                  label: 'Salary type',
-                  child: _SalaryTypeSelector(
+                const SizedBox(height: AppSpacing.fieldGap),
+                if (!_isEdit) ...[
+                  _labeled(
+                    'Joining date',
+                    _DateWell(date: _joiningDate, onTap: _pickJoiningDate),
+                  ),
+                  const SizedBox(height: AppSpacing.fieldGap),
+                ],
+                _labeled(
+                  'Salary type',
+                  _SalaryTypeSelector(
                     value: _salaryType,
                     onChanged: (t) => setState(() => _salaryType = t),
                   ),
                 ),
-                const SizedBox(height: 14),
+                const SizedBox(height: AppSpacing.fieldGap),
                 AppTextField(
                   controller: _salaryCtrl,
-                  label: 'Base salary *',
+                  label: 'Base salary',
+                  isRequired: true,
                   prefixIcon: LucideIcons.wallet,
                   keyboardType:
                       const TextInputType.numberWithOptions(decimal: true),
@@ -312,32 +326,81 @@ class _EmployeeFormPageState extends ConsumerState<EmployeeFormPage> {
           ),
           const SizedBox(height: 16),
           AppSectionCard(
-            eyebrow: 'Bank & notes',
+            eyebrow: 'Additional details',
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.stretch,
               children: [
-                _grid([
+                AppFieldRow(children: [
+                  if (!_isEdit)
+                    AppTextField(
+                      controller: _cnicCtrl,
+                      label: 'CNIC',
+                      hint: 'Optional',
+                      prefixIcon: LucideIcons.fingerprint,
+                    ),
+                  AppTextField(
+                    controller: _addressCtrl,
+                    label: 'Address',
+                    hint: 'Optional',
+                    prefixIcon: LucideIcons.mapPin,
+                  ),
+                ]),
+                const SizedBox(height: AppSpacing.fieldGap),
+                AppFieldRow(children: [
                   AppTextField(
                     controller: _bankNameCtrl,
                     label: 'Bank name',
+                    hint: 'Optional',
                     prefixIcon: LucideIcons.landmark,
                   ),
                   AppTextField(
                     controller: _bankAcctCtrl,
                     label: 'Account number',
+                    hint: 'Optional',
                     prefixIcon: LucideIcons.creditCard,
                   ),
                 ]),
-                const SizedBox(height: 14),
+                const SizedBox(height: AppSpacing.fieldGap),
                 AppTextField(
                   controller: _notesCtrl,
                   label: 'Notes',
+                  hint: 'Optional',
                   prefixIcon: LucideIcons.stickyNote,
                   maxLines: 4,
                 ),
               ],
             ),
           ),
+          // Outside the section cards: this changes what Save *does*, it is not
+          // part of the employee record. Gated on users:create (the Staff
+          // module's key, as on the profile's "Create login"), with the spacing
+          // inside the gate so hiding it leaves no orphan gap.
+          if (!_isEdit)
+            PermissionGate(
+              module: 'users',
+              action: 'create',
+              child: Padding(
+                padding: const EdgeInsets.only(top: 16),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    AppCheckbox(
+                      value: _createLogin,
+                      onChanged: (v) => setState(() => _createLogin = v),
+                      label: 'Also create an app login for this employee',
+                    ),
+                    if (_createLogin && _emailCtrl.text.trim().isEmpty) ...[
+                      const SizedBox(height: 6),
+                      Text(
+                        'No email yet — you’ll get a QR code to share instead.',
+                        style: AppTypography.footnote
+                            .copyWith(color: context.lum.g500),
+                      ),
+                    ],
+                  ],
+                ),
+              ),
+            ),
           if (_error != null) ...[
             const SizedBox(height: 16),
             AppInlineBanner(message: _error!, type: BannerType.error),
@@ -365,47 +428,13 @@ class _EmployeeFormPageState extends ConsumerState<EmployeeFormPage> {
     );
   }
 
-  /// Responsive two-up field grid: side-by-side when wide enough, else stacked.
-  Widget _grid(List<Widget> fields) => LayoutBuilder(
-        builder: (context, constraints) {
-          const gap = 14.0;
-          final twoCol = constraints.maxWidth >= 440;
-          final width =
-              twoCol ? (constraints.maxWidth - gap) / 2 : constraints.maxWidth;
-          return Wrap(
-            spacing: gap,
-            runSpacing: gap,
-            children: [
-              for (final f in fields) SizedBox(width: width, child: f),
-            ],
-          );
-        },
+  /// Label above a non-[AppTextField] control (date well, chip row) — the same
+  /// shape the product and purchase-order forms use.
+  Widget _labeled(String label, Widget child, {bool isRequired = false}) =>
+      Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [AppFieldLabel(label, isRequired: isRequired), child],
       );
-}
-
-/// Field label above a non-[AppTextField] control (date well, pill row).
-class _LabelledField extends StatelessWidget {
-  const _LabelledField({required this.label, required this.child});
-  final String label;
-  final Widget child;
-
-  @override
-  Widget build(BuildContext context) {
-    final lum = context.lum;
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Padding(
-          padding: const EdgeInsets.only(left: 2, bottom: 8),
-          child: Text(
-            label,
-            style: AppTypography.fieldLabel.copyWith(color: lum.g700),
-          ),
-        ),
-        child,
-      ],
-    );
-  }
 }
 
 /// Clay-inset date tile opening the platform picker; mirrors [AppTextField]'s
