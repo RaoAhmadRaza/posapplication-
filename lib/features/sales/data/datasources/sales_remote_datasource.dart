@@ -109,7 +109,12 @@ class SalesRemoteDataSource {
   Future<Map<String, dynamic>> loadInvoiceDetail(String id) async {
     final list = await _client
         .from('invoices')
-        .select('$_invoiceCols, invoice_items($_invoiceItemCols), payments($_paymentCols)')
+        // products(name)/customers(name) embedded: invoice_items.description is
+        // written only when the caller passes one, so the receipt has no other
+        // source for the product name.
+        .select('$_invoiceCols, customers(name),'
+            ' invoice_items($_invoiceItemCols, products(name)),'
+            ' payments($_paymentCols)')
         .eq('id', id);
     if (list.isEmpty) throw PostgrestException(message: 'Invoice not found', code: 'PGRST116');
     return list.first;

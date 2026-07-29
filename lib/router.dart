@@ -253,6 +253,33 @@ CustomTransitionPage<void> _fadePage(GoRouterState state, Widget child) {
   );
 }
 
+/// Transparent route for the sale's steps (payment → complete → receipt). They
+/// are dialogs over the register rather than screens that replace it, and a
+/// route keeps every path, extra and back gesture working as before.
+CustomTransitionPage<void> _dialogPage(GoRouterState state, Widget child) {
+  return CustomTransitionPage<void>(
+    key: state.pageKey,
+    opaque: false,
+    barrierDismissible: true,
+    barrierColor: Colors.black54,
+    barrierLabel: 'Dismiss',
+    transitionDuration: const Duration(milliseconds: 200),
+    reverseTransitionDuration: const Duration(milliseconds: 160),
+    transitionsBuilder: (context, animation, secondaryAnimation, child) {
+      final curved =
+          CurvedAnimation(parent: animation, curve: Curves.easeOutCubic);
+      return FadeTransition(
+        opacity: curved,
+        child: ScaleTransition(
+          scale: Tween<double>(begin: 0.96, end: 1).animate(curved),
+          child: child,
+        ),
+      );
+    },
+    child: child,
+  );
+}
+
 final appRouter = GoRouter(
   initialLocation: '/splash',
   refreshListenable: Listenable.merge([
@@ -822,7 +849,7 @@ final appRouter = GoRouter(
               path: '/sales/payment',
               pageBuilder: (context, state) {
                 final extra = state.extra as Map<String, dynamic>;
-                return _fadePage(
+                return _dialogPage(
                   state,
                   PaymentSheet(
                     branchId: extra['branchId'] as String,
@@ -834,13 +861,13 @@ final appRouter = GoRouter(
             GoRoute(
               path: '/sales/success',
               pageBuilder: (context, state) =>
-                  _fadePage(state, const SaleSuccessPage()),
+                  _dialogPage(state, const SaleSuccessPage()),
             ),
             GoRoute(
               path: '/sales/receipt',
               pageBuilder: (context, state) {
                 final invoiceId = state.extra as String;
-                return _fadePage(state, ReceiptPage(invoiceId: invoiceId));
+                return _dialogPage(state, ReceiptPage(invoiceId: invoiceId));
               },
             ),
             GoRoute(

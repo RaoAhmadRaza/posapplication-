@@ -28,6 +28,7 @@ import '../../domain/entities/stock_movement_type.dart';
 import '../../domain/entities/warehouse.dart';
 import '../../domain/entities/product_variant.dart';
 import '../../domain/entities/pricing_tier.dart';
+import '../../domain/usecases/get_product.dart';
 import '../../domain/usecases/load_stock_balances.dart';
 import '../../domain/usecases/load_product_ledger.dart';
 import '../../domain/usecases/load_variants.dart';
@@ -54,6 +55,10 @@ class _ProductStockDetailPageState
   List<StockLedgerEntry>? _ledger;
   List<ProductVariant>? _variants;
   List<PricingTier>? _tiers;
+
+  /// Set when the product is not in the loaded products list (scan or deep
+  /// link lands on a product outside the current page/filter).
+  Product? _fetched;
   String? _error;
 
   @override
@@ -63,9 +68,6 @@ class _ProductStockDetailPageState
   }
 
   Future<void> _load() async {
-    final branch = ref.read(currentBranchProvider);
-    if (branch == null) return;
-
     setState(() {
       _balances = null;
       _ledger = null;
@@ -73,6 +75,27 @@ class _ProductStockDetailPageState
       _tiers = null;
       _error = null;
     });
+
+    // productsProvider only holds the current page/filter, so a scanned product
+    // can be missing from it — fetch it by id rather than spinning forever.
+    final listed = (ref.read(productsProvider).value ?? const <Product>[])
+        .any((p) => p.id == widget.productId);
+    if (!listed && _fetched == null) {
+      final (fetched, fail) =
+          await ref.read(getProductUseCaseProvider).call(widget.productId);
+      if (!mounted) return;
+      if (fetched == null) {
+        setState(() => _error = fail?.message ?? 'Product not found.');
+        return;
+      }
+      setState(() => _fetched = fetched);
+    }
+
+    final branch = ref.read(currentBranchProvider);
+    if (branch == null) {
+      setState(() => _error = 'No branch selected. Pick a branch and retry.');
+      return;
+    }
 
     final (bals, balFail) = await ref.read(loadStockBalancesUseCaseProvider).call(
           branchId: branch.id,
@@ -108,7 +131,8 @@ class _ProductStockDetailPageState
   @override
   Widget build(BuildContext context) {
     final products = ref.watch(productsProvider).value ?? <Product>[];
-    final product = products.where((p) => p.id == widget.productId).firstOrNull;
+    final product =
+        products.where((p) => p.id == widget.productId).firstOrNull ?? _fetched;
     final warehouses = ref.watch(warehousesProvider).value ?? <Warehouse>[];
     final categories = ref.watch(categoriesProvider).value ?? <Category>[];
     final brands = ref.watch(brandsProvider).value ?? <Brand>[];
@@ -146,6 +170,19 @@ class _ProductStockDetailPageState
     final tiers = (_tiers ?? []).where((t) => t.isActive).toList();
     final variants = (_variants ?? []).where((v) => v.isActive).toList();
 
+    // Ledger roll-up shown in the header strip; detail stays in the card below.
+    final entries = _ledger ?? const <StockLedgerEntry>[];
+    var opening = 0.0, stockIn = 0.0, stockOut = 0.0;
+    for (final e in entries) {
+      if (e.operationType == StockMovementType.openingBalance) {
+        opening += e.qtyChange;
+      } else if (e.qtyChange >= 0) {
+        stockIn += e.qtyChange;
+      } else {
+        stockOut += -e.qtyChange;
+      }
+    }
+
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
@@ -154,12 +191,17 @@ class _ProductStockDetailPageState
           categories: categories,
           brands: brands,
           totalOnHand: totalOnHand,
+          opening: opening,
+          stockIn: stockIn,
+          stockOut: stockOut,
           onEdit: () => context.push('/inventory/products/${product.id}'),
           onAddToCart: () {
-            addProductToCart(ref, product);
-            ScaffoldMessenger.of(context).showSnackBar(
-              SnackBar(content: Text('Added ${product.name} to cart')),
-            );
+            final added = addProductToCart(ref, product);
+            ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+              content: Text(added
+                  ? 'Added ${product.name} to cart'
+                  : 'Tax settings are still loading. Try again in a moment.'),
+            ));
           },
           onAdjust: () => context.push('/inventory/adjustments/create'),
           onOpening: () => context.push('/inventory/stock/movement',
@@ -196,6 +238,9 @@ class _HeaderCard extends StatelessWidget {
     required this.categories,
     required this.brands,
     required this.totalOnHand,
+    required this.opening,
+    required this.stockIn,
+    required this.stockOut,
     required this.onEdit,
     required this.onAddToCart,
     required this.onAdjust,
@@ -207,6 +252,9 @@ class _HeaderCard extends StatelessWidget {
   final List<Category> categories;
   final List<Brand> brands;
   final double totalOnHand;
+  final double opening;
+  final double stockIn;
+  final double stockOut;
   final VoidCallback onEdit;
   final VoidCallback onAddToCart;
   final VoidCallback onAdjust;
@@ -232,6 +280,9 @@ class _HeaderCard extends StatelessWidget {
     final (tone, label) =
         stockStatusPill(totalOnHand, product.reorderPoint, product.type);
 
+    Widget qty(double v, Color color) => Text(qtyLabel(v),
+        style: AppTypography.monoValue.copyWith(fontSize: 16, color: color));
+
     final specs = <_SpecCell>[
       _SpecCell('Cost', AppMoneyText(product.costPrice, size: 16)),
       _SpecCell(
@@ -241,18 +292,11 @@ class _HeaderCard extends StatelessWidget {
                 fontSize: 16,
                 color: margin == null ? lum.g400 : lum.successText)),
       ),
-      _SpecCell(
-        'On hand',
-        Text(qtyLabel(totalOnHand),
-            style: AppTypography.monoValue
-                .copyWith(fontSize: 16, color: lum.textPrimary)),
-      ),
-      _SpecCell(
-        'Reorder at',
-        Text(product.reorderPoint.toString(),
-            style: AppTypography.monoValue
-                .copyWith(fontSize: 16, color: lum.textPrimary)),
-      ),
+      _SpecCell('Reorder at', qty(product.reorderPoint.toDouble(), lum.textPrimary)),
+      _SpecCell('Opening qty', qty(opening, opening == 0 ? lum.g400 : lum.textPrimary)),
+      _SpecCell('Stock in', qty(stockIn, stockIn == 0 ? lum.g400 : lum.successText)),
+      _SpecCell('Stock out', qty(stockOut, stockOut == 0 ? lum.g400 : lum.dangerText)),
+      _SpecCell('Current', qty(totalOnHand, lum.textPrimary)),
     ];
 
     return AppCard(
@@ -494,46 +538,39 @@ class _SpecStrip extends StatelessWidget {
       borderRadius: BorderRadius.circular(AppRadius.md),
     );
 
-    if (wide) {
-      return Container(
-        decoration: container,
-        padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 16),
-        child: IntrinsicHeight(
+    // Chunk into rows so any number of specs lays out: 4 per row wide, 2 narrow.
+    final perRow = wide ? 4 : 2;
+    final rows = [
+      for (var i = 0; i < specs.length; i += perRow)
+        specs.sublist(i, math.min(i + perRow, specs.length)),
+    ];
+
+    Widget rowOf(List<_SpecCell> r) => IntrinsicHeight(
           child: Row(
             children: [
-              for (var i = 0; i < specs.length; i++) ...[
-                Expanded(child: cell(specs[i])),
-                if (i < specs.length - 1) vDivider(),
+              for (var i = 0; i < perRow; i++) ...[
+                Expanded(
+                    child: i < r.length ? cell(r[i]) : const SizedBox.shrink()),
+                // No trailing divider, and none before a padding slot.
+                if (i < perRow - 1 && i + 1 < r.length) vDivider(),
               ],
             ],
           ),
-        ),
-      );
-    }
+        );
 
-    Widget half(_SpecCell s) => Expanded(child: cell(s));
     return Container(
       decoration: container,
-      padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 16),
+      padding: EdgeInsets.symmetric(horizontal: wide ? 20 : 18, vertical: 16),
       child: Column(
         children: [
-          IntrinsicHeight(
-            child: Row(children: [
-              half(specs[0]),
-              vDivider(),
-              half(specs[1]),
-            ]),
-          ),
-          const SizedBox(height: 14),
-          Divider(height: 1, thickness: 1, color: lum.hairline),
-          const SizedBox(height: 14),
-          IntrinsicHeight(
-            child: Row(children: [
-              half(specs[2]),
-              vDivider(),
-              half(specs[3]),
-            ]),
-          ),
+          for (var i = 0; i < rows.length; i++) ...[
+            if (i > 0) ...[
+              const SizedBox(height: 14),
+              Divider(height: 1, thickness: 1, color: lum.hairline),
+              const SizedBox(height: 14),
+            ],
+            rowOf(rows[i]),
+          ],
         ],
       ),
     );
@@ -614,7 +651,7 @@ class _LedgerCard extends StatelessWidget {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          _sectionHeader(context, LucideIcons.history, 'Ledger history'),
+          _sectionHeader(context, LucideIcons.history, 'Detailed ledger'),
           if (ledger == null)
             const Padding(
               padding: EdgeInsets.symmetric(vertical: 16),

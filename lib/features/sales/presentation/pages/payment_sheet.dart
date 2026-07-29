@@ -18,8 +18,9 @@ import '../../../sync/presentation/controllers/connectivity_controller.dart';
 import '../../domain/entities/cart_line.dart';
 import '../../domain/entities/customer.dart';
 import '../controllers/pos_cart_controller.dart';
-import '../widgets/sales_rise.dart';
-import '../widgets/sales_scaffold.dart';
+import '../widgets/enter_shortcut.dart';
+import '../widgets/sales_dialog.dart';
+import 'customer_picker_sheet.dart';
 
 class PaymentSheet extends ConsumerStatefulWidget {
   const PaymentSheet({super.key, required this.branchId, required this.sessionId});
@@ -50,7 +51,10 @@ class _PaymentSheetState extends ConsumerState<PaymentSheet> {
   void initState() {
     super.initState();
     final grand = ref.read(posCartProvider).grandTotal;
-    _rows.add(_PaymentRow(method: PaymentMethodLabel.cash, amount: grand.toStringAsFixed(0)));
+    _rows.add(_PaymentRow(
+      method: PaymentMethodLabel.cash,
+      amount: _tenderText(grand),
+    ));
   }
 
   @override
@@ -61,6 +65,15 @@ class _PaymentSheetState extends ConsumerState<PaymentSheet> {
     }
     super.dispose();
   }
+
+  /// Whole units when the amount is whole, cents when it is not.
+  ///
+  /// `toStringAsFixed(0)` rounds: a 1234.40 total prefilled a 1234 tender, so
+  /// the sale silently carried a 0.40 balance and Complete sale then refused it
+  /// as a credit sale with no customer. That refusal reads as "Enter did
+  /// nothing" from the counter.
+  static String _tenderText(double v) =>
+      v == v.roundToDouble() ? v.toStringAsFixed(0) : v.toStringAsFixed(2);
 
   double get _paid {
     double total = 0;
@@ -91,7 +104,22 @@ class _PaymentSheetState extends ConsumerState<PaymentSheet> {
   void _fillExact(int i) {
     final remaining =
         _balance + (double.tryParse(_rows[i].amountCtrl.text) ?? 0);
-    setState(() => _rows[i].amountCtrl.text = remaining.toStringAsFixed(0));
+    setState(() => _rows[i].amountCtrl.text = _tenderText(remaining));
+  }
+
+  /// Same picker (and same offline rule) as the register: offline is cash-only
+  /// by construction, so there is no credit to attach a customer to and
+  /// creating one is a server write.
+  Future<void> _pickCustomer() async {
+    final online = ref
+        .read(connectivityProvider)
+        .maybeWhen(data: (v) => v, orElse: () => true);
+    if (!online) {
+      setState(() => _error =
+          'Offline: cash-only sales. Customer selection needs a connection.');
+      return;
+    }
+    await showCustomerPicker(context);
   }
 
   bool get _needsReference {
@@ -131,7 +159,7 @@ class _PaymentSheetState extends ConsumerState<PaymentSheet> {
     });
 
     final notifier = ref.read(posCartProvider.notifier);
-    notifier.clearResult();
+    notifier.clearPayments();
     for (final r in _rows) {
       final amt = double.tryParse(r.amountCtrl.text) ?? 0;
       if (amt > 0) {
@@ -152,7 +180,9 @@ class _PaymentSheetState extends ConsumerState<PaymentSheet> {
         _error = failure.message;
       });
     } else {
-      context.go('/sales/success');
+      // Replace, not go: the register has to stay on the stack underneath or
+      // these transparent routes have nothing to sit over.
+      context.pushReplacement('/sales/success');
     }
   }
 
@@ -172,38 +202,31 @@ class _PaymentSheetState extends ConsumerState<PaymentSheet> {
     final hasCustomer = cart.customer != null;
     final online = ref.watch(connectivityProvider).maybeWhen(data: (v) => v, orElse: () => true);
 
-    return SalesScaffold(
+    final scaffold = SalesDialog(
       title: 'Payment',
-      leading: _BackButton(
-        onTap: _loading ? () {} : () => context.go('/sales/pos'),
-      ),
-      maxContentWidth: 560,
-      padding: const EdgeInsets.fromLTRB(20, 20, 20, 12),
-      bottomBar: Container(
-        padding: const EdgeInsets.fromLTRB(20, 12, 20, 20),
-        decoration: BoxDecoration(
-          color: lum.surface,
-          border: Border(top: BorderSide(color: lum.hairline)),
-        ),
-        child: SafeArea(
-          top: false,
-          child: Center(
-            child: ConstrainedBox(
-              constraints: const BoxConstraints(maxWidth: 560),
-              child: AppButton(
-                label: _balance > 0 ? 'Charge · leave balance' : 'Complete sale',
-                onPressed: _loading ? null : _complete,
-                loading: _loading,
-                fullWidth: true,
-                icon: LucideIcons.check,
-              ),
-            ),
+      // No close while the sale is in flight — the barrier is blocked too.
+      onClose: _loading ? null : () => context.pop(),
+      // The error is pinned beside the button, not left at the foot of the
+      // scrolling body: down there a refused Complete sale is below the fold
+      // and reads as the key having done nothing at all.
+      bottomBar: Column(
+        mainAxisSize: MainAxisSize.min,
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          if (_error != null) ...[
+            AppInlineBanner(message: _error!),
+            const SizedBox(height: 12),
+          ],
+          AppButton(
+            label: _balance > 0 ? 'Charge · leave balance' : 'Complete sale',
+            onPressed: _loading ? null : _complete,
+            loading: _loading,
+            fullWidth: true,
+            icon: LucideIcons.check,
           ),
-        ),
+        ],
       ),
-      child: SalesRise(
-        duration: const Duration(milliseconds: 350),
-        child: SingleChildScrollView(
+      child: SingleChildScrollView(
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
@@ -220,7 +243,7 @@ class _PaymentSheetState extends ConsumerState<PaymentSheet> {
                 ),
               ),
               const SizedBox(height: 22),
-              _CustomerCard(customer: cart.customer),
+              _CustomerCard(customer: cart.customer, onTap: _pickCustomer),
               const SizedBox(height: 12),
               _OrderSummaryCard(cart: cart),
               const SizedBox(height: 22),
@@ -285,19 +308,21 @@ class _PaymentSheetState extends ConsumerState<PaymentSheet> {
               if (_balance > 0 && !hasCustomer) ...[
                 const SizedBox(height: 12),
                 const AppInlineBanner(
-                  message: 'Credit requires a customer. Go back and select one.',
+                  message: 'Credit requires a customer. Tap the customer card '
+                      'above to select one.',
                   type: BannerType.info,
                 ),
               ],
-              if (_error != null) ...[
-                const SizedBox(height: 12),
-                AppInlineBanner(message: _error!),
-              ],
-              const SizedBox(height: 8),
             ],
           ),
         ),
-      ),
+    );
+
+    return EnterShortcut(
+      // Same commit as the bottom bar's button — _complete validates, so a
+      // half-filled tender still surfaces its error inline instead of charging.
+      onEnter: _loading ? null : _complete,
+      child: scaffold,
     );
   }
 }
@@ -474,10 +499,12 @@ class _MethodField extends StatelessWidget {
 }
 
 /// Who the sale is for. Shows the selected customer's identity, or a neutral
-/// walk-in state when none was chosen at the register.
+/// walk-in state when none was chosen at the register. Tapping re-opens the
+/// picker — credit is decided here, so this is where the customer gets fixed.
 class _CustomerCard extends StatelessWidget {
-  const _CustomerCard({required this.customer});
+  const _CustomerCard({required this.customer, required this.onTap});
   final Customer? customer;
+  final VoidCallback onTap;
 
   static String _initials(String name) {
     final parts = name.trim().split(RegExp(r'\s+')).where((p) => p.isNotEmpty);
@@ -495,7 +522,7 @@ class _CustomerCard extends StatelessWidget {
         ? 'No account attached'
         : [c.phone, c.email].whereType<String>().where((s) => s.isNotEmpty).join(' · ');
 
-    return AppCard(
+    final card = AppCard(
       padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
       child: Row(
         children: [
@@ -560,7 +587,23 @@ class _CustomerCard extends StatelessWidget {
                 ),
               ),
             ),
+          // The card looked static without it; the register's customer row
+          // carries the same chevron.
+          Padding(
+            padding: const EdgeInsets.only(left: 8),
+            child: Icon(LucideIcons.chevronRight, size: 18, color: lum.g400),
+          ),
         ],
+      ),
+    );
+
+    return Semantics(
+      button: true,
+      label: 'Customer: $title. Tap to change.',
+      child: InkWell(
+        onTap: onTap,
+        borderRadius: BorderRadius.circular(AppRadius.lg),
+        child: card,
       ),
     );
   }
@@ -667,29 +710,6 @@ class _LineRow extends StatelessWidget {
             child: AppMoneyText(line.lineTotal, size: 15),
           ),
         ],
-      ),
-    );
-  }
-}
-
-class _BackButton extends StatelessWidget {
-  const _BackButton({required this.onTap});
-  final VoidCallback onTap;
-
-  @override
-  Widget build(BuildContext context) {
-    final lum = context.lum;
-    return Semantics(
-      button: true,
-      label: 'Back',
-      child: InkWell(
-        onTap: onTap,
-        borderRadius: BorderRadius.circular(AppRadius.pill),
-        child: SizedBox(
-          width: 40,
-          height: 44,
-          child: Icon(LucideIcons.arrowLeft, size: 20, color: lum.g600),
-        ),
       ),
     );
   }

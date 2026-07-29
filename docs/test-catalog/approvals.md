@@ -32,3 +32,4 @@
 - **Key Invariant:** All approval outcomes (APPROVED/REJECTED) require role assignment in ladder; TTL (time-to-live) gates approval expiration
 
 ---
+

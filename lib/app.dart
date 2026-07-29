@@ -5,6 +5,7 @@ import 'core/services/voxa_stt_service.dart';
 import 'core/state/app_flow_state.dart';
 import 'core/state/theme_controller.dart';
 import 'core/supabase.dart';
+import 'core/widgets/cart_fab.dart';
 import 'router.dart';
 
 class App extends StatefulWidget {
@@ -56,6 +57,7 @@ class _AppState extends State<App> with WidgetsBindingObserver {
         darkTheme: AppTheme.dark,
         themeMode: mode,
         debugShowCheckedModeBanner: false,
+        builder: (context, child) => GlobalCartFab(child: child!),
       ),
     );
   }

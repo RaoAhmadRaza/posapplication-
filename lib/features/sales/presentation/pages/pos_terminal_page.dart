@@ -31,6 +31,7 @@ import '../widgets/pos/pos_cart_panel.dart';
 import '../widgets/pos/pos_cart_sheet.dart';
 import '../widgets/pos/pos_search_bar.dart';
 import '../widgets/pos/product_grid.dart';
+import '../widgets/enter_shortcut.dart';
 import '../widgets/scanned_product_dialog.dart';
 import '../widgets/sales_empty_state.dart';
 import '../widgets/sales_scaffold.dart';
@@ -245,7 +246,20 @@ class _PosTerminalPageState extends ConsumerState<PosTerminalPage>
     if (result != null && result.isNotEmpty) _searchCtrl.text = result;
   }
 
-  void _addLine(Product product) => addProductToCart(ref, product);
+  void _addLine(Product product) {
+    // The tenant's tax rule prices the line; without it the cart would total
+    // under the invoice and the sale gets refused at payment.
+    if (!addProductToCart(ref, product)) {
+      _snack('Tax settings are still loading. Try again in a moment.');
+    }
+  }
+
+  /// Same destination as the footer's Charge button — Enter is the counter's
+  /// shortcut for it.
+  void _charge(String branchId, String? sessionId) => context.push(
+        '/sales/payment',
+        extra: {'branchId': branchId, 'sessionId': sessionId},
+      );
 
   Future<void> _openCustomerPicker() async {
     // Offline is cash-only by construction: no credit, so no customer needed, and
@@ -297,6 +311,9 @@ class _PosTerminalPageState extends ConsumerState<PosTerminalPage>
     final branch = ref.watch(currentBranchProvider);
     final sessionState = ref.watch(sessionProvider);
     final cart = ref.watch(posCartProvider);
+    // Watched, not read: this is what loads the tax rule the cart prices with,
+    // and every line added before it lands would be priced short of the invoice.
+    ref.watch(saleTaxRateProvider);
     final online = ref.watch(connectivityProvider).maybeWhen(data: (v) => v, orElse: () => true);
     // Offline: resolve product search + price from the local reference cache.
     final products = online
@@ -363,7 +380,7 @@ class _PosTerminalPageState extends ConsumerState<PosTerminalPage>
           .fold<double>(0, (s, l) => s + l.qty),
     );
 
-    return Scaffold(
+    final scaffold = Scaffold(
       backgroundColor: lum.paper,
       body: Column(
         children: [
@@ -433,6 +450,12 @@ class _PosTerminalPageState extends ConsumerState<PosTerminalPage>
           ),
         ],
       ),
+    );
+
+    return EnterShortcut(
+      onEnter:
+          cart.lines.isEmpty ? null : () => _charge(branch.id, session?.id),
+      child: scaffold,
     );
   }
 }

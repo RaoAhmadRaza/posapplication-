@@ -5,11 +5,28 @@ import 'package:printing/printing.dart';
 import 'package:url_launcher/url_launcher.dart';
 import '../../../../core/design/format.dart';
 
+/// Product name for a receipt line: the sale-time description when the caller
+/// wrote one, otherwise the embedded products row. The POS sends no
+/// description, so in practice every line resolves through the product.
+String receiptItemName(Map<String, dynamic> item) {
+  final desc = item['description']?.toString().trim();
+  if (desc != null && desc.isNotEmpty) return desc;
+  final product = item['products'];
+  final name = product is Map ? product['name']?.toString().trim() : null;
+  return (name == null || name.isEmpty) ? 'Item' : name;
+}
+
+/// Customer on the receipt; a sale with no customer_id is a walk-in.
+String receiptCustomerName(Map<String, dynamic> invoice) {
+  final customer = invoice['customers'];
+  final name = customer is Map ? customer['name']?.toString().trim() : null;
+  return (name == null || name.isEmpty) ? 'Walk-in' : name;
+}
+
 class ReceiptPdfService {
   Future<Uint8List> buildReceipt(Map<String, dynamic> invoiceDetail) async {
     final invoice = invoiceDetail;
     final items = (invoice['invoice_items'] as List<dynamic>?) ?? [];
-    final payments = (invoice['payments'] as List<dynamic>?) ?? [];
 
     final doc = pw.Document();
     final theme = pw.ThemeData.withFont(
@@ -39,8 +56,6 @@ class ReceiptPdfService {
             _totals(invoice),
             pw.SizedBox(height: 8),
             _divider(),
-            pw.SizedBox(height: 8),
-            ...payments.map((p) => _paymentLine(p as Map<String, dynamic>)),
             pw.SizedBox(height: 16),
             _footer(),
           ],
@@ -63,6 +78,7 @@ class ReceiptPdfService {
         pw.SizedBox(height: 4),
         pw.Text('Date: ${_formatDate(invoice['created_at']?.toString())}', style: const pw.TextStyle(fontSize: 9)),
         pw.Text('Branch: ${invoice['branch_id']?.toString().substring(0, 8) ?? ''}', style: const pw.TextStyle(fontSize: 9)),
+        pw.Text('Customer: ${receiptCustomerName(invoice)}', style: const pw.TextStyle(fontSize: 9)),
       ],
     );
   }
@@ -71,19 +87,18 @@ class ReceiptPdfService {
     final qty = double.tryParse(item['qty']?.toString() ?? '0') ?? 0;
     final price = double.tryParse(item['unit_price']?.toString() ?? '0') ?? 0;
     final total = double.tryParse(item['line_total']?.toString() ?? '0') ?? 0;
-    final desc = item['description']?.toString() ?? '';
     return pw.Padding(
       padding: const pw.EdgeInsets.symmetric(vertical: 2),
       child: pw.Row(
+        crossAxisAlignment: pw.CrossAxisAlignment.start,
         children: [
           pw.Expanded(
             flex: 3,
             child: pw.Column(
               crossAxisAlignment: pw.CrossAxisAlignment.start,
               children: [
-                pw.Text('${qty.toStringAsFixed(0)} x ${formatPkr(price)}', style: const pw.TextStyle(fontSize: 9)),
-                if (desc.isNotEmpty)
-                  pw.Text(desc, style: pw.TextStyle(fontSize: 7, color: PdfColors.grey600)),
+                pw.Text(receiptItemName(item), style: const pw.TextStyle(fontSize: 9)),
+                pw.Text('${qty.toStringAsFixed(0)} x ${formatPkr(price)}', style: pw.TextStyle(fontSize: 7, color: PdfColors.grey600)),
               ],
             ),
           ),
@@ -97,6 +112,7 @@ class ReceiptPdfService {
   }
 
   pw.Widget _totals(Map<String, dynamic> invoice) {
+    final subtotal = double.tryParse(invoice['subtotal']?.toString() ?? '0') ?? 0;
     final discount = double.tryParse(invoice['discount_total']?.toString() ?? '0') ?? 0;
     final tax = double.tryParse(invoice['tax_total']?.toString() ?? '0') ?? 0;
     final grand = double.tryParse(invoice['grand_total']?.toString() ?? '0') ?? 0;
@@ -106,8 +122,9 @@ class ReceiptPdfService {
 
     return pw.Column(
       children: [
+        _totalRow('Subtotal', subtotal),
         if (discount > 0) _totalRow('Discount', -discount),
-        if (tax > 0) _totalRow('Tax', tax),
+        _totalRow('Tax', tax),
         _totalRow('TOTAL', grand, bold: true),
         pw.SizedBox(height: 4),
         _totalRow('Paid', paid),
@@ -127,18 +144,6 @@ class ReceiptPdfService {
           pw.Text(formatPkr(value), style: pw.TextStyle(fontSize: 9, fontWeight: bold ? pw.FontWeight.bold : pw.FontWeight.normal)),
         ],
       ),
-    );
-  }
-
-  pw.Widget _paymentLine(Map<String, dynamic> payment) {
-    final method = payment['method']?.toString() ?? '';
-    final amount = double.tryParse(payment['amount']?.toString() ?? '0') ?? 0;
-    return pw.Row(
-      mainAxisAlignment: pw.MainAxisAlignment.spaceBetween,
-      children: [
-        pw.Text(method, style: const pw.TextStyle(fontSize: 9)),
-        pw.Text(formatPkr(amount), style: const pw.TextStyle(fontSize: 9)),
-      ],
     );
   }
 

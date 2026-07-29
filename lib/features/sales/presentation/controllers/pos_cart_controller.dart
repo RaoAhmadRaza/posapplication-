@@ -9,6 +9,7 @@ import '../../domain/usecases/hold_sale.dart';
 import '../../domain/usecases/load_held_sales.dart';
 import '../../domain/usecases/delete_held_sale.dart';
 import '../../../sync/presentation/controllers/sync_controller.dart';
+import '../../../accounting/presentation/controllers/tax_rules_controller.dart';
 
 enum PaymentMethodLabel { cash, bankTransfer, card, mobileWallet, cheque, loyaltyPoints, creditNote }
 
@@ -81,6 +82,24 @@ class CartState {
   int get lineCount => lines.length;
   int get totalItems => lines.fold(0, (s, l) => s + l.qty.toInt());
 }
+
+/// The rate `create_sale` will actually charge.
+///
+/// The RPC resolves the tenant's default active tax rule once per sale and
+/// applies it to EVERY line (`v_tp := v_tax_rate`), ignoring the per-product
+/// rate the payload carries. Pricing the cart off `product.taxRate` therefore
+/// under-totalled every sale of a zero-rated product: the tender covered the
+/// cart but not the invoice, so the server refused it as a credit sale with no
+/// customer. Null while the rules are still loading — the caller must not treat
+/// that as zero.
+final saleTaxRateProvider = Provider<double?>((ref) {
+  final rules = ref.watch(taxRulesProvider).value;
+  if (rules == null) return null;
+  for (final r in rules) {
+    if (r.isDefault && r.isActive) return r.rate;
+  }
+  return null;
+});
 
 final posCartProvider = NotifierProvider<PosCartController, CartState>(
   PosCartController.new,
@@ -165,6 +184,16 @@ class PosCartController extends Notifier<CartState> {
 
   void clear() {
     state = const CartState();
+  }
+
+  /// Drops the previous attempt's tender along with its result.
+  ///
+  /// [clearResult] deliberately keeps `payments`, so a retry after a refused
+  /// checkout APPENDED a second tender and the sale went through with double
+  /// the money and a bogus change amount. A retry re-reads the tender rows, so
+  /// it must start from none.
+  void clearPayments() {
+    state = CartState(lines: state.lines, customer: state.customer);
   }
 
   void clearResult() {

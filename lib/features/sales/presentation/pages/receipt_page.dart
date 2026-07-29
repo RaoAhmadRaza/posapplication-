@@ -16,8 +16,8 @@ import '../../../../core/widgets/permission_gate.dart';
 import '../../../auth/presentation/controllers/branch_controller.dart';
 import '../../data/services/receipt_pdf_service.dart';
 import '../controllers/invoices_controller.dart';
-import '../widgets/sales_rise.dart';
-import '../widgets/sales_scaffold.dart';
+import '../widgets/enter_shortcut.dart';
+import '../widgets/sales_dialog.dart';
 
 class ReceiptPage extends ConsumerWidget {
   const ReceiptPage({super.key, required this.invoiceId});
@@ -29,22 +29,25 @@ class ReceiptPage extends ConsumerWidget {
       module: 'sales',
       action: 'create',
       fallback: const NoAccessScaffold(),
-      child: SalesScaffold(
+      child: SalesDialog(
         title: 'Receipt',
-        maxContentWidth: 420,
-        padding: const EdgeInsets.all(24),
+        maxWidth: 420,
+        onClose: () => Navigator.of(context).maybePop(),
         child: FutureBuilder<Map<String, dynamic>?>(
           future: ref.read(invoicesProvider.notifier).loadDetail(invoiceId),
           builder: (context, snapshot) {
             if (!snapshot.hasData || snapshot.data == null) {
-              return const Center(child: CircularProgressIndicator());
+              // Fixed height: the card would otherwise open at full height for
+              // the spinner and snap smaller once the slip arrives.
+              return const SizedBox(
+                height: 160,
+                child: Center(child: CircularProgressIndicator()),
+              );
             }
             final detail = snapshot.data!;
             final invoiceNumber = detail['invoice_number']?.toString() ?? '';
 
-            return SalesRise(
-              duration: const Duration(milliseconds: 350),
-              child: SingleChildScrollView(
+            final slip = SingleChildScrollView(
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.stretch,
                   children: [
@@ -72,7 +75,14 @@ class ReceiptPage extends ConsumerWidget {
                     ),
                   ],
                 ),
-              ),
+            );
+
+            return EnterShortcut(
+              // The slip is on screen — Enter is the print key, same as the
+              // button. Bound here rather than on the page, so it can't fire
+              // before there is anything to print.
+              onEnter: () => _printAndShare(context, detail, invoiceNumber),
+              child: slip,
             );
           },
         ),
@@ -128,8 +138,12 @@ class _ReceiptSlip extends ConsumerWidget {
     final changeAmount =
         double.tryParse(detail['change_amount']?.toString() ?? '0') ?? 0;
     final balance = double.tryParse(detail['balance']?.toString() ?? '0') ?? 0;
+    final subtotal =
+        double.tryParse(detail['subtotal']?.toString() ?? '0') ?? 0;
+    final discount =
+        double.tryParse(detail['discount_total']?.toString() ?? '0') ?? 0;
+    final tax = double.tryParse(detail['tax_total']?.toString() ?? '0') ?? 0;
     final items = (detail['invoice_items'] as List<dynamic>?) ?? [];
-    final payments = (detail['payments'] as List<dynamic>?) ?? [];
     final createdAt = DateTime.tryParse(detail['created_at']?.toString() ?? '');
 
     return ClayContainer(
@@ -168,9 +182,19 @@ class _ReceiptSlip extends ConsumerWidget {
               color: lum.g500,
             ),
           ),
+          const SizedBox(height: 2),
+          Text(
+            'Customer: ${receiptCustomerName(detail)}',
+            textAlign: TextAlign.center,
+            style: AppTypography.caption.copyWith(color: lum.g500),
+          ),
           const _DashedRule(),
           for (final raw in items) _ItemLine(item: raw as Map<String, dynamic>),
           const _DashedRule(),
+          _MetaLine(label: 'Subtotal', value: subtotal),
+          if (discount > 0) _MetaLine(label: 'Discount', value: -discount),
+          _MetaLine(label: 'Tax', value: tax),
+          const SizedBox(height: 8),
           Row(
             children: [
               Expanded(
@@ -190,18 +214,12 @@ class _ReceiptSlip extends ConsumerWidget {
             ],
           ),
           const SizedBox(height: 8),
-          for (final raw in payments)
-            _MetaLine(
-              label: _methodLabel(
-                (raw as Map<String, dynamic>)['method']?.toString(),
-              ),
-              value: double.tryParse(raw['amount']?.toString() ?? '0') ?? 0,
-            ),
+          // One "Paid" line, not one row per tender: split payments printed as
+          // repeated "Cash" rows that read like a double charge.
+          _MetaLine(label: 'Paid', value: paidAmount),
           if (changeAmount > 0)
             _MetaLine(label: 'Change', value: changeAmount),
           if (balance > 0) _MetaLine(label: 'Balance due', value: balance),
-          if (payments.isEmpty && changeAmount == 0 && balance == 0)
-            _MetaLine(label: 'Paid', value: paidAmount),
           const _DashedRule(),
           Text(
             'Thank you for your business.',
@@ -220,14 +238,6 @@ class _ReceiptSlip extends ConsumerWidget {
       '${dt.day}/${dt.month}/${dt.year} '
       '${dt.hour.toString().padLeft(2, '0')}:'
       '${dt.minute.toString().padLeft(2, '0')}';
-
-  static String _methodLabel(String? raw) {
-    if (raw == null || raw.isEmpty) return 'Payment';
-    final words = raw.toLowerCase().split('_');
-    return words
-        .map((w) => w.isEmpty ? w : '${w[0].toUpperCase()}${w.substring(1)}')
-        .join(' ');
-  }
 }
 
 class _ItemLine extends StatelessWidget {
@@ -252,11 +262,7 @@ class _ItemLine extends StatelessWidget {
               mainAxisSize: MainAxisSize.min,
               children: [
                 Text(
-                  // invoice_items carries no product name or SKU — only the
-                  // description written at sale time.
-                  item['description']?.toString().trim().isNotEmpty == true
-                      ? item['description'].toString()
-                      : 'Item',
+                  receiptItemName(item),
                   style: AppTypography.footnote.copyWith(
                     fontSize: 13,
                     color: lum.textPrimary,

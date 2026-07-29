@@ -8,54 +8,72 @@ import '../../../../core/design/clay.dart';
 import '../../../../core/design/widgets/app_button.dart';
 import '../../../../core/design/widgets/app_money_text.dart';
 import '../../../../core/design/widgets/app_pill.dart';
+import '../../../../core/design/widgets/app_qty_stepper.dart';
 import '../../../../core/widgets/permission_gate.dart';
 import '../../../inventory/domain/entities/product.dart';
 import '../../../inventory/presentation/widgets/inventory_ui.dart';
 import '../controllers/pos_cart_controller.dart';
 
-/// Adds one unit of [product] to the POS cart. A tax-inclusive selling price is
+/// Adds [qty] units of [product] to the POS cart. A tax-inclusive selling price is
 /// split back out so the line stores a net unit price plus its tax pct (cart
 /// totals re-add it). Shared by the POS grid and the post-scan dialog.
-void addProductToCart(WidgetRef ref, Product product) {
-  final price = product.taxInclusive && product.taxRate > 0
-      ? product.sellingPrice / (1 + product.taxRate / 100)
+///
+/// The rate is the tenant's, not the product's: create_sale charges the default
+/// tax rule on every line whatever the product says, so pricing off
+/// `product.taxRate` left the cart short of the invoice. Returns false when the
+/// rule has not loaded yet — guessing zero there is what silently under-charges.
+bool addProductToCart(WidgetRef ref, Product product, {int qty = 1}) {
+  final rate = ref.read(saleTaxRateProvider);
+  if (rate == null) return false;
+  final price = product.taxInclusive && rate > 0
+      ? product.sellingPrice / (1 + rate / 100)
       : product.sellingPrice;
   ref.read(posCartProvider.notifier).addLine(
         productId: product.id,
         productName: product.name,
         sku: product.sku,
         barcode: product.barcode,
-        qty: 1,
+        qty: qty.toDouble(),
         unitPrice: price,
-        taxPct: product.taxRate,
+        taxPct: rate,
       );
+  return true;
 }
 
 /// Post-scan product popup shared by Dashboard, POS and Products: shows the
-/// matched product's details with an "Add to Cart" and a "Back" button. Adds
-/// the product to the POS cart and returns true when the user adds it; false
-/// on Back or dismiss. The add button is hidden without `sales:create`.
+/// matched product's details with a quantity stepper, an "Add to Cart" and a
+/// "Back" button. Adds the chosen quantity to the POS cart and returns true
+/// when the user adds it; false on Back or dismiss. The add button and stepper
+/// are hidden without `sales:create`.
 Future<bool> showScannedProductDialog(
   BuildContext context,
   WidgetRef ref,
   Product product,
 ) async {
-  final added = await showDialog<bool>(
+  final qty = await showDialog<int>(
     context: context,
     barrierColor: Colors.black.withValues(alpha: 0.45),
     builder: (ctx) => _ScannedProductDialog(product: product),
   );
-  if (added == true) addProductToCart(ref, product);
-  return added ?? false;
+  if (qty != null) return addProductToCart(ref, product, qty: qty);
+  return false;
 }
 
-class _ScannedProductDialog extends StatelessWidget {
+class _ScannedProductDialog extends StatefulWidget {
   const _ScannedProductDialog({required this.product});
 
   final Product product;
 
   @override
+  State<_ScannedProductDialog> createState() => _ScannedProductDialogState();
+}
+
+class _ScannedProductDialogState extends State<_ScannedProductDialog> {
+  int _qty = 1;
+
+  @override
   Widget build(BuildContext context) {
+    final product = widget.product;
     final lum = context.lum;
     final (tone, stockLabel) =
         stockStatusPill(product.qtyOnHand, product.reorderPoint, product.type);
@@ -131,12 +149,27 @@ class _ScannedProductDialog extends StatelessWidget {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.stretch,
                 children: [
+                  Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                    children: [
+                      Text(
+                        'Quantity',
+                        style: AppTypography.body
+                            .copyWith(color: lum.textSecondary),
+                      ),
+                      AppQtyStepper(
+                        value: _qty,
+                        onChanged: (v) => setState(() => _qty = v),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 16),
                   AppButton(
                     label: 'Add to Cart',
                     variant: AppButtonVariant.filled,
                     fullWidth: true,
                     icon: Icons.add_shopping_cart,
-                    onPressed: () => Navigator.of(context).pop(true),
+                    onPressed: () => Navigator.of(context).pop(_qty),
                   ),
                   const SizedBox(height: 8),
                 ],
@@ -146,7 +179,7 @@ class _ScannedProductDialog extends StatelessWidget {
               label: 'Back',
               variant: AppButtonVariant.plain,
               fullWidth: true,
-              onPressed: () => Navigator.of(context).pop(false),
+              onPressed: () => Navigator.of(context).pop(),
             ),
           ],
         ),
@@ -154,7 +187,9 @@ class _ScannedProductDialog extends StatelessWidget {
     );
   }
 
-  Widget _photo(LumColors lum) => ClayContainer(
+  Widget _photo(LumColors lum) {
+    final product = widget.product;
+    return ClayContainer(
         variant: ClayVariant.inset,
         color: lum.g100,
         borderRadius: AppRadius.md,
@@ -174,5 +209,6 @@ class _ScannedProductDialog extends StatelessWidget {
                       Icon(kInvItemIcon, size: 32, color: lum.g500),
                 ),
               ),
-      );
+    );
+  }
 }

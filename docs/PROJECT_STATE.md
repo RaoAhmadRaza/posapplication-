@@ -19,7 +19,7 @@ lib/
   main.dart app.dart router.dart
   core/design/  (tokens + theme + shared widgets)
   core/services/ (pin, device, mfa, audit, login_throttle, scanner_support)
-  core/widgets/  (bottom_nav_shell, pin_pad, permission_gate, barcode_scan_page)
+  core/widgets/  (bottom_nav_shell, pin_pad, permission_gate, barcode_scan_page, cart_fab)
   features/auth/ (21 pages, 12 controllers)
   features/inventory/ (catalog + stock-engine + stock-ops + barcode + labels)
   features/notifications/ (entities, model, datasource, repo, controller, page)
@@ -300,6 +300,31 @@ controller/provider binding byte-identical. Sales was the last module still on l
   connectivity (online → out of stock + untappable, offline → uncached + still sellable). Covered by
   `test/sales/product_tile_layout_test.dart` (8 tests; verified to fail 7/8 when the shortfall is
   reintroduced).
+- **Enter drives the sale** (2026-07-29): `EnterShortcut` (sales/presentation/widgets) wraps POS,
+  payment, success and receipt. Enter → Charge → Complete sale → open receipt → print. Every button
+  still works. Null callback = no binding (empty cart, sale in flight, offline queued sale — no server
+  invoice to open). It is a `HardwareKeyboard` handler, NOT `Shortcuts`: focus-based dispatch never
+  reliably reached these pages (the shell owns a focus node above the branch navigator), which is what
+  made Enter need two presses. Guarded by `ModalRoute.isCurrent` + `TickerMode` so only the visible
+  top-most page acts — POS stays mounted under the popups and under other modules' tabs. Covered by
+  `test/sales/enter_shortcut_test.dart` (3 tests, incl. the real shell + transparent-route arrangement).
+- **Cart total now matches the invoice** (2026-07-29): `create_sale` charges the tenant's default tax
+  rule on EVERY line and ignores the payload's `tax_pct`, but the cart priced off `product.taxRate` —
+  a zero-rated product totalled 1,750 against a 2,047.50 invoice, so the tender fell short and the RPC
+  refused the sale as credit-without-customer. The cart now prices with `saleTaxRateProvider` (the
+  default active rule; null while loading, never assumed 0) and `CartLine` rounds to 4dp like the RPC
+  instead of to whole units. `clearPayments()` replaces `clearResult()` at checkout so a retry does not
+  append a second tender (that was why pressing Enter twice "worked" — it paid double). Covered by
+  `test/sales/cart_totals_test.dart`. Tender prefill/'Exact' use `_tenderText` (2dp when there are
+  cents) and `_error` is pinned above the dialog's button where a refusal can't scroll out of sight.
+- **The sale runs in popups** (2026-07-29): payment, sale complete and receipt are centred dialogs over
+  the register, not screens that replace it. Same routes and extras — `_dialogPage` in router.dart is a
+  transparent, barrier-dismissible `CustomTransitionPage`, and the pages swapped `SalesScaffold` for
+  the new `SalesDialog` frame (`sales_dialog.dart`, same clay card as the hold-sale dialog). Payment's
+  success hop is `pushReplacement`, not `go`, or the register would not be on the stack to sit under.
+- **Customer is changeable at payment** (2026-07-29): the payment screen's customer card is now a
+  button onto the same `showCustomerPicker` the register uses, offline-guarded the same way. Credit is
+  decided on that screen, so needing to walk back to the register to attach a customer was wrong.
 - GATE: `flutter analyze` 10 issues (was 13 — the 3 POS infos died with the rewrite), **0 new**; macOS
   debug builds clean; `flutter test` = the same 2 failures as clean HEAD, re-proven in a detached
   worktree this session.
@@ -806,9 +831,10 @@ Barcode scanning (unified via scanProductCode() in barcode_scan_page): live came
 image on ALL platforms — mobile_scanner.analyzeImage on iOS/Android/macOS, pure-Dart zxing2 QR decode on Windows/Linux (where
 mobile_scanner has no plugin; QR/DataMatrix only, not 1D). barcodeImageScanSupported = !kIsWeb. Three entry points, same exact
 barcode/SKU lookup: POS terminal HEADER scan action and dashboard HEADER scan button open showScannedProductDialog
-(sales/presentation/widgets/scanned_product_dialog.dart) on a single exact match — details + "Add to Cart" (PermissionGate
-sales:create → shared addProductToCart → posCartProvider) + "Back"; products_page scan icon still jumps to the product's stock
-detail page, which carries its own "Add to cart" action (same helper + gate). No match → POS/products fill the search field;
+(sales/presentation/widgets/scanned_product_dialog.dart) on a single exact match — details + AppQtyStepper (min 1) + "Add to
+Cart" (PermissionGate sales:create → shared addProductToCart(qty:) → posCartProvider) + "Back"; products_page scan icon still jumps to the product's stock
+detail page, which carries its own "Add to cart" action (same helper + gate) and falls back to getProduct(id) when the
+scanned product is outside the loaded productsProvider page/filter (was an endless spinner). No match → POS/products fill the search field;
 dashboard reports no match. label
 printing (LabelPdfService/LabelPrintPage);
 notifications (+prefs, trg_low_stock_notify, hub bell badge); bulk CSV import (bulk_import_products); voice search
@@ -897,6 +923,18 @@ Server-side (covers online + walk-in + offline-synced uniformly). 6 migrations
   so Print & share (and invoice-detail Reprint) threw before any dialog. Now `pw.Page`; regression test
   `test/sales/receipt_pdf_test.dart`. Known gap: PdfGoogleFonts fetches OpenSans at build time and falls
   back to Latin-1 Helvetica when gstatic is unreachable (non-ASCII names blank) — bundle the font to fix.
+- 2026-07-29 FIX: every receipt line read "Item" and no customer was shown. `create_sale` leaves
+  `invoice_items.description` null, so both renderers had no name. `loadInvoiceDetail` now embeds
+  `customers(name)` + `invoice_items.products(name)`; shared helpers `receiptItemName` /
+  `receiptCustomerName` (receipt_pdf_service.dart) resolve description → product name → 'Item', and
+  no customer_id → 'Walk-in'. Migration `20260729084858` applies the same join to
+  `receipt_render_data` (WhatsApp path). Slip + PDF now lead with the product name, qty × price under it.
+  Note: invoice_detail_page and sales_return_page still print the raw description ("Item") — same query,
+  not touched this task. Follow-up same day: the per-tender rows are gone from both renderers (a split
+  tender printed "Cash / Cash" and read as a double charge); totals block is now
+  Subtotal / Discount (when >0) / Tax / TOTAL / Paid / Change / Balance due. OPEN money bug seen on
+  INV-BR01-000026: paid_amount 3500 for a 2047.50 sale (two 1750 payment rows) — payment page is
+  submitting the tender twice; receipt only stopped displaying it.
 
 ## Tenant Provisioning — COMPLETE (creation-time, gate-proven; full detail in DECISIONS.md)
 `provision_tenant()` seeds the golden set (20 CoA / 10 number_series / 4 tax / OPEN fiscal / 3+3 comms templates /

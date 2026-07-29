@@ -11,8 +11,8 @@ import '../../../../core/design/widgets/app_pill.dart';
 import '../../../../core/widgets/no_access_scaffold.dart';
 import '../../../../core/widgets/permission_gate.dart';
 import '../controllers/pos_cart_controller.dart';
-import '../widgets/sales_rise.dart';
-import '../widgets/sales_scaffold.dart';
+import '../widgets/enter_shortcut.dart';
+import '../widgets/sales_dialog.dart';
 
 class SaleSuccessPage extends ConsumerWidget {
   const SaleSuccessPage({super.key});
@@ -31,20 +31,25 @@ class SaleSuccessPage extends ConsumerWidget {
     final lum = context.lum;
     final result = ref.watch(posCartProvider).lastResult;
     if (result == null) {
-      return const SalesScaffold(
+      return const SalesDialog(
         title: 'Sale complete',
+        maxWidth: 420,
         child: Center(child: CircularProgressIndicator()),
       );
     }
 
     final queued = result.status == 'OFFLINE';
 
-    return SalesScaffold(
+    final scaffold = SalesDialog(
       title: queued ? 'Sale queued' : 'Sale complete',
-      maxContentWidth: 420,
-      padding: const EdgeInsets.all(24),
-      child: SalesRise(
-        child: SingleChildScrollView(
+      maxWidth: 420,
+      // Closing is the same as New sale: the cart is already empty after
+      // checkout, this just drops the finished sale's result.
+      onClose: () {
+        ref.read(posCartProvider.notifier).clear();
+        context.go('/sales/pos');
+      },
+      child: SingleChildScrollView(
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
@@ -64,13 +69,8 @@ class SaleSuccessPage extends ConsumerWidget {
                   ),
                 ),
               ),
-              const SizedBox(height: 22),
-              Text(
-                queued ? 'Sale queued' : 'Sale complete',
-                textAlign: TextAlign.center,
-                style: AppTypography.title1.copyWith(fontSize: 28),
-              ),
-              const SizedBox(height: 8),
+              // The dialog header already says it — no second heading.
+              const SizedBox(height: 20),
               Row(
                 mainAxisAlignment: MainAxisAlignment.center,
                 children: [
@@ -172,7 +172,15 @@ class SaleSuccessPage extends ConsumerWidget {
             ],
           ),
         ),
-      ),
+    );
+
+    // Same destination as the Receipt button; printing happens there.
+    // Offline sales have no server invoice to open, so Enter stops here.
+    return EnterShortcut(
+      onEnter: queued
+          ? null
+          : () => context.push('/sales/receipt', extra: result.invoiceId),
+      child: scaffold,
     );
   }
 
