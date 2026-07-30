@@ -52,8 +52,11 @@ class _EnterShortcutState extends State<EnterShortcut> {
     // ...and the register also stays mounted while another module's tab is on
     // screen, where its route is still 'current' in its own branch navigator.
     // Offstage branches and covered routes are ticker-disabled; visible ones
-    // are not.
-    if (!TickerMode.valuesOf(context).enabled) return false;
+    // are not. getNotifier, not of: this is a key callback, not a build, so we
+    // want to read the current value without subscribing to rebuilds. Reading
+    // it fresh per event also means a move to a new TickerMode ancestor is
+    // picked up, which is the caveat that comes with not having a dependency.
+    if (!TickerMode.getNotifier(context).value) return false;
     onEnter();
     return true;
   }
