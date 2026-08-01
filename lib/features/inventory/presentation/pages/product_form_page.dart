@@ -33,7 +33,6 @@ import '../../domain/failures/inventory_failure.dart';
 import '../controllers/categories_controller.dart';
 import '../controllers/brands_controller.dart';
 import '../controllers/product_edit_controller.dart';
-import '../controllers/products_controller.dart';
 import '../../../accounting/domain/usecases/resolve_tax_rate.dart';
 
 class ProductFormPage extends ConsumerStatefulWidget {
@@ -86,6 +85,9 @@ class _ProductFormPageState extends ConsumerState<ProductFormPage> {
       // New product: default the tax rate from the tenant's default tax_rule
       // (resolve_tax_rate) instead of a hardcoded value — user can still override.
       Future.microtask(() async {
+        // Clear whatever product the shared edit controller was last pointed at,
+        // otherwise this "new" product saves as an update to that one.
+        ref.read(productEditProvider.notifier).startNew();
         final (resolved, _) = await ref.read(resolveTaxRateUseCaseProvider)();
         if (!mounted || resolved == null || _taxRateCtrl.text.isNotEmpty) return;
         _taxRateCtrl.text = resolved.rate.toString();
@@ -194,7 +196,6 @@ class _ProductFormPageState extends ConsumerState<ProductFormPage> {
     }
 
     setState(() { _saving = false; _hasSavedOnce = true; });
-    ref.invalidate(productsProvider);
     if (!_isEditing) {
       showAppToast(context,
           'Product saved. You can now add variants, images and pricing.');
@@ -221,7 +222,6 @@ class _ProductFormPageState extends ConsumerState<ProductFormPage> {
       return;
     }
 
-    ref.invalidate(productsProvider);
     if (mounted) Navigator.of(context).pop();
   }
 
@@ -242,7 +242,6 @@ class _ProductFormPageState extends ConsumerState<ProductFormPage> {
     );
     if (!ok) return;
     await ref.read(productEditProvider.notifier).deleteProduct();
-    ref.invalidate(productsProvider);
     if (mounted) Navigator.of(context).pop();
   }
 

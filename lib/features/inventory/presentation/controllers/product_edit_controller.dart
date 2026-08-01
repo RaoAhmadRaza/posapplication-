@@ -63,7 +63,20 @@ class ProductEditController extends Notifier<AsyncValue<Product?>> {
 
   void _notify() => state = AsyncValue.data(state.value);
 
+  /// Resets the controller for a fresh "New product" form. This Notifier is not
+  /// autoDispose, so without it `editingId` survives from the previously opened
+  /// product and the next save updates THAT product instead of inserting a new
+  /// one (and the old product's variants/images/tiers show on the new form).
+  void startNew() {
+    editingId = null;
+    variantsState = const ProductVariantsState();
+    imagesState = const ProductImagesState();
+    pricingState = const ProductPricingState();
+    state = const AsyncValue.data(null);
+  }
+
   Future<void> loadForEdit(String id) async {
+    if (id != editingId) startNew(); // drop the previous product's sub-resources
     editingId = id;
     state = const AsyncValue.loading();
     final (product, failure) =
@@ -116,13 +129,15 @@ class ProductEditController extends Notifier<AsyncValue<Product?>> {
       editingId = product.id;
       state = AsyncValue.data(product);
     }
-    ref.invalidate(productsProvider);
+    invalidateProductLists(ref);
     return null;
   }
 
   Future<void> deleteProduct() async {
     if (editingId == null) return;
     await ref.read(deleteProductUseCaseProvider).call(editingId!);
+    startNew();
+    invalidateProductLists(ref);
   }
 
   // Variants
@@ -146,7 +161,7 @@ class ProductEditController extends Notifier<AsyncValue<Product?>> {
         await ref.read(saveImageUseCaseProvider).call(data);
     if (failure != null) return failure;
     await _loadImages();
-    ref.invalidate(productsProvider);
+    invalidateProductLists(ref);
     return null;
   }
 
@@ -164,20 +179,20 @@ class ProductEditController extends Notifier<AsyncValue<Product?>> {
       'sort_order': imagesState.images.length,
       'is_primary': imagesState.images.isEmpty,
     });
-    ref.invalidate(productsProvider);
+    invalidateProductLists(ref);
     return addFailure;
   }
 
   Future<void> setPrimaryImage(String imageId) async {
     await ref.read(setPrimaryImageUseCaseProvider).call(imageId);
     await _loadImages();
-    ref.invalidate(productsProvider);
+    invalidateProductLists(ref);
   }
 
   Future<void> deleteImage(String id) async {
     await ref.read(deleteImageUseCaseProvider).call(id);
     await _loadImages();
-    ref.invalidate(productsProvider);
+    invalidateProductLists(ref);
   }
 
   // Pricing tiers

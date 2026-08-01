@@ -846,6 +846,14 @@ No partials on the Voxa path (tap to start, tap to stop→transcribe). Mics gate
 NOT verified on-device; needs Voxa running/reachable on the Windows box.
 
 ## Known Issues
+- ✓ FIXED 2026-08-01 (DECISIONS): creating a second product overwrote the first, and neither showed in POS.
+  (a) `productEditProvider` is a plain (non-autoDispose) NotifierProvider, so `editingId` survived the form
+  being popped — the next "New product" save went down the update path onto the previous product. New
+  `startNew()` resets id + variants/images/tiers state; the form calls it when opened with no productId, and
+  `loadForEdit` calls it when switching products. (b) POS holds a SECOND ProductsController instance
+  (`posProductsProvider`); nothing ever invalidated it, so the grid served the list loaded at app start.
+  All product writes now go through `invalidateProductLists(ref)`, which invalidates both. Covered by
+  test/inventory/product_edit_controller_test.dart.
 - ⚠ PARTIAL 2026-07-27 (Android perf): "app feels laggy" was measured, not guessed. Profile build on the Redmi 10
   (MT6769H / Helio G88, Android 12, 1.3GB in swap) vs the debug build: onStart 1470ms vs 5532ms, one skipped-frame
   event vs five, zero `Davey!` vs one. So debug mode was the bulk of it and the rest is the hardware. Startup trace

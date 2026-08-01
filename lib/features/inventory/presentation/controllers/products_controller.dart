@@ -6,11 +6,21 @@ import '../../domain/usecases/bulk_import_products.dart';
 import '../../domain/usecases/load_products.dart';
 import '../../domain/usecases/load_products_stock.dart';
 import '../../domain/usecases/search_products.dart';
+import '../../../sales/presentation/controllers/pos_products_controller.dart';
 
 final productsProvider =
     AsyncNotifierProvider<ProductsController, List<Product>>(
   ProductsController.new,
 );
+
+/// The product list exists as two independent controller instances: the
+/// inventory catalog and POS ([posProductsProvider]). Every write has to
+/// refresh both — invalidating only [productsProvider] leaves the POS grid
+/// serving a stale list that is missing the new or edited product.
+void invalidateProductLists(Ref ref) {
+  ref.invalidate(productsProvider);
+  ref.invalidate(posProductsProvider);
+}
 
 class ProductsController extends AsyncNotifier<List<Product>> {
   static const _pageSize = 200;
@@ -134,7 +144,7 @@ class ProductsController extends AsyncNotifier<List<Product>> {
     final (result, failure) =
         await ref.read(bulkImportProductsUseCaseProvider).call(rows);
     if (failure != null) return null;
-    ref.invalidateSelf();
+    invalidateProductLists(ref);
     return result;
   }
 }

@@ -323,7 +323,7 @@ class MigrationImportController extends Notifier<MigrationImportState> {
           case ImportTableKind.brands:
             ref.invalidate(brandsProvider);
           case ImportTableKind.products:
-            ref.invalidate(productsProvider);
+            invalidateProductLists(ref);
           case ImportTableKind.stock:
             ref.invalidate(stockLevelsProvider);
         }
